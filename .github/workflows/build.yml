@@ -1,0 +1,46 @@
+name: Build & Package Noti
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run Core & Storage unit tests
+        run: dotnet test Noti.Tests/Noti.Tests.csproj --configuration Release --verbosity normal
+
+      - name: Publish Noti.App (win-x64, self-contained, unpackaged)
+        run: >
+          dotnet publish Noti.App/Noti.App.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          -p:Platform=x64
+          -p:WindowsPackageType=None
+          -p:WindowsAppSDKSelfContained=true
+          --output "${{ runner.temp }}/noti-publish"
+
+      - name: Package distributable zip archive
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "${{ runner.temp }}/noti-publish/*" -DestinationPath "${{ github.workspace }}/Noti-win-x64.zip" -Force
+
+      - name: Upload distributable zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Noti-win-x64
+          path: ${{ github.workspace }}/Noti-win-x64.zip
+          if-no-files-found: error
