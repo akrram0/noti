@@ -21,13 +21,19 @@
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFF5F5F7" />
                     <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FF8E8E93" />
                     <SolidColorBrush x:Key="TextMutedBrush" Color="#FFA1A1A6" />
-                    <SolidColorBrush x:Key="GlassFillBrush" Color="#14FFFFFF" />
-                    <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#24FFFFFF" />
-                    <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#0DFFFFFF" />
-                    <SolidColorBrush x:Key="GlassBorderBrush" Color="#38FFFFFF" />
-                    <SolidColorBrush x:Key="GlassHaloBrush" Color="#12FFFFFF" />
+                    <LinearGradientBrush x:Key="GlassFillBrush" StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#22FFFFFF" Offset="0.0" />
+                        <GradientStop Color="#0DFFFFFF" Offset="1.0" />
+                    </LinearGradientBrush>
+                    <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#28FFFFFF" />
+                    <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#10FFFFFF" />
+                    <LinearGradientBrush x:Key="GlassBorderBrush" StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#58FFFFFF" Offset="0.0" />
+                        <GradientStop Color="#1EFFFFFF" Offset="0.5" />
+                        <GradientStop Color="#40FFFFFF" Offset="1.0" />
+                    </LinearGradientBrush>
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#29FFFFFF" />
-                    <SolidColorBrush x:Key="ToggleThumbBrush" Color="#38FFFFFF" />
+                    <SolidColorBrush x:Key="ToggleThumbBrush" Color="#40FFFFFF" />
                 </ResourceDictionary>
 
                 <ResourceDictionary x:Key="Dark">
@@ -41,13 +47,19 @@
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFF5F5F7" />
                     <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FF8E8E93" />
                     <SolidColorBrush x:Key="TextMutedBrush" Color="#FFA1A1A6" />
-                    <SolidColorBrush x:Key="GlassFillBrush" Color="#14FFFFFF" />
-                    <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#24FFFFFF" />
-                    <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#0DFFFFFF" />
-                    <SolidColorBrush x:Key="GlassBorderBrush" Color="#38FFFFFF" />
-                    <SolidColorBrush x:Key="GlassHaloBrush" Color="#12FFFFFF" />
+                    <LinearGradientBrush x:Key="GlassFillBrush" StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#22FFFFFF" Offset="0.0" />
+                        <GradientStop Color="#0DFFFFFF" Offset="1.0" />
+                    </LinearGradientBrush>
+                    <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#28FFFFFF" />
+                    <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#10FFFFFF" />
+                    <LinearGradientBrush x:Key="GlassBorderBrush" StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#58FFFFFF" Offset="0.0" />
+                        <GradientStop Color="#1EFFFFFF" Offset="0.5" />
+                        <GradientStop Color="#40FFFFFF" Offset="1.0" />
+                    </LinearGradientBrush>
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#29FFFFFF" />
-                    <SolidColorBrush x:Key="ToggleThumbBrush" Color="#38FFFFFF" />
+                    <SolidColorBrush x:Key="ToggleThumbBrush" Color="#40FFFFFF" />
                 </ResourceDictionary>
 
                 <ResourceDictionary x:Key="Light">
@@ -61,11 +73,17 @@
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FF1C1C1E" />
                     <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FF6C6C70" />
                     <SolidColorBrush x:Key="TextMutedBrush" Color="#FF8E8E93" />
-                    <SolidColorBrush x:Key="GlassFillBrush" Color="#0D000000" />
-                    <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#17000000" />
-                    <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#1F000000" />
-                    <SolidColorBrush x:Key="GlassBorderBrush" Color="#24000000" />
-                    <SolidColorBrush x:Key="GlassHaloBrush" Color="#0A000000" />
+                    <LinearGradientBrush x:Key="GlassFillBrush" StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#12000000" Offset="0.0" />
+                        <GradientStop Color="#06000000" Offset="1.0" />
+                    </LinearGradientBrush>
+                    <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#1A000000" />
+                    <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#22000000" />
+                    <LinearGradientBrush x:Key="GlassBorderBrush" StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#30000000" Offset="0.0" />
+                        <GradientStop Color="#14000000" Offset="0.5" />
+                        <GradientStop Color="#24000000" Offset="1.0" />
+                    </LinearGradientBrush>
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#1A000000" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#FFFFFFFF" />
                 </ResourceDictionary>
@@ -79,42 +97,39 @@
                 <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
                 <Setter Property="BorderBrush" Value="{ThemeResource GlassBorderBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
-                <Setter Property="CornerRadius" Value="18" />
+                <Setter Property="UseLayoutRounding" Value="False" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <Grid Width="36" Height="36">
+                            <Grid Width="36" Height="36" Background="Transparent">
                                 <VisualStateManager.VisualStateGroups>
                                     <VisualStateGroup x:Name="CommonStates">
                                         <VisualState x:Name="Normal" />
                                         <VisualState x:Name="PointerOver">
                                             <VisualState.Setters>
-                                                <Setter Target="GlassSurface.Background" Value="{ThemeResource GlassFillHoverBrush}" />
+                                                <Setter Target="GlassSurface.Fill" Value="{ThemeResource GlassFillHoverBrush}" />
                                             </VisualState.Setters>
                                         </VisualState>
                                         <VisualState x:Name="Pressed">
                                             <VisualState.Setters>
-                                                <Setter Target="GlassSurface.Background" Value="{ThemeResource GlassFillPressedBrush}" />
+                                                <Setter Target="GlassSurface.Fill" Value="{ThemeResource GlassFillPressedBrush}" />
                                             </VisualState.Setters>
                                         </VisualState>
                                     </VisualStateGroup>
                                 </VisualStateManager.VisualStateGroups>
-                                <Border
-                                    CornerRadius="18"
-                                    BorderBrush="{ThemeResource GlassHaloBrush}"
-                                    BorderThickness="2" />
-                                <Border
+                                <Ellipse
                                     x:Name="GlassSurface"
-                                    Margin="1"
-                                    Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="17">
-                                    <ContentPresenter
-                                        HorizontalAlignment="Center"
-                                        VerticalAlignment="Center"
-                                        Foreground="{TemplateBinding Foreground}" />
-                                </Border>
+                                    Width="34"
+                                    Height="34"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Fill="{TemplateBinding Background}"
+                                    Stroke="{TemplateBinding BorderBrush}"
+                                    StrokeThickness="1" />
+                                <ContentPresenter
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Foreground="{TemplateBinding Foreground}" />
                             </Grid>
                         </ControlTemplate>
                     </Setter.Value>

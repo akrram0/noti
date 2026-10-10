@@ -19,33 +19,32 @@
             Grid.Row="0"
             BorderBrush="{ThemeResource SubtleDividerBrush}"
             BorderThickness="0,0,0,1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-
             <StackPanel
-                Grid.Column="0"
                 Margin="16,0,0,0"
                 Orientation="Horizontal"
                 Spacing="12"
                 VerticalAlignment="Center">
                 <Button
+                    x:Name="SidebarToggleButton"
                     Style="{StaticResource GlassIconButtonStyle}"
                     Command="{x:Bind ViewModel.ToggleSidebarCommand}"
                     ToolTipService.ToolTip="Toggle sidebar">
-                    <Border
-                        Width="14"
-                        Height="12"
-                        CornerRadius="3"
-                        BorderBrush="{ThemeResource TextPrimaryBrush}"
-                        BorderThickness="1.5">
-                        <Border
-                            Width="1.5"
-                            HorizontalAlignment="Left"
-                            Margin="3,0,0,0"
-                            Background="{ThemeResource TextPrimaryBrush}" />
-                    </Border>
+                    <Canvas Width="14" Height="12" UseLayoutRounding="False">
+                        <Rectangle
+                            Width="14"
+                            Height="12"
+                            RadiusX="2.5"
+                            RadiusY="2.5"
+                            Stroke="{ThemeResource TextPrimaryBrush}"
+                            StrokeThickness="1.3" />
+                        <Line
+                            X1="5"
+                            Y1="1"
+                            X2="5"
+                            Y2="11"
+                            Stroke="{ThemeResource TextPrimaryBrush}"
+                            StrokeThickness="1.3" />
+                    </Canvas>
                 </Button>
 
                 <TextBlock
@@ -55,11 +54,6 @@
                     Foreground="{ThemeResource TextMutedBrush}"
                     VerticalAlignment="Center" />
             </StackPanel>
-
-            <Grid
-                x:Name="AppTitleBar"
-                Grid.Column="1"
-                Background="Transparent" />
         </Grid>
 
         <!-- Workspace Body -->
@@ -125,7 +119,26 @@
                         Style="{StaticResource GlassIconButtonStyle}"
                         Command="{x:Bind ViewModel.CreateNoteCommand}"
                         ToolTipService.ToolTip="New note">
-                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <Canvas Width="12" Height="12" UseLayoutRounding="False">
+                            <Line
+                                X1="6"
+                                Y1="1"
+                                X2="6"
+                                Y2="11"
+                                Stroke="{ThemeResource TextPrimaryBrush}"
+                                StrokeThickness="1.5"
+                                StrokeStartLineCap="Round"
+                                StrokeEndLineCap="Round" />
+                            <Line
+                                X1="1"
+                                Y1="6"
+                                X2="11"
+                                Y2="6"
+                                Stroke="{ThemeResource TextPrimaryBrush}"
+                                StrokeThickness="1.5"
+                                StrokeStartLineCap="Round"
+                                StrokeEndLineCap="Round" />
+                        </Canvas>
                     </Button>
                 </Grid>
 
@@ -201,14 +214,14 @@
                                     Background="{ThemeResource ToggleTrackBrush}"
                                     BorderBrush="{ThemeResource GlassBorderBrush}"
                                     BorderThickness="1"
-                                    Padding="3">
-                                    <Border
+                                    Padding="3,0">
+                                    <Ellipse
                                         Width="18"
                                         Height="18"
-                                        CornerRadius="9"
-                                        Background="{ThemeResource ToggleThumbBrush}"
-                                        BorderBrush="{ThemeResource GlassBorderBrush}"
-                                        BorderThickness="1"
+                                        Fill="{ThemeResource ToggleThumbBrush}"
+                                        Stroke="{ThemeResource GlassBorderBrush}"
+                                        StrokeThickness="1"
+                                        VerticalAlignment="Center"
                                         HorizontalAlignment="{x:Bind ViewModel.ToggleThumbAlignment, Mode=OneWay}" />
                                 </Border>
                             </Button>
@@ -248,6 +261,7 @@
                     Grid.Row="0"
                     AcceptsReturn="True"
                     TextWrapping="Wrap"
+                    PlaceholderText="Start writing..."
                     Text="{x:Bind ViewModel.EditorText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                     FontSize="16"
                     Foreground="{ThemeResource TextPrimaryBrush}"

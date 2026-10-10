@@ -3,6 +3,13 @@ namespace Noti.Core;
 public sealed class NoteService
 {
     private static readonly char[] WordSeparators = [' ', '\r', '\n', '\t'];
+    private static readonly HashSet<string> LegacyDemoIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "welcome",
+        "shopping",
+        "ideas"
+    };
+
     private readonly INoteStore _store;
 
     public NoteService(INoteStore store)
@@ -14,39 +21,27 @@ public sealed class NoteService
     public async Task<IReadOnlyList<Note>> LoadNotesAsync(CancellationToken cancellationToken = default)
     {
         var existing = await _store.LoadAllAsync(cancellationToken).ConfigureAwait(false);
-        if (existing.Count > 0)
-            return existing.OrderByDescending(n => n.UpdatedAt).ToList();
+        var userNotes = new List<Note>();
 
-        var now = DateTimeOffset.UtcNow;
-        var seeded = new[]
+        foreach (var note in existing)
         {
-            new Note
+            if (LegacyDemoIds.Contains(note.Id))
             {
-                Id = "welcome",
-                Content = "Welcome\nOne window, one list, one blank page.\nEvery note is a plain .md file in Documents\\Noti.",
-                UpdatedAt = now
-            },
-            new Note
-            {
-                Id = "shopping",
-                Content = "Shopping\nBread\nOlive oil\nBatteries",
-                UpdatedAt = now.AddSeconds(-1)
-            },
-            new Note
-            {
-                Id = "ideas",
-                Content = "Ideas\nA shortcut that opens a new note instantly from anywhere.",
-                UpdatedAt = now.AddSeconds(-2)
+                await _store.DeleteAsync(note.Id, cancellationToken).ConfigureAwait(false);
+                continue;
             }
-        };
+            userNotes.Add(note);
+        }
 
-        foreach (var note in seeded)
-            await _store.SaveAsync(note, cancellationToken).ConfigureAwait(false);
+        if (userNotes.Count > 0)
+            return userNotes.OrderByDescending(n => n.UpdatedAt).ToList();
 
-        return seeded;
+        var initialNote = CreateNote(string.Empty);
+        await _store.SaveAsync(initialNote, cancellationToken).ConfigureAwait(false);
+        return [initialNote];
     }
 
-    public Note CreateNote(string initialContent = "Untitled\n")
+    public Note CreateNote(string initialContent = "")
     {
         return new Note
         {

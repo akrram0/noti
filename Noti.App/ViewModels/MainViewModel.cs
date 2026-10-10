@@ -159,7 +159,7 @@ public sealed class MainViewModel : ObservableObject
 
     private async Task CreateNoteAsync()
     {
-        var note = _noteService.CreateNote("Untitled\n");
+        var note = _noteService.CreateNote(string.Empty);
         await _noteService.SaveNoteAsync(note);
 
         var vm = new NoteItemViewModel(note);

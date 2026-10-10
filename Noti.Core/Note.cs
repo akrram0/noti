@@ -45,7 +45,7 @@ public sealed class Note
             }
 
             if (parts.Count == 0)
-                return string.Empty;
+                return "No additional text";
 
             var joined = string.Join(" ", parts);
             return joined.Length > MaxSnippetLength

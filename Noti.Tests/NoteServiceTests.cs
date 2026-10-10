@@ -7,7 +7,7 @@ namespace Noti.Tests;
 public sealed class NoteServiceTests
 {
     [Fact]
-    public async Task LoadNotesAsync_WhenStoreEmpty_SeedsDefaultNotesMatchingSpec()
+    public async Task LoadNotesAsync_WhenStoreEmpty_CreatesSingleBlankNote()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"noti-tests-{Guid.NewGuid():N}");
         try
@@ -17,22 +17,30 @@ public sealed class NoteServiceTests
 
             var notes = await service.LoadNotesAsync();
 
-            Assert.Equal(3, notes.Count);
-            Assert.Equal("Welcome", notes[0].Title);
-            Assert.Equal("One window, one list, one blank page. ...", notes[0].Snippet);
-            Assert.Equal(17, notes[0].WordCount);
-
-            Assert.Equal("Shopping", notes[1].Title);
-            Assert.Equal("Bread Olive oil Batteries", notes[1].Snippet);
-
-            Assert.Equal("Ideas", notes[2].Title);
-            Assert.Equal("A shortcut that opens a new note insta...", notes[2].Snippet);
+            Assert.Single(notes);
+            Assert.Equal("Untitled", notes[0].Title);
+            Assert.Equal("No additional text", notes[0].Snippet);
+            Assert.Equal(0, notes[0].WordCount);
         }
         finally
         {
             if (Directory.Exists(tempDir))
                 Directory.Delete(tempDir, recursive: true);
         }
+    }
+
+    [Fact]
+    public void Note_ComputesTitleSnippetAndWordCountCorrectly()
+    {
+        var note = new Note
+        {
+            Id = "test",
+            Content = "Welcome\nOne window, one list, one blank page.\nEvery note is a plain .md file in Documents\\Noti."
+        };
+
+        Assert.Equal("Welcome", note.Title);
+        Assert.Equal("One window, one list, one blank page. ...", note.Snippet);
+        Assert.Equal(17, note.WordCount);
     }
 
     [Fact]
