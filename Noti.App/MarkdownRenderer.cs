@@ -27,7 +27,8 @@ public enum LiveBlockKind
     CodeBlock,
     TableBlock,
     Divider,
-    ImageBlock
+    ImageBlock,
+    HtmlWrapper
 }
 
 public sealed class LiveDocBlock
@@ -35,6 +36,7 @@ public sealed class LiveDocBlock
     public LiveBlockKind Kind { get; set; } = LiveBlockKind.Paragraph;
     public string Content { get; set; } = string.Empty;
     public bool IsChecked { get; set; }
+    public bool IsCentered { get; set; }
     public bool IsBlockBold { get; set; }
     public bool IsBlockItalic { get; set; }
     public bool IsBlockStrikethrough { get; set; }
@@ -736,6 +738,7 @@ public static class MarkdownRenderer
                text.Contains("~~", StringComparison.Ordinal) ||
                text.Contains('`') ||
                text.Contains("](", StringComparison.Ordinal) ||
+               text.Contains("<sub>", StringComparison.OrdinalIgnoreCase) ||
                text.Contains('@') ||
                (text.IndexOf('*') is var starIdx && starIdx >= 0 && text.IndexOf('*', starIdx + 1) > starIdx);
     }
@@ -751,6 +754,7 @@ public static class MarkdownRenderer
 
         var lines = markdown.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
         var inCodeBlock = false;
+        var inCenterDiv = false;
         var codeBuffer = new List<string>();
 
         for (var i = 0; i < lines.Length; i++)
@@ -783,6 +787,27 @@ public static class MarkdownRenderer
                 continue;
             }
 
+            if ((trimmed.StartsWith("<div", StringComparison.OrdinalIgnoreCase) && trimmed.EndsWith('>')) ||
+                trimmed.Equals("</div>", StringComparison.OrdinalIgnoreCase))
+            {
+                if (trimmed.StartsWith("<div", StringComparison.OrdinalIgnoreCase) &&
+                    trimmed.Contains("center", StringComparison.OrdinalIgnoreCase))
+                {
+                    inCenterDiv = true;
+                }
+                else if (trimmed.Equals("</div>", StringComparison.OrdinalIgnoreCase))
+                {
+                    inCenterDiv = false;
+                }
+
+                blocks.Add(new LiveDocBlock
+                {
+                    Kind = LiveBlockKind.HtmlWrapper,
+                    Content = raw
+                });
+                continue;
+            }
+
             if (IsMarkdownTableLine(trimmed))
             {
                 var tableLines = new List<string> { raw };
@@ -795,6 +820,7 @@ public static class MarkdownRenderer
                 blocks.Add(new LiveDocBlock
                 {
                     Kind = LiveBlockKind.TableBlock,
+                    IsCentered = inCenterDiv,
                     TableMatrix = ParseMarkdownTableMatrix(tableLines)
                 });
                 continue;
@@ -811,6 +837,7 @@ public static class MarkdownRenderer
                 blocks.Add(new LiveDocBlock
                 {
                     Kind = LiveBlockKind.ImageBlock,
+                    IsCentered = inCenterDiv,
                     Content = raw
                 });
                 continue;
@@ -818,19 +845,25 @@ public static class MarkdownRenderer
 
             if (trimmed.StartsWith("### ", StringComparison.Ordinal))
             {
-                blocks.Add(CreateTextLiveBlock(LiveBlockKind.Heading3, trimmed[4..]));
+                var b = CreateTextLiveBlock(LiveBlockKind.Heading3, trimmed[4..]);
+                b.IsCentered = inCenterDiv;
+                blocks.Add(b);
                 continue;
             }
 
             if (trimmed.StartsWith("## ", StringComparison.Ordinal))
             {
-                blocks.Add(CreateTextLiveBlock(LiveBlockKind.Heading2, trimmed[3..]));
+                var b = CreateTextLiveBlock(LiveBlockKind.Heading2, trimmed[3..]);
+                b.IsCentered = inCenterDiv;
+                blocks.Add(b);
                 continue;
             }
 
             if (trimmed.StartsWith("# ", StringComparison.Ordinal))
             {
-                blocks.Add(CreateTextLiveBlock(LiveBlockKind.Heading1, trimmed[2..]));
+                var b = CreateTextLiveBlock(LiveBlockKind.Heading1, trimmed[2..]);
+                b.IsCentered = inCenterDiv;
+                blocks.Add(b);
                 continue;
             }
 
@@ -856,7 +889,9 @@ public static class MarkdownRenderer
                 continue;
             }
 
-            blocks.Add(CreateTextLiveBlock(LiveBlockKind.Paragraph, raw));
+            var pBlock = CreateTextLiveBlock(LiveBlockKind.Paragraph, raw);
+            pBlock.IsCentered = inCenterDiv;
+            blocks.Add(pBlock);
         }
 
         if (inCodeBlock)
@@ -978,6 +1013,7 @@ public static class MarkdownRenderer
                     break;
 
                 case LiveBlockKind.ImageBlock:
+                case LiveBlockKind.HtmlWrapper:
                     lines.Add(b.Content ?? string.Empty);
                     break;
 
@@ -1280,11 +1316,12 @@ public static class MarkdownRenderer
             };
         }
 
+        var align = block.IsCentered ? HorizontalAlignment.Center : HorizontalAlignment.Left;
         var hostBorder = new Border
         {
             CornerRadius = new CornerRadius(8),
             MaxWidth = 680,
-            HorizontalAlignment = HorizontalAlignment.Left,
+            HorizontalAlignment = align,
             Margin = new Thickness(0, 6, 0, 8)
         };
 
@@ -1298,7 +1335,7 @@ public static class MarkdownRenderer
                     Source = bitmap,
                     Stretch = Stretch.Uniform,
                     MaxWidth = 680,
-                    HorizontalAlignment = HorizontalAlignment.Left
+                    HorizontalAlignment = align
                 };
                 if (width is > 0)
                     img.Width = Math.Min(width.Value, 680);
@@ -1368,6 +1405,7 @@ public static class MarkdownRenderer
         var subtleBorderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(26, 0, 0, 0));
         var accentBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 10, 132, 255));
         var buttonBgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(32, 255, 255, 255) : ColorHelper.FromArgb(18, 0, 0, 0));
+        var monoFont = new FontFamily("Cascadia Mono, Consolas, Courier New");
 
         var matrix = tableBlock.TableMatrix;
         var colCount = matrix.Count > 0 ? matrix.Max(r => r.Count) : 3;
@@ -1387,7 +1425,7 @@ public static class MarkdownRenderer
         var wrapperGrid = new Grid
         {
             Margin = new Thickness(0, 6, 0, 10),
-            HorizontalAlignment = HorizontalAlignment.Left
+            HorizontalAlignment = tableBlock.IsCentered ? HorizontalAlignment.Center : HorizontalAlignment.Left
         };
         wrapperGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         wrapperGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -1505,6 +1543,19 @@ public static class MarkdownRenderer
                 grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             var cellBoxes = new TextBox[rCount, cCount];
+            var cellDisplays = new TextBlock?[rCount, cCount];
+
+            void ActivateCell(int targetR, int targetC, bool selectAll = false)
+            {
+                if (cellDisplays[targetR, targetC] is { } dtb)
+                    dtb.Visibility = Visibility.Collapsed;
+
+                var targetTb = cellBoxes[targetR, targetC];
+                targetTb.Visibility = Visibility.Visible;
+                targetTb.Focus(FocusState.Programmatic);
+                if (selectAll)
+                    targetTb.SelectAll();
+            }
 
             for (var r = 0; r < rCount; r++)
             {
@@ -1513,6 +1564,10 @@ public static class MarkdownRenderer
                 {
                     var capturedRow = r;
                     var capturedCol = c;
+                    var cellText = matrix[r][c];
+                    var cellFontSize = Math.Max(12, baseFontSize - 2);
+                    var cellWeight = isHeader ? FontWeights.SemiBold : FontWeights.Normal;
+
                     var cellBorder = new Border
                     {
                         Background = isHeader ? headerBgBrush : new SolidColorBrush(Colors.Transparent),
@@ -1526,10 +1581,10 @@ public static class MarkdownRenderer
 
                     var tb = new TextBox
                     {
-                        Text = matrix[r][c],
+                        Text = cellText,
                         PlaceholderText = isHeader ? $"Column {c + 1}" : string.Empty,
-                        FontSize = Math.Max(12, baseFontSize - 2),
-                        FontWeight = isHeader ? FontWeights.SemiBold : FontWeights.Normal,
+                        FontSize = cellFontSize,
+                        FontWeight = cellWeight,
                         Foreground = primaryBrush,
                         Background = new SolidColorBrush(Colors.Transparent),
                         SelectionHighlightColor = accentBrush,
@@ -1543,6 +1598,70 @@ public static class MarkdownRenderer
                     };
                     if (Application.Current?.Resources.TryGetValue("BorderlessTextBoxStyle", out var styleObj) == true && styleObj is Style s)
                         tb.Style = s;
+
+                    var cellHost = new Grid { MinHeight = 32 };
+                    cellHost.Children.Add(tb);
+
+                    if (HasInlineMarkdownFormatting(cellText))
+                    {
+                        var displayTb = CreateFormattedTextBlock(
+                            cellText,
+                            cellFontSize,
+                            cellWeight,
+                            primaryBrush,
+                            accentBrush,
+                            monoFont,
+                            new Thickness(10, 7, 10, 7),
+                            [],
+                            null);
+                        displayTb.VerticalAlignment = VerticalAlignment.Center;
+                        displayTb.PointerReleased += (_, _) =>
+                        {
+                            if (!string.IsNullOrEmpty(displayTb.SelectedText))
+                                return;
+                            ActivateCell(capturedRow, capturedCol);
+                        };
+                        cellDisplays[r, c] = displayTb;
+                        tb.Visibility = Visibility.Collapsed;
+                        cellHost.Children.Add(displayTb);
+                    }
+
+                    tb.LostFocus += (_, _) =>
+                    {
+                        var currentText = matrix[capturedRow][capturedCol];
+                        if (HasInlineMarkdownFormatting(currentText))
+                        {
+                            if (cellDisplays[capturedRow, capturedCol] is not { } dtb)
+                            {
+                                dtb = CreateFormattedTextBlock(
+                                    currentText,
+                                    cellFontSize,
+                                    cellWeight,
+                                    primaryBrush,
+                                    accentBrush,
+                                    monoFont,
+                                    new Thickness(10, 7, 10, 7),
+                                    [],
+                                    null);
+                                dtb.VerticalAlignment = VerticalAlignment.Center;
+                                dtb.PointerReleased += (_, _) =>
+                                {
+                                    if (!string.IsNullOrEmpty(dtb.SelectedText))
+                                        return;
+                                    ActivateCell(capturedRow, capturedCol);
+                                };
+                                cellDisplays[capturedRow, capturedCol] = dtb;
+                                cellHost.Children.Add(dtb);
+                            }
+                            else
+                            {
+                                dtb.Inlines.Clear();
+                                PopulateInlines(dtb.Inlines, currentText, monoFont, accentBrush, [], null);
+                                dtb.Visibility = Visibility.Visible;
+                            }
+                            tb.Visibility = Visibility.Collapsed;
+                        }
+                    };
 
                     tb.TextChanged += (_, _) =>
                     {
@@ -1565,8 +1684,7 @@ public static class MarkdownRenderer
                                     prevCol = cCount - 1;
                                     prevRow = (capturedRow - 1 + rCount) % rCount;
                                 }
-                                cellBoxes[prevRow, prevCol].Focus(FocusState.Programmatic);
-                                cellBoxes[prevRow, prevCol].SelectAll();
+                                ActivateCell(prevRow, prevCol, selectAll: true);
                             }
                             else
                             {
@@ -1586,8 +1704,7 @@ public static class MarkdownRenderer
                                 }
                                 else
                                 {
-                                    cellBoxes[nextRow, nextCol].Focus(FocusState.Programmatic);
-                                    cellBoxes[nextRow, nextCol].SelectAll();
+                                    ActivateCell(nextRow, nextCol, selectAll: true);
                                 }
                             }
                         }
@@ -1599,17 +1716,17 @@ public static class MarkdownRenderer
                         else if (e.Key == VirtualKey.Down && capturedRow + 1 < rCount)
                         {
                             e.Handled = true;
-                            cellBoxes[capturedRow + 1, capturedCol].Focus(FocusState.Programmatic);
+                            ActivateCell(capturedRow + 1, capturedCol);
                         }
                         else if (e.Key == VirtualKey.Up && capturedRow > 0)
                         {
                             e.Handled = true;
-                            cellBoxes[capturedRow - 1, capturedCol].Focus(FocusState.Programmatic);
+                            ActivateCell(capturedRow - 1, capturedCol);
                         }
                     };
 
                     cellBoxes[r, c] = tb;
-                    cellBorder.Child = tb;
+                    cellBorder.Child = cellHost;
                     Grid.SetRow(cellBorder, r);
                     Grid.SetColumn(cellBorder, c);
                     grid.Children.Add(cellBorder);

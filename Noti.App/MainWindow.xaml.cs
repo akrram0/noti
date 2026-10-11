@@ -583,7 +583,7 @@ public sealed partial class MainWindow : Window
     }
 
     private static bool IsEditableLiveBlock(LiveDocBlock block) =>
-        block.Kind is not (LiveBlockKind.Divider or LiveBlockKind.TableBlock or LiveBlockKind.ImageBlock);
+        block.Kind is not (LiveBlockKind.Divider or LiveBlockKind.TableBlock or LiveBlockKind.ImageBlock or LiveBlockKind.HtmlWrapper);
 
     private TextBox GetActiveEditorTextBox()
     {
@@ -648,7 +648,7 @@ public sealed partial class MainWindow : Window
 
     private void RecycleBlockTextBox(LiveDocBlock block)
     {
-        if (block.Kind is LiveBlockKind.CodeBlock or LiveBlockKind.TableBlock or LiveBlockKind.Divider or LiveBlockKind.ImageBlock)
+        if (block.Kind is LiveBlockKind.CodeBlock or LiveBlockKind.TableBlock or LiveBlockKind.Divider or LiveBlockKind.ImageBlock or LiveBlockKind.HtmlWrapper)
             return;
 
         if (block.PrimaryTextBox is not { } tb)
@@ -832,7 +832,7 @@ public sealed partial class MainWindow : Window
         EnsureLiveBlocksMaterializedThrough(_liveBlocks.Count - 1);
 
         var lastBlock = _liveBlocks[^1];
-        if (lastBlock.Kind is LiveBlockKind.TableBlock or LiveBlockKind.Divider or LiveBlockKind.CodeBlock or LiveBlockKind.ImageBlock)
+        if (lastBlock.Kind is LiveBlockKind.TableBlock or LiveBlockKind.Divider or LiveBlockKind.CodeBlock or LiveBlockKind.ImageBlock or LiveBlockKind.HtmlWrapper)
         {
             InsertLiveBlockAt(_liveBlocks.Count, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
             FlushSyncLiveBlocksToViewModel();
@@ -905,8 +905,13 @@ public sealed partial class MainWindow : Window
         var targetBlock = _liveBlocks[index];
         _activeLiveBlock = targetBlock;
 
+        if (targetBlock.DisplayTextBlock is { } dtb)
+            dtb.Visibility = Visibility.Collapsed;
+
         if (targetBlock.PrimaryTextBox is not { } targetTb)
             return;
+
+        targetTb.Visibility = Visibility.Visible;
 
         var caret = focusCaret ?? (targetTb.Text ?? string.Empty).Length;
         DispatcherQueue.TryEnqueue(() =>
@@ -919,6 +924,9 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
+            if (targetBlock.DisplayTextBlock is { } d)
+                d.Visibility = Visibility.Collapsed;
+            targetTb.Visibility = Visibility.Visible;
             targetTb.Focus(FocusState.Programmatic);
             var clamped = Math.Clamp(caret, 0, (targetTb.Text ?? string.Empty).Length);
             targetTb.SelectionStart = clamped;
@@ -1030,6 +1038,15 @@ public sealed partial class MainWindow : Window
         block.CellHostGrid = null;
         block.DisplayTextBlock = null;
 
+        if (block.Kind == LiveBlockKind.HtmlWrapper)
+        {
+            return new Border
+            {
+                Height = 0,
+                Visibility = Visibility.Collapsed
+            };
+        }
+
         if (block.Kind == LiveBlockKind.TableBlock)
         {
             return MarkdownRenderer.CreateLiveTableElement(
@@ -1043,12 +1060,12 @@ public sealed partial class MainWindow : Window
                     if (idx < 0)
                         return;
 
-                    if (idx + 1 < _liveBlocks.Count)
+                    for (var next = idx + 1; next < _liveBlocks.Count; next++)
                     {
-                        EnsureLiveBlocksMaterializedThrough(idx + 1);
-                        if (IsEditableLiveBlock(_liveBlocks[idx + 1]))
+                        EnsureLiveBlocksMaterializedThrough(next);
+                        if (IsEditableLiveBlock(_liveBlocks[next]))
                         {
-                            FocusLiveBlockAt(idx + 1, 0);
+                            FocusLiveBlockAt(next, 0);
                             return;
                         }
                     }
@@ -1124,12 +1141,12 @@ public sealed partial class MainWindow : Window
                     if (idx < 0)
                         return;
 
-                    if (idx + 1 < _liveBlocks.Count)
+                    for (var next = idx + 1; next < _liveBlocks.Count; next++)
                     {
-                        EnsureLiveBlocksMaterializedThrough(idx + 1);
-                        if (IsEditableLiveBlock(_liveBlocks[idx + 1]))
+                        EnsureLiveBlocksMaterializedThrough(next);
+                        if (IsEditableLiveBlock(_liveBlocks[next]))
                         {
-                            FocusLiveBlockAt(idx + 1, 0);
+                            FocusLiveBlockAt(next, 0);
                             return;
                         }
                     }
@@ -1197,6 +1214,7 @@ public sealed partial class MainWindow : Window
         tb.FontWeight = fontWeight;
         tb.FontStyle = fontStyle;
         tb.Foreground = textForeground;
+        tb.TextAlignment = block.IsCentered ? TextAlignment.Center : TextAlignment.Left;
         tb.MinHeight = Math.Max(26, Math.Round(fontSize * 1.45));
         tb.Opacity = 1.0;
         tb.Visibility = Visibility.Visible;
@@ -1212,6 +1230,54 @@ public sealed partial class MainWindow : Window
         };
         block.CellHostGrid = cellGrid;
         cellGrid.Children.Add(tb);
+
+        var rawContent = block.Content ?? string.Empty;
+        if (MarkdownRenderer.HasInlineMarkdownFormatting(rawContent))
+        {
+            var isSubLine = rawContent.Contains("<sub>", StringComparison.OrdinalIgnoreCase);
+            var displayFontSize = isSubLine ? Math.Max(12, fontSize - 2) : fontSize;
+            var displayForeground = isSubLine ? secondaryBrush : textForeground;
+
+            var displayTb = MarkdownRenderer.CreateFormattedTextBlock(
+                rawContent,
+                displayFontSize,
+                fontWeight,
+                displayForeground,
+                AccentBrush,
+                MonoFontFamily,
+                new Thickness(0, 2, 0, 2),
+                _cachedSortedNoteTitles,
+                title =>
+                {
+                    var target = ViewModel.FindNoteByMention(title);
+                    if (target is not null)
+                        NavigateToNote(target);
+                });
+            displayTb.FontStyle = fontStyle;
+            displayTb.LineHeight = Math.Max(22, Math.Round(displayFontSize * 1.45));
+            displayTb.VerticalAlignment = VerticalAlignment.Center;
+            if (block.IsCentered)
+            {
+                displayTb.HorizontalAlignment = HorizontalAlignment.Center;
+                displayTb.TextAlignment = TextAlignment.Center;
+            }
+
+            displayTb.PointerReleased += (_, _) =>
+            {
+                if (!string.IsNullOrEmpty(displayTb.SelectedText))
+                    return;
+
+                displayTb.Visibility = Visibility.Collapsed;
+                tb.Visibility = Visibility.Visible;
+                var idx = _liveBlocks.IndexOf(block);
+                if (idx >= 0)
+                    FocusLiveBlockAt(idx);
+            };
+
+            block.DisplayTextBlock = displayTb;
+            tb.Visibility = Visibility.Collapsed;
+            cellGrid.Children.Add(displayTb);
+        }
 
         if (block.IsBlockStrikethrough)
         {
@@ -1271,6 +1337,8 @@ public sealed partial class MainWindow : Window
                     EnsureLiveRenderResources();
                     block.IsChecked = checkBox.IsChecked == true;
                     tb.Foreground = block.IsChecked ? _cachedSecondaryBrush : _cachedPrimaryBrush;
+                    if (block.DisplayTextBlock is { } dtb)
+                        dtb.Foreground = tb.Foreground;
                     FlushSyncLiveBlocksToViewModel();
                 };
 
@@ -1359,7 +1427,25 @@ public sealed partial class MainWindow : Window
         tb.GotFocus += (_, _) =>
         {
             if (tb.Tag is LiveDocBlock block)
+            {
                 _activeLiveBlock = block;
+                if (block.DisplayTextBlock is { } dtb)
+                    dtb.Visibility = Visibility.Collapsed;
+                tb.Visibility = Visibility.Visible;
+            }
+        };
+
+        tb.LostFocus += (_, _) =>
+        {
+            if (_isSyncingLiveEditor || tb.Tag is not LiveDocBlock block)
+                return;
+
+            if (MarkdownRenderer.HasInlineMarkdownFormatting(block.Content))
+            {
+                var idx = _liveBlocks.IndexOf(block);
+                if (idx >= 0)
+                    RefreshLiveBlockAt(idx);
+            }
         };
 
         tb.TextChanged += (_, _) =>
@@ -1801,7 +1887,7 @@ public sealed partial class MainWindow : Window
             {
                 e.Handled = true;
                 var prevBlock = _liveBlocks[blockIdx - 1];
-                if (prevBlock.Kind is LiveBlockKind.Divider or LiveBlockKind.ImageBlock)
+                if (prevBlock.Kind is LiveBlockKind.Divider or LiveBlockKind.ImageBlock or LiveBlockKind.HtmlWrapper)
                 {
                     _liveBlocks.RemoveAt(blockIdx - 1);
                     if (blockIdx - 1 < LiveEditorPanel.Children.Count)
