@@ -11,7 +11,7 @@ public sealed class AppSettings
     public bool IsFluidAnimationEnabled { get; set; } = true;
     public bool IsTreeShortcutEnabled { get; set; } = true;
     public double EditorFontSize { get; set; } = 16.0;
-    public double SurfaceOpacityPercent { get; set; } = 42.0;
+    public double SurfaceOpacityPercent { get; set; } = 22.0;
     public string BackdropKind { get; set; } = "Blur";
     public string VaultDirectoryPath { get; set; } = string.Empty;
     public string UserName { get; set; } = string.IsNullOrWhiteSpace(Environment.UserName) ? "Writer" : Environment.UserName;

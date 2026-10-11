@@ -904,8 +904,11 @@ public static class MarkdownRenderer
             });
         }
 
-        if (blocks.Count == 0)
+        if (blocks.Count == 0 ||
+            blocks[^1].Kind is LiveBlockKind.ImageBlock or LiveBlockKind.TableBlock or LiveBlockKind.Divider or LiveBlockKind.CodeBlock or LiveBlockKind.HtmlWrapper)
+        {
             blocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+        }
 
         return blocks;
     }
@@ -1267,12 +1270,17 @@ public static class MarkdownRenderer
         double baseFontSize,
         string? noteFolderPath,
         string? vaultRootPath,
-        Action? onRequestEditRaw = null,
-        Action? onRequestClickBelow = null)
+        Action? onImageMutated = null,
+        Action? onRequestClickBelow = null,
+        Action? onRequestDeleteImage = null)
     {
         var secondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 108, 108, 112));
         var surfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(30, 255, 255, 255) : ColorHelper.FromArgb(18, 0, 0, 0));
         var borderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(38, 255, 255, 255) : ColorHelper.FromArgb(28, 0, 0, 0));
+        var accentOutlineBrush = new SolidColorBrush(ColorHelper.FromArgb(175, 10, 132, 255));
+        var pillBrush = new SolidColorBrush(ColorHelper.FromArgb(230, 10, 132, 255));
+        var badgeBgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(215, 20, 20, 24) : ColorHelper.FromArgb(225, 245, 245, 247));
+        var badgeFgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(245, 245, 245, 247) : ColorHelper.FromArgb(245, 28, 28, 30));
 
         TryParseImageLine(block.Content, out var src, out var alt, out var width, out var height);
 
@@ -1323,7 +1331,8 @@ public static class MarkdownRenderer
             CornerRadius = new CornerRadius(8),
             MaxWidth = 680,
             HorizontalAlignment = align,
-            Margin = new Thickness(0, 6, 0, 8)
+            Margin = new Thickness(0, 6, 0, 8),
+            Background = new SolidColorBrush(ColorHelper.FromArgb(1, 0, 0, 0))
         };
 
         if (TryResolveImageUri(src, noteFolderPath, vaultRootPath, out var resolvedUri) && resolvedUri is not null)
@@ -1336,21 +1345,242 @@ public static class MarkdownRenderer
                     Source = bitmap,
                     Stretch = Stretch.Uniform,
                     MaxWidth = 680,
+                    MinWidth = 80,
                     HorizontalAlignment = align
                 };
                 if (width is > 0)
-                    img.Width = Math.Min(width.Value, 680);
-                if (height is > 0)
+                    img.Width = Math.Clamp(width.Value, 80, 680);
+                else if (height is > 0)
                     img.Height = height.Value;
+
                 if (!string.IsNullOrWhiteSpace(alt))
                     ToolTipService.SetToolTip(img, alt);
+
+                var containerGrid = new Grid
+                {
+                    HorizontalAlignment = align
+                };
+
+                var imgClipBorder = new Border
+                {
+                    CornerRadius = new CornerRadius(8),
+                    Child = img
+                };
+                containerGrid.Children.Add(imgClipBorder);
+
+                var hoverFrame = new Border
+                {
+                    CornerRadius = new CornerRadius(8),
+                    BorderBrush = accentOutlineBrush,
+                    BorderThickness = new Thickness(1.5),
+                    Opacity = 0,
+                    IsHitTestVisible = false
+                };
+                containerGrid.Children.Add(hoverFrame);
+
+                var rightResizeZone = new Border
+                {
+                    Width = 18,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Stretch,
+                    Background = new SolidColorBrush(ColorHelper.FromArgb(1, 0, 0, 0)),
+                    Opacity = 0,
+                    Child = new Border
+                    {
+                        Width = 5,
+                        Height = 40,
+                        CornerRadius = new CornerRadius(2.5),
+                        Background = pillBrush,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(0, 0, 3, 0)
+                    }
+                };
+                ToolTipService.SetToolTip(rightResizeZone, "Drag to resize image");
+                containerGrid.Children.Add(rightResizeZone);
+
+                var cornerResizeGrip = new Border
+                {
+                    Width = 24,
+                    Height = 24,
+                    CornerRadius = new CornerRadius(6),
+                    Background = badgeBgBrush,
+                    BorderBrush = borderBrush,
+                    BorderThickness = new Thickness(1),
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Bottom,
+                    Margin = new Thickness(0, 0, 6, 6),
+                    Opacity = 0,
+                    Child = new FontIcon
+                    {
+                        Glyph = "\uE740",
+                        FontSize = 11,
+                        Foreground = badgeFgBrush,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    }
+                };
+                ToolTipService.SetToolTip(cornerResizeGrip, "Drag to resize image");
+                containerGrid.Children.Add(cornerResizeGrip);
+
+                var sizeText = new TextBlock
+                {
+                    FontSize = 11,
+                    Foreground = badgeFgBrush,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                var sizeBadge = new Border
+                {
+                    CornerRadius = new CornerRadius(5),
+                    Background = badgeBgBrush,
+                    BorderBrush = borderBrush,
+                    BorderThickness = new Thickness(1),
+                    Padding = new Thickness(7, 3, 7, 3),
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    VerticalAlignment = VerticalAlignment.Bottom,
+                    Margin = new Thickness(8, 0, 0, 8),
+                    Opacity = 0,
+                    IsHitTestVisible = false,
+                    Child = sizeText
+                };
+                containerGrid.Children.Add(sizeBadge);
+
+                if (onRequestDeleteImage is not null)
+                {
+                    var delBtn = new Button
+                    {
+                        Width = 26,
+                        Height = 26,
+                        Padding = new Thickness(0),
+                        CornerRadius = new CornerRadius(6),
+                        Background = badgeBgBrush,
+                        BorderBrush = borderBrush,
+                        BorderThickness = new Thickness(1),
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        VerticalAlignment = VerticalAlignment.Top,
+                        Margin = new Thickness(0, 6, 6, 0),
+                        Opacity = 0,
+                        Content = new FontIcon
+                        {
+                            Glyph = "\uE74D",
+                            FontSize = 12,
+                            Foreground = badgeFgBrush
+                        }
+                    };
+                    ToolTipService.SetToolTip(delBtn, "Remove image");
+                    delBtn.Click += (_, _) => onRequestDeleteImage();
+                    containerGrid.Children.Add(delBtn);
+
+                    hostBorder.PointerEntered += (_, _) => delBtn.Opacity = 1;
+                    hostBorder.PointerExited += (_, _) => delBtn.Opacity = 0;
+                }
+
+                var isResizing = false;
+                var isPointerInside = false;
+                var startX = 0.0;
+                var startWidth = 0.0;
+
+                void UpdateHoverChrome(bool visible)
+                {
+                    var alpha = (visible || isResizing) ? 1.0 : 0.0;
+                    hoverFrame.Opacity = alpha;
+                    rightResizeZone.Opacity = alpha;
+                    cornerResizeGrip.Opacity = alpha;
+                }
+
+                hostBorder.PointerEntered += (_, _) =>
+                {
+                    isPointerInside = true;
+                    UpdateHoverChrome(true);
+                };
+
+                hostBorder.PointerExited += (_, _) =>
+                {
+                    isPointerInside = false;
+                    UpdateHoverChrome(false);
+                };
+
+                void WireResizeHandle(UIElement handle)
+                {
+                    handle.PointerPressed += (_, e) =>
+                    {
+                        var props = e.GetCurrentPoint(hostBorder).Properties;
+                        if (!props.IsLeftButtonPressed)
+                            return;
+
+                        e.Handled = true;
+                        isResizing = true;
+                        startX = e.GetCurrentPoint(hostBorder).Position.X;
+                        startWidth = !double.IsNaN(img.Width) && img.Width > 0
+                            ? img.Width
+                            : (img.ActualWidth > 0 ? img.ActualWidth : 360.0);
+                        img.Height = double.NaN;
+                        handle.CapturePointer(e.Pointer);
+                        sizeText.Text = $"{Math.Round(startWidth):0} px";
+                        sizeBadge.Opacity = 1;
+                        UpdateHoverChrome(true);
+                    };
+
+                    handle.PointerMoved += (_, e) =>
+                    {
+                        if (!isResizing)
+                            return;
+
+                        e.Handled = true;
+                        var currentX = e.GetCurrentPoint(hostBorder).Position.X;
+                        var deltaX = currentX - startX;
+                        var newWidth = Math.Clamp(Math.Round(startWidth + deltaX), 80.0, 680.0);
+                        img.Width = newWidth;
+                        sizeText.Text = $"{newWidth:0} px";
+                    };
+
+                    void EndResize(PointerRoutedEventArgs e)
+                    {
+                        if (!isResizing)
+                            return;
+
+                        e.Handled = true;
+                        isResizing = false;
+                        handle.ReleasePointerCaptures();
+                        sizeBadge.Opacity = 0;
+                        UpdateHoverChrome(isPointerInside);
+
+                        if (!double.IsNaN(img.Width) && img.Width > 0)
+                        {
+                            var safeAlt = (alt ?? string.Empty).Replace('"', '\'');
+                            block.Content = $"<img src=\"{src}\" alt=\"{safeAlt}\" width=\"{Math.Round(img.Width):0}\" />";
+                            onImageMutated?.Invoke();
+                        }
+                    }
+
+                    handle.PointerReleased += (_, e) => EndResize(e);
+                    handle.PointerCanceled += (_, e) => EndResize(e);
+                    handle.PointerCaptureLost += (_, _) =>
+                    {
+                        if (!isResizing)
+                            return;
+
+                        isResizing = false;
+                        sizeBadge.Opacity = 0;
+                        UpdateHoverChrome(isPointerInside);
+                        if (!double.IsNaN(img.Width) && img.Width > 0)
+                        {
+                            var safeAlt = (alt ?? string.Empty).Replace('"', '\'');
+                            block.Content = $"<img src=\"{src}\" alt=\"{safeAlt}\" width=\"{Math.Round(img.Width):0}\" />";
+                            onImageMutated?.Invoke();
+                        }
+                    };
+                }
+
+                WireResizeHandle(rightResizeZone);
+                WireResizeHandle(cornerResizeGrip);
 
                 img.ImageFailed += (_, _) =>
                 {
                     hostBorder.Child = CreateFallbackPlaceholder();
                 };
 
-                hostBorder.Child = img;
+                hostBorder.Child = containerGrid;
             }
             catch
             {
@@ -1364,12 +1594,8 @@ public static class MarkdownRenderer
 
         hostBorder.PointerPressed += (_, e) =>
         {
-            if (e.GetCurrentPoint(hostBorder).Properties.IsRightButtonPressed && onRequestEditRaw is not null)
-            {
-                e.Handled = true;
-                onRequestEditRaw();
+            if (e.GetCurrentPoint(hostBorder).Properties.IsRightButtonPressed)
                 return;
-            }
 
             if (onRequestClickBelow is not null)
             {

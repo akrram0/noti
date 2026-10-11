@@ -106,6 +106,7 @@ public sealed partial class MainWindow : Window
         LiveEditorScrollViewer.ViewChanged += OnLiveEditorScrollViewerViewChanged;
         EditorPaneGrid.RightTapped += OnEditorPaneRightTapped;
         EditorTextBox.ContextRequested += OnEditorContextRequested;
+        EditorTextBox.Paste += OnEditorTextBoxPaste;
         RootGrid.AddHandler(UIElement.DragOverEvent, new DragEventHandler(OnRootGridDragOver), true);
         RootGrid.AddHandler(UIElement.DropEvent, new DragEventHandler(OnRootGridDrop), true);
         RootGrid.PreviewKeyDown += OnRootPreviewKeyDown;
@@ -665,9 +666,6 @@ public sealed partial class MainWindow : Window
 
     private void RecycleBlockTextBox(LiveDocBlock block)
     {
-        if (block.Kind is LiveBlockKind.CodeBlock or LiveBlockKind.TableBlock or LiveBlockKind.Divider or LiveBlockKind.ImageBlock or LiveBlockKind.HtmlWrapper)
-            return;
-
         if (block.PrimaryTextBox is not { } tb)
             return;
 
@@ -678,7 +676,7 @@ public sealed partial class MainWindow : Window
             parentBorder.Child = null;
 
         block.PrimaryTextBox = null;
-        if (_liveTextBoxPool.Count < 160)
+        if (!tb.AcceptsReturn && _liveTextBoxPool.Count < 160)
             _liveTextBoxPool.Push(tb);
     }
 
@@ -763,6 +761,10 @@ public sealed partial class MainWindow : Window
             ? _cachedSecondaryBrush
             : _cachedPrimaryBrush;
 
+        var isAfterVisualBlock = blockIndex > 0 &&
+                                 blockIndex < _liveBlocks.Count &&
+                                 _liveBlocks[blockIndex - 1].Kind is LiveBlockKind.ImageBlock or LiveBlockKind.TableBlock or LiveBlockKind.Divider;
+
         placeholder = block.Kind switch
         {
             LiveBlockKind.Heading1 => "Heading 1",
@@ -771,7 +773,9 @@ public sealed partial class MainWindow : Window
             LiveBlockKind.Checklist => "To-do",
             LiveBlockKind.Bullet => "List item",
             LiveBlockKind.Quote => "Quote...",
-            _ => blockIndex == 0 && _liveBlocks.Count == 1 ? "Type '/' for commands, or start writing..." : string.Empty
+            _ => (blockIndex == 0 && _liveBlocks.Count == 1) || (isAfterVisualBlock && blockIndex == _liveBlocks.Count - 1)
+                ? "Type '/' for commands, or start writing..."
+                : string.Empty
         };
     }
 
@@ -834,6 +838,30 @@ public sealed partial class MainWindow : Window
         FocusNearestLiveBlockAtY(e.GetCurrentPoint(LiveEditorPanel).Position.Y);
     }
 
+    private void FocusOrInsertParagraphAfter(int blockIndex)
+    {
+        if (_liveBlocks.Count == 0)
+        {
+            InsertLiveBlockAt(0, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+            FlushSyncLiveBlocksToViewModel();
+            return;
+        }
+
+        var clamped = Math.Clamp(blockIndex, 0, _liveBlocks.Count - 1);
+        if (clamped + 1 < _liveBlocks.Count)
+        {
+            EnsureLiveBlocksMaterializedThrough(clamped + 1);
+            if (IsEditableLiveBlock(_liveBlocks[clamped + 1]))
+            {
+                FocusLiveBlockAt(clamped + 1, 0);
+                return;
+            }
+        }
+
+        InsertLiveBlockAt(clamped + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+        FlushSyncLiveBlocksToViewModel();
+    }
+
     private void FocusNearestLiveBlockAtY(double clickY)
     {
         if (_liveBlocks.Count == 0)
@@ -853,6 +881,8 @@ public sealed partial class MainWindow : Window
             {
                 if (IsEditableLiveBlock(_liveBlocks[i]))
                     FocusLiveBlockAt(i);
+                else
+                    FocusOrInsertParagraphAfter(i);
                 return;
             }
         }
@@ -860,7 +890,7 @@ public sealed partial class MainWindow : Window
         EnsureLiveBlocksMaterializedThrough(_liveBlocks.Count - 1);
 
         var lastBlock = _liveBlocks[^1];
-        if (lastBlock.Kind is LiveBlockKind.TableBlock or LiveBlockKind.Divider or LiveBlockKind.CodeBlock or LiveBlockKind.ImageBlock or LiveBlockKind.HtmlWrapper)
+        if (!IsEditableLiveBlock(lastBlock) || lastBlock.Kind == LiveBlockKind.CodeBlock)
         {
             InsertLiveBlockAt(_liveBlocks.Count, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
             FlushSyncLiveBlocksToViewModel();
@@ -1138,10 +1168,7 @@ public sealed partial class MainWindow : Window
             {
                 var idx = _liveBlocks.IndexOf(block);
                 if (idx >= 0)
-                {
-                    InsertLiveBlockAt(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
-                    FlushSyncLiveBlocksToViewModel();
-                }
+                    FocusOrInsertParagraphAfter(idx);
             };
             return dividerContainer;
         }
@@ -1154,32 +1181,29 @@ public sealed partial class MainWindow : Window
                 baseFontSize,
                 ViewModel.SelectedNote?.FolderPath,
                 ViewModel.VaultDirectoryPath,
-                onRequestEditRaw: () =>
+                onImageMutated: QueueSyncLiveBlocksToViewModel,
+                onRequestClickBelow: () =>
                 {
                     var idx = _liveBlocks.IndexOf(block);
                     if (idx >= 0)
-                    {
-                        block.Kind = LiveBlockKind.Paragraph;
-                        RefreshLiveBlockAt(idx, (block.Content ?? string.Empty).Length);
-                    }
+                        FocusOrInsertParagraphAfter(idx);
                 },
-                onRequestClickBelow: () =>
+                onRequestDeleteImage: () =>
                 {
                     var idx = _liveBlocks.IndexOf(block);
                     if (idx < 0)
                         return;
 
-                    for (var next = idx + 1; next < _liveBlocks.Count; next++)
-                    {
-                        EnsureLiveBlocksMaterializedThrough(next);
-                        if (IsEditableLiveBlock(_liveBlocks[next]))
-                        {
-                            FocusLiveBlockAt(next, 0);
-                            return;
-                        }
-                    }
+                    _liveBlocks.RemoveAt(idx);
+                    if (idx < LiveEditorPanel.Children.Count)
+                        LiveEditorPanel.Children.RemoveAt(idx);
+                    _liveMaterializedCount = LiveEditorPanel.Children.Count;
 
-                    InsertLiveBlockAt(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+                    if (_liveBlocks.Count == 0)
+                        InsertLiveBlockAt(0, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+                    else
+                        FocusOrInsertParagraphAfter(Math.Max(0, idx - 1));
+
                     FlushSyncLiveBlocksToViewModel();
                 });
         }
@@ -1539,6 +1563,7 @@ public sealed partial class MainWindow : Window
         };
 
         tb.ContextRequested += OnEditorContextRequested;
+        tb.Paste += OnEditorTextBoxPaste;
 
         tb.PreviewKeyDown += (_, e) =>
         {
@@ -1631,7 +1656,7 @@ public sealed partial class MainWindow : Window
                 block.Kind = LiveBlockKind.Divider;
                 block.Content = string.Empty;
                 RefreshLiveBlockAt(idx);
-                InsertLiveBlockAt(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+                FocusOrInsertParagraphAfter(idx);
                 FlushSyncLiveBlocksToViewModel();
                 return true;
             }
@@ -1641,8 +1666,7 @@ public sealed partial class MainWindow : Window
                 block.Kind = LiveBlockKind.ImageBlock;
                 block.Content = text;
                 RefreshLiveBlockAt(idx);
-                if (idx == _liveBlocks.Count - 1)
-                    InsertLiveBlockAt(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+                FocusOrInsertParagraphAfter(idx);
                 FlushSyncLiveBlocksToViewModel();
                 return true;
             }
@@ -3774,7 +3798,7 @@ public sealed partial class MainWindow : Window
                 {
                     _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.ImageBlock, Content = markdownImage });
                     _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
-                    RebuildLiveEditor(reparse: false, focusBlockIndex: 1);
+                    RebuildLiveEditor(reparse: false, focusBlockIndex: 1, focusCaretIndex: 0);
                 }
                 else if (_liveBlocks[idx].Kind == LiveBlockKind.Paragraph &&
                          string.IsNullOrWhiteSpace(_liveBlocks[idx].Content))
@@ -3782,10 +3806,7 @@ public sealed partial class MainWindow : Window
                     _liveBlocks[idx].Kind = LiveBlockKind.ImageBlock;
                     _liveBlocks[idx].Content = markdownImage;
                     RefreshLiveBlockAt(idx);
-                    if (idx == _liveBlocks.Count - 1)
-                        InsertLiveBlockAt(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
-                    else
-                        FocusLiveBlockAt(idx + 1, 0);
+                    FocusOrInsertParagraphAfter(idx);
                 }
                 else
                 {
@@ -3794,10 +3815,7 @@ public sealed partial class MainWindow : Window
                         Kind = LiveBlockKind.ImageBlock,
                         Content = markdownImage
                     });
-                    if (idx + 1 == _liveBlocks.Count - 1)
-                        InsertLiveBlockAt(idx + 2, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
-                    else
-                        FocusLiveBlockAt(idx + 2, 0);
+                    FocusOrInsertParagraphAfter(idx + 1);
                 }
 
                 FlushSyncLiveBlocksToViewModel();
@@ -3812,6 +3830,81 @@ public sealed partial class MainWindow : Window
             var updated = text.Insert(caret, insertBlock);
             ApplyEditorText(updated, caret + insertBlock.Length);
             EditorTextBox.Focus(FocusState.Programmatic);
+        }
+        catch
+        {
+        }
+    }
+
+    private async void OnEditorTextBoxPaste(object sender, TextControlPasteEventArgs e)
+    {
+        try
+        {
+            var dataView = Clipboard.GetContent();
+            if (dataView.Contains(StandardDataFormats.StorageItems))
+            {
+                var items = await dataView.GetStorageItemsAsync();
+                var targetBlock = (sender as TextBox)?.Tag as LiveDocBlock ?? _activeLiveBlock;
+                foreach (var item in items)
+                {
+                    if (item is StorageFile file && IsSupportedImageFile(file.Path))
+                    {
+                        e.Handled = true;
+                        await InsertImageFileIntoCurrentNoteAsync(file.Path, targetBlock);
+                        return;
+                    }
+                }
+            }
+
+            if (dataView.Contains(StandardDataFormats.Bitmap))
+            {
+                e.Handled = true;
+                var targetBlock = (sender as TextBox)?.Tag as LiveDocBlock ?? _activeLiveBlock;
+                var bmpRef = await dataView.GetBitmapAsync();
+                if (bmpRef is not null)
+                    await InsertClipboardBitmapIntoCurrentNoteAsync(bmpRef, targetBlock);
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task InsertClipboardBitmapIntoCurrentNoteAsync(
+        Windows.Storage.Streams.RandomAccessStreamReference bitmapRef,
+        LiveDocBlock? targetLiveBlock = null)
+    {
+        try
+        {
+            if (ViewModel.SelectedNote is null || ViewModel.SelectedNote.IsFolder)
+                await ViewModel.CreateNoteInFolderAsync(ViewModel.ActiveFolderPath);
+
+            var vaultDir = ViewModel.VaultDirectoryPath;
+            var noteFolder = ViewModel.SelectedNote?.FolderPath;
+            var baseDir = !string.IsNullOrWhiteSpace(noteFolder)
+                ? Path.Combine(vaultDir, noteFolder.Replace('/', Path.DirectorySeparatorChar))
+                : vaultDir;
+
+            var assetsDir = Path.Combine(baseDir, "assets");
+            Directory.CreateDirectory(assetsDir);
+
+            var fileName = $"pasted-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.png";
+            var destPath = Path.Combine(assetsDir, fileName);
+
+            using (var inputStream = await bitmapRef.OpenReadAsync())
+            {
+                var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(inputStream);
+                var softBmp = await decoder.GetSoftwareBitmapAsync();
+                using var fileStream = File.Create(destPath);
+                using var winrtOut = fileStream.AsRandomAccessStream();
+                var encoder = await Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(
+                    Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId,
+                    winrtOut);
+                encoder.SetSoftwareBitmap(softBmp);
+                await encoder.FlushAsync();
+            }
+
+            await InsertImageFileIntoCurrentNoteAsync(destPath, targetLiveBlock);
         }
         catch
         {

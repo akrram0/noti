@@ -12,7 +12,7 @@
                 <ResourceDictionary x:Key="Default">
                     <SolidColorBrush x:Key="CanvasBackgroundBrush" Color="#FF09090B" />
                     <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#CC121216" />
-                    <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FF121216" TintOpacity="0.38" FallbackColor="#CC121216" />
+                    <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FF121216" TintOpacity="0.18" TintLuminosityOpacity="0.18" FallbackColor="#B8121216" />
                     <SolidColorBrush x:Key="SurfaceActiveBrush" Color="#28FFFFFF" />
                     <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#16FFFFFF" />
                     <SolidColorBrush x:Key="InputBackgroundBrush" Color="#18FFFFFF" />
@@ -55,7 +55,7 @@
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="CanvasBackgroundBrush" Color="#FF09090B" />
                     <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#CC121216" />
-                    <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FF121216" TintOpacity="0.38" FallbackColor="#CC121216" />
+                    <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FF121216" TintOpacity="0.18" TintLuminosityOpacity="0.18" FallbackColor="#B8121216" />
                     <SolidColorBrush x:Key="SurfaceActiveBrush" Color="#28FFFFFF" />
                     <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#16FFFFFF" />
                     <SolidColorBrush x:Key="InputBackgroundBrush" Color="#18FFFFFF" />
@@ -98,7 +98,7 @@
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="CanvasBackgroundBrush" Color="#FFFFFFFF" />
                     <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#CCF5F5F7" />
-                    <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FFFFFFFF" TintOpacity="0.42" FallbackColor="#CCF5F5F7" />
+                    <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FFFFFFFF" TintOpacity="0.22" TintLuminosityOpacity="0.24" FallbackColor="#C8F5F5F7" />
                     <SolidColorBrush x:Key="SurfaceActiveBrush" Color="#1C000000" />
                     <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#0F000000" />
                     <SolidColorBrush x:Key="InputBackgroundBrush" Color="#12000000" />

@@ -769,13 +769,23 @@
                                                     CornerRadius="6"
                                                     Background="{ThemeResource InputBackgroundBrush}"
                                                     VerticalAlignment="Center">
-                                                    <TextBlock
-                                                        Text="{x:Bind BadgeText}"
-                                                        FontSize="11"
-                                                        FontWeight="SemiBold"
-                                                        Foreground="{ThemeResource TextPrimaryBrush}"
-                                                        HorizontalAlignment="Center"
-                                                        VerticalAlignment="Center" />
+                                                    <Grid>
+                                                        <FontIcon
+                                                            Glyph="{x:Bind IconGlyph}"
+                                                            Visibility="{x:Bind IconVisibility}"
+                                                            FontSize="13"
+                                                            Foreground="{ThemeResource TextPrimaryBrush}"
+                                                            HorizontalAlignment="Center"
+                                                            VerticalAlignment="Center" />
+                                                        <TextBlock
+                                                            Text="{x:Bind BadgeText}"
+                                                            Visibility="{x:Bind BadgeTextVisibility}"
+                                                            FontSize="11"
+                                                            FontWeight="SemiBold"
+                                                            Foreground="{ThemeResource TextPrimaryBrush}"
+                                                            HorizontalAlignment="Center"
+                                                            VerticalAlignment="Center" />
+                                                    </Grid>
                                                 </Border>
                                                 <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
                                                     <TextBlock

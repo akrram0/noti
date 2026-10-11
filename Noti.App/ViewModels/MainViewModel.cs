@@ -59,7 +59,10 @@ public sealed class SlashCommandItem
     public required string Id { get; init; }
     public required string Title { get; init; }
     public required string Subtitle { get; init; }
-    public required string BadgeText { get; init; }
+    public string BadgeText { get; init; } = string.Empty;
+    public string IconGlyph { get; init; } = string.Empty;
+    public Visibility BadgeTextVisibility => string.IsNullOrEmpty(BadgeText) ? Visibility.Collapsed : Visibility.Visible;
+    public Visibility IconVisibility => string.IsNullOrEmpty(IconGlyph) ? Visibility.Collapsed : Visibility.Visible;
 }
 
 public sealed class MainViewModel : ObservableObject
@@ -95,7 +98,7 @@ public sealed class MainViewModel : ObservableObject
     private bool _isFluidAnimationEnabled = true;
     private bool _isTreeShortcutEnabled = true;
     private double _editorFontSize = 16.0;
-    private double _surfaceOpacityPercent = 42.0;
+    private double _surfaceOpacityPercent = 22.0;
     private EditorViewMode _currentViewMode = EditorViewMode.Live;
     private string _userName = "Writer";
     private string _userAvatarPath = string.Empty;
@@ -117,8 +120,11 @@ public sealed class MainViewModel : ObservableObject
         _isFluidAnimationEnabled = _settings.IsFluidAnimationEnabled;
         _isTreeShortcutEnabled = _settings.IsTreeShortcutEnabled;
         _editorFontSize = Math.Clamp(_settings.EditorFontSize, 11.0, 28.0);
-        if (Math.Abs(_settings.SurfaceOpacityPercent - 75.0) < 0.01)
-            _settings.SurfaceOpacityPercent = 42.0;
+        if (Math.Abs(_settings.SurfaceOpacityPercent - 75.0) < 0.01 || Math.Abs(_settings.SurfaceOpacityPercent - 42.0) < 0.01)
+        {
+            _settings.SurfaceOpacityPercent = 22.0;
+            _settings.Save();
+        }
         _surfaceOpacityPercent = Math.Clamp(_settings.SurfaceOpacityPercent, 0.0, 100.0);
         _currentBackdropMode = Enum.TryParse<BackdropMode>(_settings.BackdropKind, ignoreCase: true, out var parsedBackdrop)
             ? parsedBackdrop
@@ -454,6 +460,8 @@ public sealed class MainViewModel : ObservableObject
                 _settings.BackdropKind = value.ToString();
                 _settings.Save();
                 OnPropertyChanged(nameof(BackdropIndicatorOffsetX));
+                OnPropertyChanged(nameof(SurfaceOpacity));
+                OnPropertyChanged(nameof(SidebarSurfaceOpacity));
             }
         }
     }
@@ -545,8 +553,14 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    public double SurfaceOpacity => _surfaceOpacityPercent / 100.0;
-    public double SidebarSurfaceOpacity => Math.Clamp(_surfaceOpacityPercent / 100.0, 0.0, 1.0);
+    public double SurfaceOpacity => _currentBackdropMode == BackdropMode.Blur
+        ? (_surfaceOpacityPercent / 100.0) * 0.36
+        : _surfaceOpacityPercent / 100.0;
+
+    public double SidebarSurfaceOpacity => _currentBackdropMode == BackdropMode.Blur
+        ? Math.Clamp((_surfaceOpacityPercent / 100.0) * 0.45, 0.06, 0.85)
+        : Math.Clamp(_surfaceOpacityPercent / 100.0, 0.0, 1.0);
+
     public string SurfaceOpacityText => $"{_surfaceOpacityPercent:0}%";
 
     public void SetItemColor(NoteItemViewModel? item, string? colorHex)
@@ -601,11 +615,11 @@ public sealed class MainViewModel : ObservableObject
         new() { Id = "h2", Title = "Heading 2", Subtitle = "Medium section heading", BadgeText = "H2" },
         new() { Id = "h3", Title = "Heading 3", Subtitle = "Compact subsection heading", BadgeText = "H3" },
         new() { Id = "paragraph", Title = "Paragraph", Subtitle = "Plain body text", BadgeText = "Aa" },
-        new() { Id = "checklist", Title = "Checklist", Subtitle = "Interactive task item (- [ ])", BadgeText = "☑" },
-        new() { Id = "quote", Title = "Quote / Callout", Subtitle = "Callout block with clean left border", BadgeText = "❝" },
-        new() { Id = "code", Title = "Code Block", Subtitle = "Monospace code snippet block", BadgeText = "<>" },
-        new() { Id = "table", Title = "Interactive Table", Subtitle = "Visual table with rows, columns & Tab navigation", BadgeText = "⊞" },
-        new() { Id = "image", Title = "Image / Photo", Subtitle = "Insert a photo (or drag & drop into note)", BadgeText = "🖼" }
+        new() { Id = "checklist", Title = "Checklist", Subtitle = "Interactive task item (- [ ])", IconGlyph = "\uE73A" },
+        new() { Id = "quote", Title = "Quote / Callout", Subtitle = "Callout block with clean left border", IconGlyph = "\uE9B1" },
+        new() { Id = "code", Title = "Code Block", Subtitle = "Monospace code snippet block", IconGlyph = "\uE943" },
+        new() { Id = "table", Title = "Interactive Table", Subtitle = "Visual table with rows, columns & Tab navigation", IconGlyph = "\uE80A" },
+        new() { Id = "image", Title = "Image / Photo", Subtitle = "Insert a photo (or drag & drop into note)", IconGlyph = "\uEB9F" }
     ];
 
     public void UpdateSlashSuggestions(string query)
