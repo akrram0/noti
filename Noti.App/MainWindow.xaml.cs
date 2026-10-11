@@ -99,6 +99,8 @@ public sealed partial class MainWindow : Window
         ZoomBadgeButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
 
         LiveEditorScrollViewer.ViewChanged += OnLiveEditorScrollViewerViewChanged;
+        RootGrid.AddHandler(UIElement.DragOverEvent, new DragEventHandler(OnRootGridDragOver), true);
+        RootGrid.AddHandler(UIElement.DropEvent, new DragEventHandler(OnRootGridDrop), true);
         RootGrid.PreviewKeyDown += OnRootPreviewKeyDown;
         EditorTextBox.PreviewKeyDown += OnEditorPreviewKeyDown;
         EditorTextBox.TextChanged += OnEditorTextChanged;
@@ -2329,6 +2331,12 @@ public sealed partial class MainWindow : Window
                 break;
             }
 
+            case "image":
+                HideSlashMenuPopup();
+                ApplyEditorText(baseText, slashIndex);
+                _ = PickAndInsertNoteImageAsync();
+                return;
+
             default:
                 HideSlashMenuPopup();
                 return;
@@ -2439,6 +2447,13 @@ public sealed partial class MainWindow : Window
                 FlushSyncLiveBlocksToViewModel();
                 return;
             }
+
+            case "image":
+                block.Content = cleaned;
+                tb.Text = cleaned;
+                FlushSyncLiveBlocksToViewModel();
+                _ = PickAndInsertNoteImageAsync(block);
+                return;
 
             default:
                 return;
@@ -3476,12 +3491,147 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private static bool IsSupportedNoteImageExtension(string? ext) =>
+        !string.IsNullOrWhiteSpace(ext) &&
+        (ext.Equals(".png", StringComparison.OrdinalIgnoreCase) ||
+         ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase) ||
+         ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+         ext.Equals(".webp", StringComparison.OrdinalIgnoreCase) ||
+         ext.Equals(".gif", StringComparison.OrdinalIgnoreCase) ||
+         ext.Equals(".bmp", StringComparison.OrdinalIgnoreCase) ||
+         ext.Equals(".svg", StringComparison.OrdinalIgnoreCase));
+
+    private async Task PickAndInsertNoteImageAsync(LiveDocBlock? targetLiveBlock = null)
+    {
+        try
+        {
+            var picker = new FileOpenPicker();
+            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+            picker.FileTypeFilter.Add(".png");
+            picker.FileTypeFilter.Add(".jpg");
+            picker.FileTypeFilter.Add(".jpeg");
+            picker.FileTypeFilter.Add(".webp");
+            picker.FileTypeFilter.Add(".gif");
+            picker.FileTypeFilter.Add(".bmp");
+            picker.FileTypeFilter.Add(".svg");
+
+            var file = await picker.PickSingleFileAsync();
+            if (file is not null)
+                await InsertImageFileIntoCurrentNoteAsync(file.Path, targetLiveBlock);
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task InsertImageFileIntoCurrentNoteAsync(string sourceFilePath, LiveDocBlock? targetLiveBlock = null)
+    {
+        if (string.IsNullOrWhiteSpace(sourceFilePath) || !File.Exists(sourceFilePath))
+            return;
+
+        try
+        {
+            if (ViewModel.SelectedNote is null || ViewModel.SelectedNote.IsFolder)
+                await ViewModel.CreateNewNoteInFolderAsync(ViewModel.ActiveFolderPath);
+
+            var vaultDir = ViewModel.VaultDirectoryPath;
+            var noteFolder = ViewModel.SelectedNote?.FolderPath;
+            var baseDir = !string.IsNullOrWhiteSpace(noteFolder)
+                ? Path.Combine(vaultDir, noteFolder.Replace('/', Path.DirectorySeparatorChar))
+                : vaultDir;
+
+            var assetsDir = Path.Combine(baseDir, "assets");
+            Directory.CreateDirectory(assetsDir);
+
+            var rawStem = Path.GetFileNameWithoutExtension(sourceFilePath);
+            var safeStem = string.Concat(rawStem.Select(ch => ch is ' ' or '(' or ')' or '[' or ']' ? '-' : ch)).Trim('-');
+            if (string.IsNullOrWhiteSpace(safeStem))
+                safeStem = "image";
+
+            var ext = Path.GetExtension(sourceFilePath);
+            if (string.IsNullOrWhiteSpace(ext))
+                ext = ".png";
+
+            var destFileName = $"{safeStem}{ext}";
+            var destPath = Path.Combine(assetsDir, destFileName);
+            var fullSource = Path.GetFullPath(sourceFilePath);
+            var fullDest = Path.GetFullPath(destPath);
+
+            if (File.Exists(destPath) && !string.Equals(fullSource, fullDest, StringComparison.OrdinalIgnoreCase))
+            {
+                destFileName = $"{safeStem}-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}{ext}";
+                destPath = Path.Combine(assetsDir, destFileName);
+                fullDest = Path.GetFullPath(destPath);
+            }
+
+            if (!string.Equals(fullSource, fullDest, StringComparison.OrdinalIgnoreCase))
+                await Task.Run(() => File.Copy(sourceFilePath, destPath, overwrite: true));
+
+            var altText = string.IsNullOrWhiteSpace(rawStem) ? "image" : rawStem;
+            var markdownImage = $"![{altText}](assets/{destFileName})";
+
+            if (ViewModel.CurrentViewMode == EditorViewMode.Live)
+            {
+                var targetBlock = targetLiveBlock ?? _activeLiveBlock;
+                var idx = targetBlock is not null ? _liveBlocks.IndexOf(targetBlock) : _liveBlocks.Count - 1;
+                if (idx < 0)
+                    idx = Math.Max(0, _liveBlocks.Count - 1);
+
+                if (_liveBlocks.Count == 0)
+                {
+                    _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.ImageBlock, Content = markdownImage });
+                    _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+                    RebuildLiveEditor(reparse: false, focusBlockIndex: 1);
+                }
+                else if (_liveBlocks[idx].Kind == LiveBlockKind.Paragraph &&
+                         string.IsNullOrWhiteSpace(_liveBlocks[idx].Content))
+                {
+                    _liveBlocks[idx].Kind = LiveBlockKind.ImageBlock;
+                    _liveBlocks[idx].Content = markdownImage;
+                    RefreshLiveBlockAt(idx);
+                    if (idx == _liveBlocks.Count - 1)
+                        InsertLiveBlockAt(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+                    else
+                        FocusLiveBlockAt(idx + 1, 0);
+                }
+                else
+                {
+                    InsertLiveBlockAt(idx + 1, new LiveDocBlock
+                    {
+                        Kind = LiveBlockKind.ImageBlock,
+                        Content = markdownImage
+                    });
+                    if (idx + 1 == _liveBlocks.Count - 1)
+                        InsertLiveBlockAt(idx + 2, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+                    else
+                        FocusLiveBlockAt(idx + 2, 0);
+                }
+
+                FlushSyncLiveBlocksToViewModel();
+                return;
+            }
+
+            var text = EditorTextBox.Text ?? string.Empty;
+            var caret = Math.Clamp(EditorTextBox.SelectionStart, 0, text.Length);
+            var lineStart = FindLineStart(text, caret);
+            var leadingNewline = caret > lineStart && !string.IsNullOrWhiteSpace(text[lineStart..caret]) ? "\r" : string.Empty;
+            var insertBlock = $"{leadingNewline}{markdownImage}\r";
+            var updated = text.Insert(caret, insertBlock);
+            ApplyEditorText(updated, caret + insertBlock.Length);
+            EditorTextBox.Focus(FocusState.Programmatic);
+        }
+        catch
+        {
+        }
+    }
+
     private void OnRootGridDragOver(object sender, DragEventArgs e)
     {
         if (e.DataView.Contains(StandardDataFormats.StorageItems))
         {
             e.AcceptedOperation = DataPackageOperation.Copy;
-            e.DragUIOverride.Caption = "Import .md into Noti";
+            e.DragUIOverride.Caption = "Insert photo or import .md";
+            e.Handled = true;
         }
     }
 
@@ -3490,16 +3640,24 @@ public sealed partial class MainWindow : Window
         if (!e.DataView.Contains(StandardDataFormats.StorageItems))
             return;
 
+        e.Handled = true;
+
         try
         {
             var items = await e.DataView.GetStorageItemsAsync();
             foreach (var item in items)
             {
-                if (item is StorageFile file &&
-                    (file.FileType.Equals(".md", StringComparison.OrdinalIgnoreCase) ||
-                     file.FileType.Equals(".txt", StringComparison.OrdinalIgnoreCase)))
+                if (item is not StorageFile file)
+                    continue;
+
+                if (file.FileType.Equals(".md", StringComparison.OrdinalIgnoreCase) ||
+                    file.FileType.Equals(".txt", StringComparison.OrdinalIgnoreCase))
                 {
                     await ViewModel.ImportMarkdownFileAsync(file.Path);
+                }
+                else if (IsSupportedNoteImageExtension(file.FileType))
+                {
+                    await InsertImageFileIntoCurrentNoteAsync(file.Path);
                 }
             }
         }

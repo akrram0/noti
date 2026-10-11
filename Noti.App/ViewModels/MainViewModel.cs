@@ -602,7 +602,8 @@ public sealed class MainViewModel : ObservableObject
         new() { Id = "checklist", Title = "Checklist", Subtitle = "Interactive task item (- [ ])", BadgeText = "☑" },
         new() { Id = "quote", Title = "Quote / Callout", Subtitle = "Callout block with clean left border", BadgeText = "❝" },
         new() { Id = "code", Title = "Code Block", Subtitle = "Monospace code snippet block", BadgeText = "<>" },
-        new() { Id = "table", Title = "Interactive Table", Subtitle = "Visual table with rows, columns & Tab navigation", BadgeText = "⊞" }
+        new() { Id = "table", Title = "Interactive Table", Subtitle = "Visual table with rows, columns & Tab navigation", BadgeText = "⊞" },
+        new() { Id = "image", Title = "Image / Photo", Subtitle = "Insert a photo (or drag & drop into note)", BadgeText = "🖼" }
     ];
 
     public void UpdateSlashSuggestions(string query)

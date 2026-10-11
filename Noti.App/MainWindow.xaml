@@ -9,8 +9,6 @@
         x:Name="RootGrid"
         UseLayoutRounding="True"
         AllowDrop="True"
-        DragOver="OnRootGridDragOver"
-        Drop="OnRootGridDrop"
         PointerWheelChanged="OnRootPointerWheelChanged"
         Background="Transparent"
         RequestedTheme="{x:Bind ViewModel.CurrentElementTheme, Mode=OneWay}">
