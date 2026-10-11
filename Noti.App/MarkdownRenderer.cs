@@ -808,7 +808,7 @@ public static class MarkdownRenderer
                     inlines.Add(new Run
                     {
                         Text = text[(i + 2)..close],
-                        TextDecorations = TextDecorations.Strikethrough
+                        TextDecorations = Windows.UI.Text.TextDecorations.Strikethrough
                     });
                     i = close + 2;
                     continue;

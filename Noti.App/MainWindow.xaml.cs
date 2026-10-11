@@ -931,35 +931,33 @@ public sealed partial class MainWindow : Window
             if (!forceRebuild &&
                 InlineVisualTableCard.Visibility == Visibility.Visible &&
                 _activeInlineTableStartLine == tableStart &&
-                InlineVisualTableHost.Children.Count > 0)
+                InlineVisualTableHost.Content is not null)
             {
                 return;
             }
 
             _activeInlineTableStartLine = tableStart;
-            InlineVisualTableHost.Children.Clear();
-            var tableElement = MarkdownRenderer.CreateInteractiveTableElement(
-                rawTableLines,
+            InlineVisualTableHost.Content = MarkdownRenderer.CreateInteractiveTableElement(
                 tableStart,
                 tableEnd,
+                rawTableLines,
                 ViewModel.IsDarkMode,
                 ViewModel.EditorFontSize,
                 OnVisualTableMarkdownChanged);
-            InlineVisualTableHost.Children.Add(tableElement);
             InlineVisualTableCard.Visibility = Visibility.Visible;
             return;
         }
 
         _activeInlineTableStartLine = -1;
         InlineVisualTableCard.Visibility = Visibility.Collapsed;
-        InlineVisualTableHost.Children.Clear();
+        InlineVisualTableHost.Content = null;
     }
 
     private void OnCloseInlineVisualTableClick(object sender, RoutedEventArgs e)
     {
         _activeInlineTableStartLine = -1;
         InlineVisualTableCard.Visibility = Visibility.Collapsed;
-        InlineVisualTableHost.Children.Clear();
+        InlineVisualTableHost.Content = null;
         EditorTextBox.Focus(FocusState.Programmatic);
     }
 
