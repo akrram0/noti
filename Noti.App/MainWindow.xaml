@@ -161,19 +161,23 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Borderless Elevated Sidebar with Nested File Tree & User Profile -->
+            <!-- Borderless Elevated Sidebar with Rounded Card Corners, Nested File Tree & User Profile -->
             <Grid
                 x:Name="SidebarContainer"
                 Grid.Column="0"
-                Width="264"
+                Width="272"
                 UseLayoutRounding="True"
-                Background="{ThemeResource SidebarBackgroundBrush}">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="56" />
-                </Grid.RowDefinitions>
+                Background="Transparent">
+                <Grid
+                    Margin="8,0,0,8"
+                    CornerRadius="16"
+                    Background="{ThemeResource SidebarBackgroundBrush}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="56" />
+                    </Grid.RowDefinitions>
 
                 <!-- Search, New Note & New Folder -->
                 <Grid Grid.Row="0" Padding="14,12,14,8">
@@ -327,10 +331,17 @@
                 <ListView
                     Grid.Row="2"
                     Padding="12,4"
-                    SelectionMode="Single"
+                    SelectionMode="None"
+                    IsItemClickEnabled="True"
+                    ItemClick="OnSidebarItemClick"
                     ItemsSource="{x:Bind ViewModel.FilteredNotes, Mode=OneWay}"
-                    SelectedItem="{x:Bind ViewModel.SelectedNote, Mode=TwoWay}"
                     ItemContainerStyle="{StaticResource MinimalListViewItemStyle}">
+                    <ListView.ItemContainerTransitions>
+                        <TransitionCollection>
+                            <AddDeleteThemeTransition />
+                            <RepositionThemeTransition />
+                        </TransitionCollection>
+                    </ListView.ItemContainerTransitions>
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="vm:NoteItemViewModel">
                             <Grid Margin="{x:Bind IndentMargin, Mode=OneWay}">
@@ -542,6 +553,7 @@
                             </FontIcon.RenderTransform>
                         </FontIcon>
                     </Button>
+                </Grid>
                 </Grid>
             </Grid>
 

@@ -59,7 +59,7 @@ public sealed partial class MainWindow : Window
 
     public MainViewModel ViewModel { get; }
 
-    private double TargetSidebarWidth => RootGrid.ActualWidth is > 0 and < 860 ? 216.0 : 264.0;
+    private double TargetSidebarWidth => RootGrid.ActualWidth is > 0 and < 860 ? 224.0 : 272.0;
 
     private void ConfigureWindowChrome()
     {
@@ -815,6 +815,17 @@ public sealed partial class MainWindow : Window
             e.Handled = true;
             ViewModel.CancelNewFolderCommand.Execute(null);
         }
+    }
+
+    private void OnSidebarItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is not NoteItemViewModel item)
+            return;
+
+        if (item.IsFolder)
+            ViewModel.ToggleFolderExpansion(item.FolderPath);
+        else
+            ViewModel.SelectedNote = item;
     }
 
     private void OnCreateNoteInFolderClick(object sender, RoutedEventArgs e)

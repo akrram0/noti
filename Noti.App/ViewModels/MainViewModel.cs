@@ -32,6 +32,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly DispatcherQueue? _dispatcherQueue;
     private readonly UISettings _uiSettings = new();
     private readonly List<NoteItemViewModel> _allNotes = new();
+    private readonly Dictionary<string, NoteItemViewModel> _folderViewModels = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _knownFolders = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _collapsedFolders = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _pinnedNoteIds = new(StringComparer.OrdinalIgnoreCase);
@@ -183,8 +184,8 @@ public sealed class MainViewModel : ObservableObject
 
             if (SetProperty(ref _selectedNote, value))
             {
-                foreach (var item in FilteredNotes)
-                    item.IsSelected = !item.IsFolder && ReferenceEquals(item, value);
+                foreach (var item in _allNotes)
+                    item.IsSelected = ReferenceEquals(item, value);
 
                 if (value is not null)
                 {
@@ -502,6 +503,7 @@ public sealed class MainViewModel : ObservableObject
     {
         var folders = await _noteService.GetFoldersAsync();
         _knownFolders.Clear();
+        _folderViewModels.Clear();
         foreach (var f in folders)
             AddFolderHierarchy(f);
 
@@ -705,6 +707,13 @@ public sealed class MainViewModel : ObservableObject
         _knownFolders.RemoveWhere(f =>
             string.Equals(f, normalized, StringComparison.OrdinalIgnoreCase) ||
             f.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var key in _folderViewModels.Keys.Where(f =>
+                     string.Equals(f, normalized, StringComparison.OrdinalIgnoreCase) ||
+                     f.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList())
+        {
+            _folderViewModels.Remove(key);
+        }
 
         _collapsedFolders.RemoveWhere(f =>
             string.Equals(f, normalized, StringComparison.OrdinalIgnoreCase) ||
@@ -924,7 +933,6 @@ public sealed class MainViewModel : ObservableObject
 
     public void RefreshFilteredNotes()
     {
-        var previousSelectedId = _selectedNote?.Id;
         var matchingModels = _noteService
             .FilterNotes(_allNotes.Where(vm => vm.Model is not null).Select(vm => vm.Model!), _searchQuery)
             .ToHashSet();
@@ -935,7 +943,7 @@ public sealed class MainViewModel : ObservableObject
             .ThenByDescending(vm => vm.Model!.UpdatedAt)
             .ToList();
 
-        FilteredNotes.Clear();
+        var desiredItems = new List<NoteItemViewModel>();
         var isSearching = !string.IsNullOrWhiteSpace(_searchQuery);
 
         var topFolders = _knownFolders
@@ -944,32 +952,53 @@ public sealed class MainViewModel : ObservableObject
             .ToList();
 
         foreach (var folder in topFolders)
-            AppendFolderBranch(folder, 0, matchingNotes, isSearching);
+            AppendFolderBranch(folder, 0, matchingNotes, isSearching, desiredItems);
 
         foreach (var rootNote in matchingNotes.Where(n => string.IsNullOrEmpty(n.FolderPath)))
         {
             rootNote.Depth = 0;
-            FilteredNotes.Add(rootNote);
+            desiredItems.Add(rootNote);
         }
 
-        var restored = previousSelectedId is not null
-            ? FilteredNotes.FirstOrDefault(n => !n.IsFolder && n.Id == previousSelectedId)
-            : null;
-
-        var nextSelection = restored ?? FilteredNotes.FirstOrDefault(n => !n.IsFolder);
-        if (!ReferenceEquals(_selectedNote, nextSelection))
+        // Diff-sync FilteredNotes in-place so expanding/collapsing a folder never clears/flashes the list
+        var desiredSet = desiredItems.ToHashSet();
+        for (var i = FilteredNotes.Count - 1; i >= 0; i--)
         {
-            SelectedNote = nextSelection;
+            if (!desiredSet.Contains(FilteredNotes[i]))
+                FilteredNotes.RemoveAt(i);
+        }
+
+        for (var i = 0; i < desiredItems.Count; i++)
+        {
+            var target = desiredItems[i];
+            if (i < FilteredNotes.Count && ReferenceEquals(FilteredNotes[i], target))
+                continue;
+
+            var existingIndex = FilteredNotes.IndexOf(target);
+            if (existingIndex >= 0)
+                FilteredNotes.Move(existingIndex, i);
+            else
+                FilteredNotes.Insert(i, target);
+        }
+
+        // Keep the active note untouched when expanding/collapsing folders so the editor never flashes/reloads
+        if (_selectedNote is not null && _allNotes.Contains(_selectedNote))
+        {
+            foreach (var item in _allNotes)
+                item.IsSelected = ReferenceEquals(item, _selectedNote);
         }
         else
         {
-            foreach (var item in FilteredNotes)
-                item.IsSelected = !item.IsFolder && ReferenceEquals(item, _selectedNote);
-            OnPropertyChanged(nameof(SelectedNote));
+            SelectedNote = desiredItems.FirstOrDefault(n => !n.IsFolder);
         }
     }
 
-    private void AppendFolderBranch(string folderPath, int depth, List<NoteItemViewModel> matchingNotes, bool isSearching)
+    private void AppendFolderBranch(
+        string folderPath,
+        int depth,
+        List<NoteItemViewModel> matchingNotes,
+        bool isSearching,
+        List<NoteItemViewModel> desiredItems)
     {
         var branchNotesCount = matchingNotes.Count(n =>
             string.Equals(n.FolderPath, folderPath, StringComparison.OrdinalIgnoreCase) ||
@@ -982,8 +1011,19 @@ public sealed class MainViewModel : ObservableObject
         var lastSlash = folderPath.LastIndexOf('/');
         var displayName = lastSlash >= 0 ? folderPath[(lastSlash + 1)..] : folderPath;
 
-        var folderVm = new NoteItemViewModel(folderPath, displayName, depth, isExpanded, branchNotesCount);
-        FilteredNotes.Add(folderVm);
+        if (!_folderViewModels.TryGetValue(folderPath, out var folderVm))
+        {
+            folderVm = new NoteItemViewModel(folderPath, displayName, depth, isExpanded, branchNotesCount);
+            _folderViewModels[folderPath] = folderVm;
+        }
+        else
+        {
+            folderVm.Depth = depth;
+            folderVm.IsExpanded = isExpanded;
+            folderVm.FolderNoteCount = branchNotesCount;
+        }
+
+        desiredItems.Add(folderVm);
 
         if (!isExpanded)
             return;
@@ -996,12 +1036,12 @@ public sealed class MainViewModel : ObservableObject
             .ToList();
 
         foreach (var childFolder in childFolders)
-            AppendFolderBranch(childFolder, depth + 1, matchingNotes, isSearching);
+            AppendFolderBranch(childFolder, depth + 1, matchingNotes, isSearching, desiredItems);
 
         foreach (var note in matchingNotes.Where(n => string.Equals(n.FolderPath, folderPath, StringComparison.OrdinalIgnoreCase)))
         {
             note.Depth = depth + 1;
-            FilteredNotes.Add(note);
+            desiredItems.Add(note);
         }
     }
 
