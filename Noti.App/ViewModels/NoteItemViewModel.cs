@@ -1,6 +1,10 @@
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Media;
 using Noti.Core;
+using Windows.UI;
 
 namespace Noti.App.ViewModels;
 
@@ -11,17 +15,19 @@ public sealed class NoteItemViewModel : ObservableObject
     private bool _isExpanded = true;
     private int _depth;
     private int _folderNoteCount;
+    private string _colorHex = string.Empty;
 
-    public NoteItemViewModel(Note model, int depth = 0)
+    public NoteItemViewModel(Note model, int depth = 0, string colorHex = "")
     {
         ArgumentNullException.ThrowIfNull(model);
         Model = model;
         IsFolder = false;
         FolderPath = model.FolderPath;
         _depth = depth;
+        _colorHex = colorHex ?? string.Empty;
     }
 
-    public NoteItemViewModel(string folderPath, string displayName, int depth = 0, bool isExpanded = true, int noteCount = 0)
+    public NoteItemViewModel(string folderPath, string displayName, int depth = 0, bool isExpanded = true, int noteCount = 0, string colorHex = "")
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folderPath);
         IsFolder = true;
@@ -30,6 +36,7 @@ public sealed class NoteItemViewModel : ObservableObject
         _depth = depth;
         _isExpanded = isExpanded;
         _folderNoteCount = noteCount;
+        _colorHex = colorHex ?? string.Empty;
     }
 
     public Note? Model { get; }
@@ -46,11 +53,45 @@ public sealed class NoteItemViewModel : ObservableObject
         set
         {
             if (SetProperty(ref _depth, value))
+            {
                 OnPropertyChanged(nameof(IndentMargin));
+                OnPropertyChanged(nameof(TreeGuideVisibility));
+            }
         }
     }
 
-    public Thickness IndentMargin => new(_depth * 14, 0, 0, 4);
+    public Thickness IndentMargin => new(_depth * 16, 0, 0, 4);
+    public Visibility TreeGuideVisibility => _depth > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    public string ColorHex
+    {
+        get => _colorHex;
+        set
+        {
+            if (SetProperty(ref _colorHex, value ?? string.Empty))
+            {
+                OnPropertyChanged(nameof(HasCustomColor));
+                OnPropertyChanged(nameof(AccentColorBrush));
+                OnPropertyChanged(nameof(CustomRowTintBrush));
+                OnPropertyChanged(nameof(ColorDotVisibility));
+                OnPropertyChanged(nameof(ColorDotRestingOpacity));
+            }
+        }
+    }
+
+    public bool HasCustomColor => !string.IsNullOrWhiteSpace(_colorHex);
+    public Visibility ColorDotVisibility => HasCustomColor ? Visibility.Visible : Visibility.Collapsed;
+    public double ColorDotRestingOpacity => HasCustomColor ? 0.95 : 0.0;
+
+    public SolidColorBrush AccentColorBrush =>
+        TryParseHexColor(_colorHex, 255, out var c)
+            ? new SolidColorBrush(c)
+            : new SolidColorBrush(ColorHelper.FromArgb(150, 142, 142, 147));
+
+    public SolidColorBrush CustomRowTintBrush =>
+        TryParseHexColor(_colorHex, 30, out var c)
+            ? new SolidColorBrush(c)
+            : new SolidColorBrush(Colors.Transparent);
 
     public Visibility FolderVisibility => IsFolder ? Visibility.Visible : Visibility.Collapsed;
     public Visibility NoteVisibility => IsFolder ? Visibility.Collapsed : Visibility.Visible;
@@ -129,4 +170,35 @@ public sealed class NoteItemViewModel : ObservableObject
     }
 
     public double SelectionOpacity => _isSelected ? 1.0 : 0.0;
+
+    public static Color ParseHexColor(string? hex, Color fallback) =>
+        TryParseHexColor(hex, 255, out var c) ? c : fallback;
+
+    private static bool TryParseHexColor(string? hex, byte overrideAlpha, out Color color)
+    {
+        color = Colors.Transparent;
+        if (string.IsNullOrWhiteSpace(hex))
+            return false;
+
+        var clean = hex.Trim().TrimStart('#');
+        if (clean.Length == 8 && uint.TryParse(clean, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var argb))
+        {
+            color = ColorHelper.FromArgb(
+                overrideAlpha,
+                (byte)((argb >> 16) & 0xFF),
+                (byte)((argb >> 8) & 0xFF),
+                (byte)(argb & 0xFF));
+            return true;
+        }
+        if (clean.Length == 6 && uint.TryParse(clean, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
+        {
+            color = ColorHelper.FromArgb(
+                overrideAlpha,
+                (byte)((rgb >> 16) & 0xFF),
+                (byte)((rgb >> 8) & 0xFF),
+                (byte)(rgb & 0xFF));
+            return true;
+        }
+        return false;
+    }
 }

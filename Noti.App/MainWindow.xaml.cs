@@ -30,6 +30,21 @@ public sealed partial class MainWindow : Window
     private Storyboard? _typingWordStoryboard;
     private string? _pendingDeleteFolderPath;
     private bool _isCommandPaletteOpen;
+    private int _activeMentionAtIndex = -1;
+    private int _activeSlashIndex = -1;
+    private bool _isSyncingVisualTable;
+    private int _activeInlineTableStartLine = -1;
+
+    private static readonly (string Name, string Hex)[] PaletteColors =
+    [
+        ("Blue", "#FF3B82F6"),
+        ("Purple", "#FF8B5CF6"),
+        ("Pink", "#FFEC4899"),
+        ("Red", "#FFEF4444"),
+        ("Amber", "#FFF59E0B"),
+        ("Green", "#FF10B981"),
+        ("Cyan", "#FF06B6D4")
+    ];
 
     public MainWindow(MainViewModel viewModel)
     {
@@ -44,6 +59,7 @@ public sealed partial class MainWindow : Window
         {
             ApplyResponsiveLayout();
             ThemeIndicatorTranslate.X = ViewModel.ThemeIndicatorOffsetX;
+            BackdropIndicatorTranslate.X = ViewModel.BackdropIndicatorOffsetX;
             UpdateTitleBarPassthrough();
             RefreshMarkdownPreview();
         };
@@ -75,8 +91,7 @@ public sealed partial class MainWindow : Window
         if (File.Exists(iconPath))
             AppWindow.SetIcon(iconPath);
 
-        if (MicaController.IsSupported())
-            SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
+        ApplyWindowBackdrop();
 
         if (AppWindowTitleBar.IsCustomizationSupported())
         {
@@ -86,6 +101,26 @@ public sealed partial class MainWindow : Window
             titleBar.ButtonBackgroundColor = Colors.Transparent;
             titleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
             titleBar.ButtonForegroundColor = Colors.Gray;
+        }
+    }
+
+    private void ApplyWindowBackdrop()
+    {
+        try
+        {
+            if (ViewModel.CurrentBackdropMode == BackdropMode.Blur && DesktopAcrylicController.IsSupported())
+            {
+                SystemBackdrop = new DesktopAcrylicBackdrop();
+                return;
+            }
+
+            if (MicaController.IsSupported())
+            {
+                SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
+            }
+        }
+        catch
+        {
         }
     }
 
@@ -126,6 +161,24 @@ public sealed partial class MainWindow : Window
     {
         if (e.Key == VirtualKey.Escape)
         {
+            if (SlashMenuPopupBorder.Visibility == Visibility.Visible)
+            {
+                HideSlashMenuPopup();
+                e.Handled = true;
+                return;
+            }
+            if (MentionPopupBorder.Visibility == Visibility.Visible)
+            {
+                HideMentionPopup();
+                e.Handled = true;
+                return;
+            }
+            if (SelectionToolbarBorder.Visibility == Visibility.Visible)
+            {
+                SelectionToolbarBorder.Visibility = Visibility.Collapsed;
+                e.Handled = true;
+                return;
+            }
             if (_isCommandPaletteOpen)
             {
                 ShowCommandPalette(open: false);
@@ -160,7 +213,6 @@ public sealed partial class MainWindow : Window
         switch (e.Key)
         {
             case VirtualKey.K:
-            case VirtualKey.P:
                 e.Handled = true;
                 ToggleCommandPalette();
                 break;
@@ -235,6 +287,60 @@ public sealed partial class MainWindow : Window
     {
         var ctrlDown = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(CoreVirtualKeyStates.Down);
         var shiftDown = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down);
+
+        if (!ctrlDown && SlashMenuPopupBorder.Visibility == Visibility.Visible && ViewModel.SlashMenuSuggestions.Count > 0)
+        {
+            if (e.Key == VirtualKey.Down)
+            {
+                e.Handled = true;
+                var next = (SlashMenuListView.SelectedIndex + 1) % ViewModel.SlashMenuSuggestions.Count;
+                SlashMenuListView.SelectedIndex = next;
+                SlashMenuListView.ScrollIntoView(ViewModel.SlashMenuSuggestions[next]);
+                return;
+            }
+            if (e.Key == VirtualKey.Up)
+            {
+                e.Handled = true;
+                var prev = (SlashMenuListView.SelectedIndex - 1 + ViewModel.SlashMenuSuggestions.Count) % ViewModel.SlashMenuSuggestions.Count;
+                SlashMenuListView.SelectedIndex = prev;
+                SlashMenuListView.ScrollIntoView(ViewModel.SlashMenuSuggestions[prev]);
+                return;
+            }
+            if (e.Key is VirtualKey.Enter or VirtualKey.Tab)
+            {
+                e.Handled = true;
+                var selected = SlashMenuListView.SelectedItem as SlashCommandItem ?? ViewModel.SlashMenuSuggestions[0];
+                ApplySlashCommand(selected);
+                return;
+            }
+        }
+
+        if (!ctrlDown && MentionPopupBorder.Visibility == Visibility.Visible && ViewModel.MentionSuggestions.Count > 0)
+        {
+            if (e.Key == VirtualKey.Down)
+            {
+                e.Handled = true;
+                var next = (MentionListView.SelectedIndex + 1) % ViewModel.MentionSuggestions.Count;
+                MentionListView.SelectedIndex = next;
+                MentionListView.ScrollIntoView(ViewModel.MentionSuggestions[next]);
+                return;
+            }
+            if (e.Key == VirtualKey.Up)
+            {
+                e.Handled = true;
+                var prev = (MentionListView.SelectedIndex - 1 + ViewModel.MentionSuggestions.Count) % ViewModel.MentionSuggestions.Count;
+                MentionListView.SelectedIndex = prev;
+                MentionListView.ScrollIntoView(ViewModel.MentionSuggestions[prev]);
+                return;
+            }
+            if (e.Key is VirtualKey.Enter or VirtualKey.Tab)
+            {
+                e.Handled = true;
+                var selected = MentionListView.SelectedItem as NoteItemViewModel ?? ViewModel.MentionSuggestions[0];
+                InsertMention(selected);
+                return;
+            }
+        }
 
         if (ctrlDown)
         {
@@ -514,8 +620,17 @@ public sealed partial class MainWindow : Window
 
     private void OnEditorTextChanged(object sender, TextChangedEventArgs e)
     {
+        if (_isSyncingVisualTable)
+            return;
+
         if (ViewModel.CurrentViewMode != EditorViewMode.Write)
             RefreshMarkdownPreview();
+
+        UpdateSelectionToolbar();
+        UpdateSlashMenuAutocomplete();
+        UpdateMentionAutocomplete();
+        UpdateActiveMentionJumpPill();
+        UpdateInlineVisualTableEditor(forceRebuild: true);
 
         if (!ViewModel.IsFluidAnimationEnabled || EditorTextBox.FocusState == FocusState.Unfocused)
             return;
@@ -524,6 +639,545 @@ public sealed partial class MainWindow : Window
         var caret = Math.Clamp(EditorTextBox.SelectionStart, 0, text.Length);
         var activeWord = ExtractCurrentWord(text, caret);
         TriggerWordTypingAnimation(activeWord);
+    }
+
+    private void OnEditorSelectionChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isSyncingVisualTable)
+            return;
+
+        UpdateSelectionToolbar();
+        UpdateSlashMenuAutocomplete();
+        UpdateMentionAutocomplete();
+        UpdateActiveMentionJumpPill();
+        UpdateInlineVisualTableEditor(forceRebuild: false);
+    }
+
+    private void OnEditorPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        var ctrlDown = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(CoreVirtualKeyStates.Down);
+        if (ctrlDown && TryGetMentionedNoteAtCaret(out var targetNote) && targetNote is not null)
+        {
+            NavigateToNote(targetNote);
+        }
+    }
+
+    private void UpdateSelectionToolbar()
+    {
+        var hasSelection = EditorTextBox.SelectionLength > 0;
+        SelectionToolbarBorder.Visibility = hasSelection ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnSelectionBoldClick(object sender, RoutedEventArgs e)
+    {
+        WrapEditorSelection("**", "**");
+        EditorTextBox.Focus(FocusState.Programmatic);
+    }
+
+    private void OnSelectionItalicClick(object sender, RoutedEventArgs e)
+    {
+        WrapEditorSelection("*", "*");
+        EditorTextBox.Focus(FocusState.Programmatic);
+    }
+
+    private void OnSelectionStrikethroughClick(object sender, RoutedEventArgs e)
+    {
+        WrapEditorSelection("~~", "~~");
+        EditorTextBox.Focus(FocusState.Programmatic);
+    }
+
+    private void OnSelectionCodeClick(object sender, RoutedEventArgs e)
+    {
+        WrapEditorSelection("`", "`");
+        EditorTextBox.Focus(FocusState.Programmatic);
+    }
+
+    private void OnSelectionLinkClick(object sender, RoutedEventArgs e)
+    {
+        var text = EditorTextBox.Text ?? string.Empty;
+        var start = Math.Clamp(EditorTextBox.SelectionStart, 0, text.Length);
+        var length = Math.Clamp(EditorTextBox.SelectionLength, 0, text.Length - start);
+        var selected = length > 0 ? text.Substring(start, length) : "link";
+        const string defaultUrl = "https://";
+        var replacement = $"[{selected}]({defaultUrl})";
+
+        var updated = text[..start] + replacement + text[(start + length)..];
+        EditorTextBox.Text = updated;
+        ViewModel.EditorText = updated;
+        EditorTextBox.SelectionStart = start + selected.Length + 3;
+        EditorTextBox.SelectionLength = defaultUrl.Length;
+        EditorTextBox.Focus(FocusState.Programmatic);
+    }
+
+    private void UpdateSlashMenuAutocomplete()
+    {
+        if (EditorTextBox.FocusState == FocusState.Unfocused || EditorTextBox.SelectionLength > 0)
+        {
+            HideSlashMenuPopup();
+            return;
+        }
+
+        var text = EditorTextBox.Text ?? string.Empty;
+        var caret = Math.Clamp(EditorTextBox.SelectionStart, 0, text.Length);
+
+        if (TryGetActiveSlashTrigger(text, caret, out var slashIndex, out var query))
+        {
+            _activeSlashIndex = slashIndex;
+            ViewModel.UpdateSlashSuggestions(query);
+            if (ViewModel.SlashMenuSuggestions.Count > 0)
+            {
+                SlashMenuPopupBorder.Visibility = Visibility.Visible;
+                if (SlashMenuListView.SelectedIndex < 0 || SlashMenuListView.SelectedIndex >= ViewModel.SlashMenuSuggestions.Count)
+                    SlashMenuListView.SelectedIndex = 0;
+                return;
+            }
+        }
+
+        HideSlashMenuPopup();
+    }
+
+    private void HideSlashMenuPopup()
+    {
+        _activeSlashIndex = -1;
+        if (SlashMenuPopupBorder.Visibility != Visibility.Collapsed)
+            SlashMenuPopupBorder.Visibility = Visibility.Collapsed;
+    }
+
+    private static bool TryGetActiveSlashTrigger(string text, int caret, out int slashIndex, out string query)
+    {
+        slashIndex = -1;
+        query = string.Empty;
+
+        if (string.IsNullOrEmpty(text) || caret <= 0 || caret > text.Length)
+            return false;
+
+        var lineStart = FindLineStart(text, caret);
+        for (var i = caret - 1; i >= lineStart; i--)
+        {
+            var ch = text[i];
+            if (ch is '\r' or '\n' or ' ' or '\t')
+                break;
+
+            if (ch == '/')
+            {
+                var validStart = i == lineStart || char.IsWhiteSpace(text[i - 1]);
+                if (!validStart)
+                    return false;
+
+                var candidate = text[(i + 1)..caret];
+                if (candidate.Length > 20 || candidate.Contains('/'))
+                    return false;
+
+                slashIndex = i;
+                query = candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void OnSlashMenuItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is SlashCommandItem item)
+            ApplySlashCommand(item);
+    }
+
+    private void ApplySlashCommand(SlashCommandItem item)
+    {
+        var text = EditorTextBox.Text ?? string.Empty;
+        var caret = Math.Clamp(EditorTextBox.SelectionStart, 0, text.Length);
+        var slashIndex = _activeSlashIndex;
+
+        if (slashIndex < 0 || slashIndex >= caret || slashIndex >= text.Length || text[slashIndex] != '/')
+        {
+            if (!TryGetActiveSlashTrigger(text, caret, out slashIndex, out _))
+            {
+                HideSlashMenuPopup();
+                return;
+            }
+        }
+
+        // Remove the `/query` trigger first
+        var baseText = text[..slashIndex] + text[caret..];
+        var lineStart = FindLineStart(baseText, slashIndex);
+        var lineEnd = FindLineEnd(baseText, slashIndex);
+        var lineContent = baseText[lineStart..lineEnd];
+
+        string updated;
+        int newCaret;
+
+        switch (item.Id)
+        {
+            case "h1":
+            case "h2":
+            case "h3":
+            {
+                var prefix = item.Id switch
+                {
+                    "h1" => "# ",
+                    "h2" => "## ",
+                    _ => "### "
+                };
+                var stripped = StripBlockFormattingPrefix(lineContent);
+                updated = baseText[..lineStart] + prefix + stripped + baseText[lineEnd..];
+                newCaret = lineStart + prefix.Length + stripped.Length;
+                break;
+            }
+
+            case "paragraph":
+            {
+                var stripped = StripBlockFormattingPrefix(lineContent);
+                updated = baseText[..lineStart] + stripped + baseText[lineEnd..];
+                newCaret = lineStart + stripped.Length;
+                break;
+            }
+
+            case "checklist":
+            {
+                const string prefix = "- [ ] ";
+                var stripped = StripBlockFormattingPrefix(lineContent);
+                updated = baseText[..lineStart] + prefix + stripped + baseText[lineEnd..];
+                newCaret = lineStart + prefix.Length + stripped.Length;
+                break;
+            }
+
+            case "quote":
+            {
+                const string prefix = "> ";
+                var stripped = StripBlockFormattingPrefix(lineContent);
+                updated = baseText[..lineStart] + prefix + stripped + baseText[lineEnd..];
+                newCaret = lineStart + prefix.Length + stripped.Length;
+                break;
+            }
+
+            case "code":
+            {
+                var leadingNewline = slashIndex > lineStart && !string.IsNullOrWhiteSpace(baseText[lineStart..slashIndex]) ? "\r" : string.Empty;
+                var block = $"{leadingNewline}```\r\r```";
+                updated = baseText.Insert(slashIndex, block);
+                newCaret = slashIndex + leadingNewline.Length + 4;
+                break;
+            }
+
+            case "table":
+            {
+                var leadingNewline = slashIndex > lineStart && !string.IsNullOrWhiteSpace(baseText[lineStart..slashIndex]) ? "\r" : string.Empty;
+                const string tableTemplate =
+                    "| Column 1 | Column 2 | Column 3 |\r" +
+                    "| --- | --- | --- |\r" +
+                    "|  |  |  |\r" +
+                    "|  |  |  |";
+                var block = leadingNewline + tableTemplate;
+                updated = baseText.Insert(slashIndex, block);
+                newCaret = slashIndex + leadingNewline.Length + 2;
+                break;
+            }
+
+            default:
+                HideSlashMenuPopup();
+                return;
+        }
+
+        HideSlashMenuPopup();
+        ApplyEditorText(updated, newCaret);
+        UpdateInlineVisualTableEditor(forceRebuild: true);
+        EditorTextBox.Focus(FocusState.Programmatic);
+    }
+
+    private static string StripBlockFormattingPrefix(string line)
+    {
+        var trimmed = line.TrimStart();
+        if (trimmed.StartsWith("- [ ] ", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("- [x] ", StringComparison.OrdinalIgnoreCase))
+            return trimmed[6..];
+        if (trimmed.StartsWith("### ", StringComparison.Ordinal))
+            return trimmed[4..];
+        if (trimmed.StartsWith("## ", StringComparison.Ordinal))
+            return trimmed[3..];
+        if (trimmed.StartsWith("# ", StringComparison.Ordinal))
+            return trimmed[2..];
+        if (trimmed.StartsWith("> ", StringComparison.Ordinal))
+            return trimmed[2..];
+        if (trimmed.StartsWith("- ", StringComparison.Ordinal))
+            return trimmed[2..];
+        return line;
+    }
+
+    private void UpdateInlineVisualTableEditor(bool forceRebuild)
+    {
+        var raw = (EditorTextBox.Text ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
+        var lines = raw.Split('\n');
+        var caret = Math.Clamp(EditorTextBox.SelectionStart, 0, (EditorTextBox.Text ?? string.Empty).Length);
+
+        var caretLineIndex = 0;
+        var text = EditorTextBox.Text ?? string.Empty;
+        for (var i = 0; i < caret && i < text.Length; i++)
+        {
+            if (text[i] == '\r')
+            {
+                caretLineIndex++;
+                if (i + 1 < text.Length && text[i + 1] == '\n')
+                    i++;
+            }
+            else if (text[i] == '\n')
+            {
+                caretLineIndex++;
+            }
+        }
+
+        if (MarkdownRenderer.TryFindTableBlockAtLine(lines, caretLineIndex, out var tableStart, out var tableEnd, out var rawTableLines))
+        {
+            if (!forceRebuild &&
+                InlineVisualTableCard.Visibility == Visibility.Visible &&
+                _activeInlineTableStartLine == tableStart &&
+                InlineVisualTableHost.Children.Count > 0)
+            {
+                return;
+            }
+
+            _activeInlineTableStartLine = tableStart;
+            InlineVisualTableHost.Children.Clear();
+            var tableElement = MarkdownRenderer.CreateInteractiveTableElement(
+                rawTableLines,
+                tableStart,
+                tableEnd,
+                ViewModel.IsDarkMode,
+                ViewModel.EditorFontSize,
+                OnVisualTableMarkdownChanged);
+            InlineVisualTableHost.Children.Add(tableElement);
+            InlineVisualTableCard.Visibility = Visibility.Visible;
+            return;
+        }
+
+        _activeInlineTableStartLine = -1;
+        InlineVisualTableCard.Visibility = Visibility.Collapsed;
+        InlineVisualTableHost.Children.Clear();
+    }
+
+    private void OnCloseInlineVisualTableClick(object sender, RoutedEventArgs e)
+    {
+        _activeInlineTableStartLine = -1;
+        InlineVisualTableCard.Visibility = Visibility.Collapsed;
+        InlineVisualTableHost.Children.Clear();
+        EditorTextBox.Focus(FocusState.Programmatic);
+    }
+
+    private void OnVisualTableMarkdownChanged(int startLine, int endLine, IReadOnlyList<string> newTableLines)
+    {
+        var normalized = (ViewModel.EditorText ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
+        var lines = normalized.Split('\n').ToList();
+        if (startLine < 0 || startLine >= lines.Count)
+            return;
+
+        var clampedEnd = Math.Clamp(endLine, startLine, lines.Count - 1);
+        var removeCount = clampedEnd - startLine + 1;
+        lines.RemoveRange(startLine, removeCount);
+        lines.InsertRange(startLine, newTableLines);
+
+        var updated = string.Join("\r", lines);
+        _isSyncingVisualTable = true;
+        try
+        {
+            var prevCaret = EditorTextBox.SelectionStart;
+            EditorTextBox.Text = updated;
+            ViewModel.EditorText = updated;
+            EditorTextBox.SelectionStart = Math.Clamp(prevCaret, 0, updated.Length);
+        }
+        finally
+        {
+            _isSyncingVisualTable = false;
+        }
+    }
+
+    private void UpdateMentionAutocomplete()
+    {
+        if (EditorTextBox.FocusState == FocusState.Unfocused || SlashMenuPopupBorder.Visibility == Visibility.Visible)
+        {
+            HideMentionPopup();
+            return;
+        }
+
+        var text = EditorTextBox.Text ?? string.Empty;
+        var caret = Math.Clamp(EditorTextBox.SelectionStart, 0, text.Length);
+
+        if (TryGetActiveMentionTrigger(text, caret, out var atIndex, out var query))
+        {
+            _activeMentionAtIndex = atIndex;
+            ViewModel.UpdateMentionSuggestions(query);
+            if (ViewModel.MentionSuggestions.Count > 0)
+            {
+                MentionPopupBorder.Visibility = Visibility.Visible;
+                if (MentionListView.SelectedIndex < 0 || MentionListView.SelectedIndex >= ViewModel.MentionSuggestions.Count)
+                    MentionListView.SelectedIndex = 0;
+                return;
+            }
+        }
+
+        HideMentionPopup();
+    }
+
+    private void HideMentionPopup()
+    {
+        _activeMentionAtIndex = -1;
+        if (MentionPopupBorder.Visibility != Visibility.Collapsed)
+            MentionPopupBorder.Visibility = Visibility.Collapsed;
+    }
+
+    private static bool TryGetActiveMentionTrigger(string text, int caret, out int atIndex, out string query)
+    {
+        atIndex = -1;
+        query = string.Empty;
+
+        if (string.IsNullOrEmpty(text) || caret <= 0 || caret > text.Length)
+            return false;
+
+        var lineStart = FindLineStart(text, caret);
+        for (var i = caret - 1; i >= lineStart; i--)
+        {
+            var ch = text[i];
+            if (ch is '\r' or '\n')
+                break;
+
+            if (ch == '@')
+            {
+                var validStart = i == lineStart || char.IsWhiteSpace(text[i - 1]) || text[i - 1] is '(' or '[' or '-' or '─';
+                if (!validStart)
+                    return false;
+
+                var candidate = text[(i + 1)..caret];
+                if (candidate.Length > 28 || candidate.Contains("  ", StringComparison.Ordinal))
+                    return false;
+
+                atIndex = i;
+                query = candidate.TrimStart('[');
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void InsertMention(NoteItemViewModel note)
+    {
+        var text = EditorTextBox.Text ?? string.Empty;
+        var caret = Math.Clamp(EditorTextBox.SelectionStart, 0, text.Length);
+        var atIndex = _activeMentionAtIndex;
+
+        if (atIndex < 0 || atIndex >= caret || atIndex >= text.Length || text[atIndex] != '@')
+        {
+            if (!TryGetActiveMentionTrigger(text, caret, out atIndex, out _))
+            {
+                HideMentionPopup();
+                return;
+            }
+        }
+
+        var mentionText = $"@{note.Title} ";
+        var updated = text[..atIndex] + mentionText + text[caret..];
+        var newCaret = atIndex + mentionText.Length;
+
+        HideMentionPopup();
+        ApplyEditorText(updated, newCaret);
+        EditorTextBox.Focus(FocusState.Programmatic);
+    }
+
+    private void OnMentionItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is NoteItemViewModel note)
+            InsertMention(note);
+    }
+
+    private void UpdateActiveMentionJumpPill()
+    {
+        if (TryGetMentionedNoteAtCaret(out var note) && note is not null)
+        {
+            ActiveMentionJumpButton.Tag = note;
+            ActiveMentionJumpButton.Content = $"Open @{note.Title} →";
+            ActiveMentionJumpButton.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            ActiveMentionJumpButton.Tag = null;
+            ActiveMentionJumpButton.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private bool TryGetMentionedNoteAtCaret(out NoteItemViewModel? matchedNote)
+    {
+        matchedNote = null;
+        var text = EditorTextBox.Text ?? string.Empty;
+        if (string.IsNullOrEmpty(text))
+            return false;
+
+        var caret = Math.Clamp(EditorTextBox.SelectionStart, 0, text.Length);
+        var lineStart = FindLineStart(text, caret);
+        var lineEnd = FindLineEnd(text, caret);
+        var line = text[lineStart..lineEnd];
+        var caretInLine = caret - lineStart;
+
+        for (var i = 0; i < line.Length; i++)
+        {
+            if (line[i] != '@')
+                continue;
+
+            if (i + 1 < line.Length && line[i + 1] == '[')
+            {
+                var closeBracket = line.IndexOf(']', i + 2);
+                if (closeBracket > i + 2)
+                {
+                    var spanEnd = closeBracket + 1;
+                    if (caretInLine >= i && caretInLine <= spanEnd)
+                    {
+                        var bracketTitle = line[(i + 2)..closeBracket];
+                        matchedNote = ViewModel.FindNoteByMention(bracketTitle);
+                        if (matchedNote is not null)
+                            return true;
+                    }
+                }
+            }
+
+            foreach (var note in ViewModel.AllNoteItems.OrderByDescending(n => n.Title.Length))
+            {
+                if (string.IsNullOrWhiteSpace(note.Title))
+                    continue;
+
+                if (i + 1 + note.Title.Length <= line.Length &&
+                    line.AsSpan(i + 1, note.Title.Length).Equals(note.Title.AsSpan(), StringComparison.OrdinalIgnoreCase))
+                {
+                    var spanEnd = i + 1 + note.Title.Length;
+                    if (caretInLine >= i && caretInLine <= spanEnd)
+                    {
+                        matchedNote = note;
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private void OnActiveMentionJumpClick(object sender, RoutedEventArgs e)
+    {
+        if (ActiveMentionJumpButton.Tag is NoteItemViewModel note)
+            NavigateToNote(note);
+    }
+
+    private void OnMentionClicked(string mentionTitle)
+    {
+        var note = ViewModel.FindNoteByMention(mentionTitle);
+        if (note is not null)
+            NavigateToNote(note);
+    }
+
+    private void NavigateToNote(NoteItemViewModel note)
+    {
+        HideMentionPopup();
+        HideSlashMenuPopup();
+        ViewModel.SelectedNote = note;
+        ViewModel.IsSettingsOpen = false;
+        EditorTextBox.Focus(FocusState.Programmatic);
     }
 
     private static string ExtractCurrentWord(string text, int caret)
@@ -593,6 +1247,11 @@ public sealed partial class MainWindow : Window
         switch (e.PropertyName)
         {
             case nameof(MainViewModel.SelectedNote):
+                HideMentionPopup();
+                HideSlashMenuPopup();
+                SelectionToolbarBorder.Visibility = Visibility.Collapsed;
+                UpdateActiveMentionJumpPill();
+                UpdateInlineVisualTableEditor(forceRebuild: true);
                 RefreshMarkdownPreview();
                 if (ViewModel.IsFluidAnimationEnabled)
                 {
@@ -602,6 +1261,8 @@ public sealed partial class MainWindow : Window
                 break;
 
             case nameof(MainViewModel.CurrentViewMode):
+                HideMentionPopup();
+                HideSlashMenuPopup();
                 RefreshMarkdownPreview();
                 AnimateViewModeChange();
                 break;
@@ -618,8 +1279,14 @@ public sealed partial class MainWindow : Window
                 AnimateThemeModePill();
                 break;
 
+            case nameof(MainViewModel.CurrentBackdropMode):
+                ApplyWindowBackdrop();
+                AnimateBackdropModePill();
+                break;
+
             case nameof(MainViewModel.IsDarkMode):
             case nameof(MainViewModel.EditorFontSize):
+                UpdateInlineVisualTableEditor(forceRebuild: true);
                 RefreshMarkdownPreview();
                 break;
         }
@@ -630,12 +1297,20 @@ public sealed partial class MainWindow : Window
         if (ViewModel.CurrentViewMode == EditorViewMode.Write)
             return;
 
+        var noteTitles = ViewModel.AllNoteItems
+            .Select(n => n.Title)
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .ToList();
+
         MarkdownRenderer.Render(
             MarkdownPreviewPanel,
             ViewModel.EditorText,
             ViewModel.IsDarkMode,
             ViewModel.EditorFontSize,
-            OnPreviewChecklistToggled);
+            OnPreviewChecklistToggled,
+            noteTitles,
+            OnMentionClicked,
+            OnVisualTableMarkdownChanged);
     }
 
     private void OnPreviewChecklistToggled(int lineIndex, bool isChecked)
@@ -756,6 +1431,28 @@ public sealed partial class MainWindow : Window
         sb.Begin();
     }
 
+    private void AnimateBackdropModePill()
+    {
+        var sb = new Storyboard();
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var targetX = ViewModel.BackdropIndicatorOffsetX;
+
+        var pillSlide = new DoubleAnimation
+        {
+            From = BackdropIndicatorTranslate.X,
+            To = targetX,
+            Duration = new Duration(TimeSpan.FromMilliseconds(190)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(pillSlide, BackdropIndicatorTranslate);
+        Storyboard.SetTargetProperty(pillSlide, "X");
+        BackdropIndicatorTranslate.X = targetX;
+
+        sb.Children.Add(pillSlide);
+        sb.Begin();
+    }
+
     private void AnimateSettingsModal(bool open)
     {
         var sb = new Storyboard();
@@ -766,6 +1463,7 @@ public sealed partial class MainWindow : Window
         if (open)
         {
             ThemeIndicatorTranslate.X = ViewModel.ThemeIndicatorOffsetX;
+            BackdropIndicatorTranslate.X = ViewModel.BackdropIndicatorOffsetX;
             MainWorkspaceGrid.Visibility = Visibility.Collapsed;
             SettingsOverlayGrid.Visibility = Visibility.Visible;
         }
@@ -816,7 +1514,7 @@ public sealed partial class MainWindow : Window
 
     private void OnOpacitySliderValueChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
-        if (e.NewValue >= 30.0)
+        if (e.NewValue >= 0.0)
             ViewModel.SurfaceOpacityPercent = e.NewValue;
     }
 
@@ -1016,23 +1714,122 @@ public sealed partial class MainWindow : Window
 
     private void OnSidebarRowPointerEntered(object sender, PointerRoutedEventArgs e)
     {
-        if (sender is Grid { Children.Count: > 0 } grid && grid.Children[0] is Border hoverBorder)
+        if (sender is Grid { Children.Count: > 0 } grid)
         {
-            var isAlreadySelected = grid.DataContext is NoteItemViewModel { IsFolder: false, IsSelected: true };
-            hoverBorder.Opacity = isAlreadySelected ? 0.0 : 1.0;
+            if (grid.Children[0] is Border hoverBorder)
+            {
+                var isAlreadySelected = grid.DataContext is NoteItemViewModel { IsFolder: false, IsSelected: true };
+                hoverBorder.Opacity = isAlreadySelected ? 0.0 : 1.0;
+            }
+
+            if (grid.FindName("FolderColorBtn") is Button folderColorBtn)
+                folderColorBtn.Opacity = 1.0;
+            if (grid.FindName("NoteColorBtn") is Button noteColorBtn)
+                noteColorBtn.Opacity = 1.0;
         }
     }
 
     private void OnSidebarRowPointerExited(object sender, PointerRoutedEventArgs e)
     {
-        if (sender is Grid { Children.Count: > 0 } grid && grid.Children[0] is Border hoverBorder)
-            hoverBorder.Opacity = 0.0;
+        if (sender is Grid { Children.Count: > 0 } grid)
+        {
+            if (grid.Children[0] is Border hoverBorder)
+                hoverBorder.Opacity = 0.0;
+
+            var restingOpacity = (grid.DataContext as NoteItemViewModel)?.ColorDotRestingOpacity ?? 0.0;
+            if (grid.FindName("FolderColorBtn") is Button folderColorBtn)
+                folderColorBtn.Opacity = restingOpacity;
+            if (grid.FindName("NoteColorBtn") is Button noteColorBtn)
+                noteColorBtn.Opacity = restingOpacity;
+        }
     }
 
     private void OnCreateNoteInFolderClick(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: string folderPath })
             _ = ViewModel.CreateNoteInFolderAsync(folderPath);
+    }
+
+    private void OnCreateSubfolderInFolderClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string folderPath } && !string.IsNullOrWhiteSpace(folderPath))
+        {
+            ViewModel.StartNewSubfolder(folderPath);
+            NewFolderTextBox.Focus(FocusState.Programmatic);
+        }
+    }
+
+    private void OnItemColorDotClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: NoteItemViewModel item } anchorButton)
+            return;
+
+        var flyout = new Flyout
+        {
+            Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft
+        };
+
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Padding = new Thickness(4, 2, 4, 2)
+        };
+
+        foreach (var (name, hex) in PaletteColors)
+        {
+            var color = NoteItemViewModel.ParseHexColor(hex, Colors.DodgerBlue);
+            var isCurrent = string.Equals(item.ColorHex, hex, StringComparison.OrdinalIgnoreCase);
+
+            var swatchBtn = new Button
+            {
+                Width = 22,
+                Height = 22,
+                Padding = new Thickness(0),
+                CornerRadius = new CornerRadius(11),
+                Background = new SolidColorBrush(color),
+                BorderThickness = new Thickness(isCurrent ? 2 : 0),
+                BorderBrush = new SolidColorBrush(Colors.White)
+            };
+            ToolTipService.SetToolTip(swatchBtn, name);
+
+            var capturedHex = hex;
+            swatchBtn.Click += (_, _) =>
+            {
+                ViewModel.SetItemColor(item, capturedHex);
+                flyout.Hide();
+            };
+
+            row.Children.Add(swatchBtn);
+        }
+
+        if (item.HasCustomColor)
+        {
+            var clearBtn = new Button
+            {
+                Width = 22,
+                Height = 22,
+                Padding = new Thickness(0),
+                CornerRadius = new CornerRadius(11),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(40, 142, 142, 147)),
+                BorderThickness = new Thickness(0),
+                Content = new FontIcon
+                {
+                    Glyph = "\uE711",
+                    FontSize = 9
+                }
+            };
+            ToolTipService.SetToolTip(clearBtn, "Reset color");
+            clearBtn.Click += (_, _) =>
+            {
+                ViewModel.SetItemColor(item, null);
+                flyout.Hide();
+            };
+            row.Children.Add(clearBtn);
+        }
+
+        flyout.Content = row;
+        flyout.ShowAt(anchorButton);
     }
 
     private void OnDeleteFolderClick(object sender, RoutedEventArgs e)

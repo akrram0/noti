@@ -25,6 +25,12 @@ public enum ThemeMode
     Light = 2
 }
 
+public enum BackdropMode
+{
+    Blur = 0,
+    Mica = 1
+}
+
 public sealed class CommandPaletteItem : ObservableObject
 {
     private bool _isSelected;
@@ -49,6 +55,14 @@ public sealed class CommandPaletteItem : ObservableObject
     public double SelectionOpacity => _isSelected ? 1.0 : 0.0;
 }
 
+public sealed class SlashCommandItem
+{
+    public required string Id { get; init; }
+    public required string Title { get; init; }
+    public required string Subtitle { get; init; }
+    public required string BadgeText { get; init; }
+}
+
 public sealed class MainViewModel : ObservableObject
 {
     private readonly NoteService _noteService;
@@ -60,6 +74,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly HashSet<string> _knownFolders = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _collapsedFolders = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _pinnedNoteIds = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _itemColors = new(StringComparer.OrdinalIgnoreCase);
     private CancellationTokenSource? _autosaveCts;
     private bool _suppressAutosave;
 
@@ -73,13 +88,15 @@ public sealed class MainViewModel : ObservableObject
     private bool _isSidebarOpen = true;
     private bool _isSettingsOpen;
     private bool _isCreatingFolder;
+    private string _newFolderParentPath = string.Empty;
     private string _newFolderName = string.Empty;
     private ThemeMode _currentThemeMode = ThemeMode.System;
+    private BackdropMode _currentBackdropMode = BackdropMode.Blur;
     private bool _isDarkMode = true;
     private bool _isFluidAnimationEnabled = true;
     private bool _isTreeShortcutEnabled = true;
     private double _editorFontSize = 16.0;
-    private double _surfaceOpacityPercent = 85.0;
+    private double _surfaceOpacityPercent = 75.0;
     private EditorViewMode _currentViewMode = EditorViewMode.Write;
     private string _userName = "Writer";
     private string _userAvatarPath = string.Empty;
@@ -101,7 +118,10 @@ public sealed class MainViewModel : ObservableObject
         _isFluidAnimationEnabled = _settings.IsFluidAnimationEnabled;
         _isTreeShortcutEnabled = _settings.IsTreeShortcutEnabled;
         _editorFontSize = Math.Clamp(_settings.EditorFontSize, 11.0, 28.0);
-        _surfaceOpacityPercent = Math.Clamp(_settings.SurfaceOpacityPercent <= 0 ? 85.0 : _settings.SurfaceOpacityPercent, 30.0, 100.0);
+        _surfaceOpacityPercent = Math.Clamp(_settings.SurfaceOpacityPercent, 0.0, 100.0);
+        _currentBackdropMode = Enum.TryParse<BackdropMode>(_settings.BackdropKind, ignoreCase: true, out var parsedBackdrop)
+            ? parsedBackdrop
+            : BackdropMode.Blur;
         _userName = string.IsNullOrWhiteSpace(_settings.UserName) ? "Writer" : _settings.UserName;
         _userAvatarPath = _settings.UserAvatarPath ?? string.Empty;
         LoadAvatarBitmap();
@@ -121,16 +141,22 @@ public sealed class MainViewModel : ObservableObject
             _pinnedNoteIds.Add(id);
         foreach (var folder in _settings.CollapsedFolders)
             _collapsedFolders.Add(folder);
+        if (_settings.ItemColors is not null)
+        {
+            foreach (var kv in _settings.ItemColors)
+                _itemColors[kv.Key] = kv.Value;
+        }
 
         if (!string.IsNullOrWhiteSpace(_settings.VaultDirectoryPath) && _noteService.Store is MarkdownNoteStore mdStore)
             mdStore.SetDirectoryPath(_settings.VaultDirectoryPath);
 
         CreateNoteCommand = new AsyncRelayCommand(() => CreateNoteInFolderAsync(_activeFolderPath));
-        StartNewFolderCommand = new RelayCommand(StartNewFolder);
+        StartNewFolderCommand = new RelayCommand(() => StartNewSubfolder(_activeFolderPath));
         ConfirmNewFolderCommand = new AsyncRelayCommand(ConfirmNewFolderAsync);
         CancelNewFolderCommand = new RelayCommand(() =>
         {
             IsCreatingFolder = false;
+            _newFolderParentPath = string.Empty;
             NewFolderName = string.Empty;
         });
         ToggleSidebarCommand = new RelayCommand(() => IsSidebarOpen = !IsSidebarOpen);
@@ -144,6 +170,9 @@ public sealed class MainViewModel : ObservableObject
         {
             CurrentThemeMode = IsDarkMode ? ThemeMode.Light : ThemeMode.Dark;
         });
+
+        SetBlurBackdropCommand = new RelayCommand(() => CurrentBackdropMode = BackdropMode.Blur);
+        SetMicaBackdropCommand = new RelayCommand(() => CurrentBackdropMode = BackdropMode.Mica);
 
         ToggleFluidAnimationCommand = new RelayCommand(() => IsFluidAnimationEnabled = !IsFluidAnimationEnabled);
         ToggleTreeShortcutCommand = new RelayCommand(() => IsTreeShortcutEnabled = !IsTreeShortcutEnabled);
@@ -173,6 +202,9 @@ public sealed class MainViewModel : ObservableObject
 
     public ObservableCollection<NoteItemViewModel> FilteredNotes { get; } = new();
     public ObservableCollection<CommandPaletteItem> CommandPaletteItems { get; } = new();
+    public ObservableCollection<NoteItemViewModel> MentionSuggestions { get; } = new();
+    public ObservableCollection<SlashCommandItem> SlashMenuSuggestions { get; } = new();
+    public IReadOnlyList<NoteItemViewModel> AllNoteItems => _allNotes;
     public Action? RequestExportMarkdown { get; set; }
 
     public IAsyncRelayCommand CreateNoteCommand { get; }
@@ -186,6 +218,8 @@ public sealed class MainViewModel : ObservableObject
     public IRelayCommand SetDarkThemeCommand { get; }
     public IRelayCommand SetLightThemeCommand { get; }
     public IRelayCommand ToggleThemeCommand { get; }
+    public IRelayCommand SetBlurBackdropCommand { get; }
+    public IRelayCommand SetMicaBackdropCommand { get; }
     public IRelayCommand ToggleFluidAnimationCommand { get; }
     public IRelayCommand ToggleTreeShortcutCommand { get; }
     public IRelayCommand SetWriteModeCommand { get; }
@@ -307,6 +341,15 @@ public sealed class MainViewModel : ObservableObject
 
     public Visibility NewFolderBoxVisibility => _isCreatingFolder ? Visibility.Visible : Visibility.Collapsed;
 
+    public string NewFolderParentBadgeText =>
+        string.IsNullOrEmpty(_newFolderParentPath) ? string.Empty : $"{_newFolderParentPath} /";
+
+    public Visibility NewFolderParentBadgeVisibility =>
+        string.IsNullOrEmpty(_newFolderParentPath) ? Visibility.Collapsed : Visibility.Visible;
+
+    public string NewFolderPlaceholderText =>
+        string.IsNullOrEmpty(_newFolderParentPath) ? "Folder name (e.g. Work)" : "Subfolder name...";
+
     public string NewFolderName
     {
         get => _newFolderName;
@@ -338,7 +381,7 @@ public sealed class MainViewModel : ObservableObject
                 if (_selectedNote is null && !string.IsNullOrEmpty(value))
                 {
                     var note = _noteService.CreateNote(value, _activeFolderPath);
-                    var vm = new NoteItemViewModel(note) { IsSelected = true };
+                    var vm = new NoteItemViewModel(note, colorHex: _itemColors.GetValueOrDefault(note.Id, string.Empty)) { IsSelected = true };
                     _allNotes.Insert(0, vm);
                     _selectedNote = vm;
                     RefreshFilteredNotes();
@@ -400,6 +443,22 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public double ThemeIndicatorOffsetX => (int)_currentThemeMode * 60.0;
+
+    public BackdropMode CurrentBackdropMode
+    {
+        get => _currentBackdropMode;
+        set
+        {
+            if (SetProperty(ref _currentBackdropMode, value))
+            {
+                _settings.BackdropKind = value.ToString();
+                _settings.Save();
+                OnPropertyChanged(nameof(BackdropIndicatorOffsetX));
+            }
+        }
+    }
+
+    public double BackdropIndicatorOffsetX => (int)_currentBackdropMode * 60.0;
 
     public bool IsDarkMode
     {
@@ -474,7 +533,7 @@ public sealed class MainViewModel : ObservableObject
         get => _surfaceOpacityPercent;
         set
         {
-            var clamped = Math.Clamp(Math.Round(value), 30.0, 100.0);
+            var clamped = Math.Clamp(Math.Round(value), 0.0, 100.0);
             if (SetProperty(ref _surfaceOpacityPercent, clamped))
             {
                 _settings.SurfaceOpacityPercent = clamped;
@@ -487,8 +546,83 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public double SurfaceOpacity => _surfaceOpacityPercent / 100.0;
-    public double SidebarSurfaceOpacity => Math.Clamp((_surfaceOpacityPercent + 4.0) / 100.0, 0.34, 1.0);
+    public double SidebarSurfaceOpacity => Math.Clamp(_surfaceOpacityPercent / 100.0, 0.0, 1.0);
     public string SurfaceOpacityText => $"{_surfaceOpacityPercent:0}%";
+
+    public void SetItemColor(NoteItemViewModel? item, string? colorHex)
+    {
+        if (item is null)
+            return;
+
+        var normalizedColor = colorHex ?? string.Empty;
+        item.ColorHex = normalizedColor;
+
+        if (string.IsNullOrWhiteSpace(normalizedColor))
+            _itemColors.Remove(item.Id);
+        else
+            _itemColors[item.Id] = normalizedColor;
+
+        _settings.ItemColors = new Dictionary<string, string>(_itemColors, StringComparer.OrdinalIgnoreCase);
+        _settings.Save();
+    }
+
+    public void UpdateMentionSuggestions(string query)
+    {
+        var q = (query ?? string.Empty).Trim();
+        MentionSuggestions.Clear();
+
+        var matches = _allNotes
+            .Where(n => !n.IsFolder &&
+                        !ReferenceEquals(n, _selectedNote) &&
+                        (string.IsNullOrEmpty(q) ||
+                         n.Title.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                         n.FolderPath.Contains(q, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(n => n.IsPinned)
+            .ThenByDescending(n => n.Model?.UpdatedAt ?? DateTimeOffset.MinValue)
+            .Take(6);
+
+        foreach (var m in matches)
+            MentionSuggestions.Add(m);
+    }
+
+    public NoteItemViewModel? FindNoteByMention(string mentionTitle)
+    {
+        var clean = (mentionTitle ?? string.Empty).Trim().TrimStart('@');
+        if (string.IsNullOrWhiteSpace(clean))
+            return null;
+
+        return _allNotes.FirstOrDefault(n => !n.IsFolder && string.Equals(n.Title, clean, StringComparison.OrdinalIgnoreCase))
+            ?? _allNotes.FirstOrDefault(n => !n.IsFolder && n.Title.StartsWith(clean, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static readonly SlashCommandItem[] AllSlashCommands =
+    [
+        new() { Id = "h1", Title = "Heading 1", Subtitle = "Large section title", BadgeText = "H1" },
+        new() { Id = "h2", Title = "Heading 2", Subtitle = "Medium section heading", BadgeText = "H2" },
+        new() { Id = "h3", Title = "Heading 3", Subtitle = "Compact subsection heading", BadgeText = "H3" },
+        new() { Id = "paragraph", Title = "Paragraph", Subtitle = "Plain body text", BadgeText = "Aa" },
+        new() { Id = "checklist", Title = "Checklist", Subtitle = "Interactive task item (- [ ])", BadgeText = "☑" },
+        new() { Id = "quote", Title = "Quote / Callout", Subtitle = "Callout block with clean left border", BadgeText = "❝" },
+        new() { Id = "code", Title = "Code Block", Subtitle = "Monospace code snippet block", BadgeText = "<>" },
+        new() { Id = "table", Title = "Interactive Table", Subtitle = "Visual table with rows, columns & Tab navigation", BadgeText = "⊞" }
+    ];
+
+    public void UpdateSlashSuggestions(string query)
+    {
+        var q = (query ?? string.Empty).Trim();
+        SlashMenuSuggestions.Clear();
+
+        foreach (var cmd in AllSlashCommands)
+        {
+            if (string.IsNullOrEmpty(q) ||
+                cmd.Id.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                cmd.Title.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                cmd.Subtitle.Contains(q, StringComparison.OrdinalIgnoreCase))
+            {
+                SlashMenuSuggestions.Add(cmd);
+            }
+        }
+    }
 
     public string CommandSearchQuery
     {
@@ -678,7 +812,7 @@ public sealed class MainViewModel : ObservableObject
             if (!string.IsNullOrEmpty(note.FolderPath))
                 AddFolderHierarchy(note.FolderPath);
 
-            _allNotes.Add(new NoteItemViewModel(note));
+            _allNotes.Add(new NoteItemViewModel(note, colorHex: _itemColors.GetValueOrDefault(note.Id, string.Empty)));
         }
 
         RefreshFilteredNotes();
@@ -876,6 +1010,7 @@ public sealed class MainViewModel : ObservableObject
                      f.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList())
         {
             _folderViewModels.Remove(key);
+            _itemColors.Remove($"folder:{key}");
         }
 
         _collapsedFolders.RemoveWhere(f =>
@@ -892,6 +1027,7 @@ public sealed class MainViewModel : ObservableObject
         {
             _allNotes.Remove(noteVm);
             _pinnedNoteIds.Remove(noteVm.Id);
+            _itemColors.Remove(noteVm.Id);
         }
 
         if (string.Equals(_activeFolderPath, normalized, StringComparison.OrdinalIgnoreCase) ||
@@ -902,6 +1038,7 @@ public sealed class MainViewModel : ObservableObject
 
         _settings.CollapsedFolders = _collapsedFolders.ToList();
         _settings.PinnedNoteIds = _pinnedNoteIds.ToList();
+        _settings.ItemColors = new Dictionary<string, string>(_itemColors, StringComparer.OrdinalIgnoreCase);
         _settings.Save();
 
         if (_allNotes.Count == 0)
@@ -971,7 +1108,9 @@ public sealed class MainViewModel : ObservableObject
         await _noteService.DeleteNoteAsync(target.Id);
         _allNotes.Remove(target);
         _pinnedNoteIds.Remove(target.Id);
+        _itemColors.Remove(target.Id);
         _settings.PinnedNoteIds = _pinnedNoteIds.ToList();
+        _settings.ItemColors = new Dictionary<string, string>(_itemColors, StringComparer.OrdinalIgnoreCase);
         _settings.Save();
 
         if (_allNotes.Count == 0)
@@ -1037,23 +1176,39 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    private void StartNewFolder()
+    public void StartNewSubfolder(string? parentFolderPath = null)
     {
-        NewFolderName = string.IsNullOrEmpty(_activeFolderPath) ? string.Empty : $"{_activeFolderPath}/";
+        _newFolderParentPath = NoteService.NormalizeFolderPath(parentFolderPath ?? string.Empty);
+        NewFolderName = string.Empty;
         IsCreatingFolder = true;
+        OnPropertyChanged(nameof(NewFolderParentBadgeText));
+        OnPropertyChanged(nameof(NewFolderParentBadgeVisibility));
+        OnPropertyChanged(nameof(NewFolderPlaceholderText));
     }
 
     private async Task ConfirmNewFolderAsync()
     {
-        var normalized = NoteService.NormalizeFolderPath(_newFolderName);
+        var childName = (_newFolderName ?? string.Empty).Trim().Trim('/');
+        var combined = string.IsNullOrEmpty(_newFolderParentPath)
+            ? childName
+            : $"{_newFolderParentPath}/{childName}";
+        var normalized = NoteService.NormalizeFolderPath(combined);
+
+        var parentToExpand = _newFolderParentPath;
+        _newFolderParentPath = string.Empty;
         IsCreatingFolder = false;
         NewFolderName = string.Empty;
+        OnPropertyChanged(nameof(NewFolderParentBadgeText));
+        OnPropertyChanged(nameof(NewFolderParentBadgeVisibility));
+        OnPropertyChanged(nameof(NewFolderPlaceholderText));
 
         if (string.IsNullOrWhiteSpace(normalized))
             return;
 
         await _noteService.CreateFolderAsync(normalized);
         AddFolderHierarchy(normalized);
+        if (!string.IsNullOrEmpty(parentToExpand))
+            _collapsedFolders.Remove(parentToExpand);
         _collapsedFolders.Remove(normalized);
         ActiveFolderPath = normalized;
         RefreshFilteredNotes();
@@ -1176,7 +1331,8 @@ public sealed class MainViewModel : ObservableObject
 
         if (!_folderViewModels.TryGetValue(folderPath, out var folderVm))
         {
-            folderVm = new NoteItemViewModel(folderPath, displayName, depth, isExpanded, branchNotesCount);
+            var savedColor = _itemColors.GetValueOrDefault($"folder:{folderPath}", string.Empty);
+            folderVm = new NoteItemViewModel(folderPath, displayName, depth, isExpanded, branchNotesCount, savedColor);
             _folderViewModels[folderPath] = folderVm;
         }
         else
