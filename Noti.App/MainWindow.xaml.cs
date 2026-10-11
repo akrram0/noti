@@ -53,7 +53,7 @@ public sealed partial class MainWindow : Window
     private SolidColorBrush _cachedSecondaryBrush = new(ColorHelper.FromArgb(255, 142, 142, 147));
     private SolidColorBrush _cachedSurfaceBrush = new(ColorHelper.FromArgb(36, 255, 255, 255));
     private SolidColorBrush _cachedBorderBrush = new(ColorHelper.FromArgb(38, 255, 255, 255));
-    private SolidColorBrush _cachedInputBgBrush = new(ColorHelper.FromArgb(1, 0, 0, 0));
+    private SolidColorBrush _cachedInputBgBrush = new(ColorHelper.FromArgb(255, 0, 0, 0));
     private Style? _cachedBorderlessStyle;
     private List<string> _cachedSortedNoteTitles = [];
     private bool _isContextSlashMenuOpen;
@@ -104,7 +104,8 @@ public sealed partial class MainWindow : Window
         ZoomBadgeButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
 
         LiveEditorScrollViewer.ViewChanged += OnLiveEditorScrollViewerViewChanged;
-        EditorPaneGrid.RightTapped += OnEditorPaneRightTapped;
+        EditorPaneGrid.AddHandler(UIElement.ContextRequestedEvent, new TypedEventHandler<UIElement, ContextRequestedEventArgs>(OnEditorContextRequested), true);
+        EditorPaneGrid.AddHandler(UIElement.RightTappedEvent, new RightTappedEventHandler(OnEditorPaneRightTapped), true);
         EditorTextBox.ContextRequested += OnEditorContextRequested;
         EditorTextBox.Paste += OnEditorTextBoxPaste;
         RootGrid.AddHandler(UIElement.DragOverEvent, new DragEventHandler(OnRootGridDragOver), true);
@@ -633,6 +634,8 @@ public sealed partial class MainWindow : Window
         EnsureLiveRenderResources();
         EditorTextBox.RequestedTheme = ViewModel.CurrentElementTheme;
         EditorTextBox.Background = _cachedInputBgBrush;
+        EditorTextBox.ContextFlyout = null;
+        EditorTextBox.SelectionFlyout = null;
     }
 
     private void EnsureLiveRenderResources(bool refreshTitles = false)
@@ -645,7 +648,7 @@ public sealed partial class MainWindow : Window
             _cachedSecondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 108, 108, 112));
             _cachedSurfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(22, 0, 0, 0));
             _cachedBorderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(38, 255, 255, 255) : ColorHelper.FromArgb(28, 0, 0, 0));
-            _cachedInputBgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(1, 0, 0, 0) : ColorHelper.FromArgb(1, 255, 255, 255));
+            _cachedInputBgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 0, 0, 0) : ColorHelper.FromArgb(255, 255, 255, 255));
         }
 
         if (_cachedBorderlessStyle is null &&
@@ -697,6 +700,10 @@ public sealed partial class MainWindow : Window
             else if (pooledTb.Parent is Border parentBorder)
                 parentBorder.Child = null;
 
+            pooledTb.Background = _cachedInputBgBrush;
+            pooledTb.RequestedTheme = ViewModel.CurrentElementTheme;
+            pooledTb.ContextFlyout = null;
+            pooledTb.SelectionFlyout = null;
             pooledTb.Tag = block;
             return pooledTb;
         }
@@ -714,6 +721,8 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Center,
             Opacity = 1.0,
+            ContextFlyout = null,
+            SelectionFlyout = null,
             Tag = block
         };
         if (_cachedBorderlessStyle is not null)
@@ -832,8 +841,13 @@ public sealed partial class MainWindow : Window
         if (_isContextSlashMenuOpen)
             HideSlashMenuPopup();
 
-        if (!ReferenceEquals(e.OriginalSource, LiveCanvasRootGrid) && !ReferenceEquals(e.OriginalSource, LiveEditorPanel))
-            return;
+        var cur = e.OriginalSource as DependencyObject;
+        while (cur is not null && !ReferenceEquals(cur, LiveEditorScrollViewer))
+        {
+            if (cur is TextBox or Button or CheckBox)
+                return;
+            cur = VisualTreeHelper.GetParent(cur);
+        }
 
         FocusNearestLiveBlockAtY(e.GetCurrentPoint(LiveEditorPanel).Position.Y);
     }
@@ -890,7 +904,9 @@ public sealed partial class MainWindow : Window
         EnsureLiveBlocksMaterializedThrough(_liveBlocks.Count - 1);
 
         var lastBlock = _liveBlocks[^1];
-        if (!IsEditableLiveBlock(lastBlock) || lastBlock.Kind == LiveBlockKind.CodeBlock)
+        if (!IsEditableLiveBlock(lastBlock) ||
+            lastBlock.Kind == LiveBlockKind.CodeBlock ||
+            !string.IsNullOrWhiteSpace(lastBlock.Content))
         {
             InsertLiveBlockAt(_liveBlocks.Count, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
             FlushSyncLiveBlocksToViewModel();
@@ -958,6 +974,7 @@ public sealed partial class MainWindow : Window
         if (index < 0 || index >= _liveBlocks.Count)
             return;
 
+        var savedOffset = LiveEditorScrollViewer.VerticalOffset;
         EnsureLiveBlocksMaterializedThrough(index);
 
         var targetBlock = _liveBlocks[index];
@@ -989,6 +1006,9 @@ public sealed partial class MainWindow : Window
             var clamped = Math.Clamp(caret, 0, (targetTb.Text ?? string.Empty).Length);
             targetTb.SelectionStart = clamped;
             targetTb.SelectionLength = 0;
+
+            if (savedOffset > 4.0 && LiveEditorScrollViewer.VerticalOffset < 1.0 && index > 1)
+                LiveEditorScrollViewer.ChangeView(null, savedOffset, null, true);
         });
     }
 
@@ -1164,11 +1184,18 @@ public sealed partial class MainWindow : Window
                 Background = borderBrush,
                 VerticalAlignment = VerticalAlignment.Center
             });
-            dividerContainer.PointerPressed += (_, _) =>
+            dividerContainer.PointerPressed += (_, e) =>
             {
+                if (e.GetCurrentPoint(dividerContainer).Properties.IsRightButtonPressed)
+                    return;
+
+                e.Handled = true;
+                var savedOffset = LiveEditorScrollViewer.VerticalOffset;
                 var idx = _liveBlocks.IndexOf(block);
                 if (idx >= 0)
                     FocusOrInsertParagraphAfter(idx);
+                if (savedOffset > 4.0 && LiveEditorScrollViewer.VerticalOffset < 1.0)
+                    LiveEditorScrollViewer.ChangeView(null, savedOffset, null, true);
             };
             return dividerContainer;
         }
@@ -1228,6 +1255,8 @@ public sealed partial class MainWindow : Window
                 Padding = new Thickness(0),
                 MinHeight = 28,
                 Opacity = 1.0,
+                ContextFlyout = null,
+                SelectionFlyout = null,
                 Tag = block
             };
             if (_cachedBorderlessStyle is not null)
@@ -1269,7 +1298,7 @@ public sealed partial class MainWindow : Window
         tb.Foreground = textForeground;
         tb.Background = _cachedInputBgBrush;
         tb.RequestedTheme = ViewModel.CurrentElementTheme;
-        tb.TextAlignment = block.IsCentered ? TextAlignment.Center : TextAlignment.Left;
+        tb.TextAlignment = block.BlockAlignment;
         tb.MinHeight = Math.Max(26, Math.Round(fontSize * 1.45));
         tb.Opacity = 1.0;
         tb.Visibility = Visibility.Visible;
@@ -1311,23 +1340,26 @@ public sealed partial class MainWindow : Window
             displayTb.FontStyle = fontStyle;
             displayTb.LineHeight = Math.Max(22, Math.Round(displayFontSize * 1.45));
             displayTb.VerticalAlignment = VerticalAlignment.Center;
-            if (block.IsCentered)
-            {
-                displayTb.HorizontalAlignment = HorizontalAlignment.Center;
-                displayTb.TextAlignment = TextAlignment.Center;
-            }
+            displayTb.TextAlignment = block.BlockAlignment;
+            displayTb.HorizontalAlignment = block.HorizontalBlockAlignment == HorizontalAlignment.Left
+                ? HorizontalAlignment.Stretch
+                : block.HorizontalBlockAlignment;
+            displayTb.ContextRequested += OnEditorContextRequested;
 
-            displayTb.PointerReleased += (_, _) =>
+            displayTb.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, e) =>
             {
-                if (!string.IsNullOrEmpty(displayTb.SelectedText))
+                if (e.GetCurrentPoint(displayTb).Properties.PointerUpdateKind == PointerUpdateKind.RightButtonReleased ||
+                    !string.IsNullOrEmpty(displayTb.SelectedText))
+                {
                     return;
+                }
 
                 displayTb.Visibility = Visibility.Collapsed;
                 tb.Visibility = Visibility.Visible;
                 var idx = _liveBlocks.IndexOf(block);
                 if (idx >= 0)
                     FocusLiveBlockAt(idx);
-            };
+            }), true);
 
             block.DisplayTextBlock = displayTb;
             tb.Visibility = Visibility.Collapsed;
@@ -2219,17 +2251,77 @@ public sealed partial class MainWindow : Window
         activeTb.Focus(FocusState.Programmatic);
     }
 
+    private void OnAlignLeftClick(object sender, RoutedEventArgs e) => SetEditorBlockAlignment(TextAlignment.Left);
+
+    private void OnAlignCenterClick(object sender, RoutedEventArgs e) => SetEditorBlockAlignment(TextAlignment.Center);
+
+    private void OnAlignRightClick(object sender, RoutedEventArgs e) => SetEditorBlockAlignment(TextAlignment.Right);
+
+    private void SetEditorBlockAlignment(TextAlignment alignment)
+    {
+        HideSlashMenuPopup();
+
+        if (ViewModel.CurrentViewMode == EditorViewMode.Live)
+        {
+            var block = _activeLiveBlock ?? _liveBlocks.FirstOrDefault();
+            if (block is null)
+                return;
+
+            var idx = _liveBlocks.IndexOf(block);
+            if (idx < 0)
+                return;
+
+            block.BlockAlignment = alignment;
+            var caret = block.PrimaryTextBox?.SelectionStart ?? (block.Content?.Length ?? 0);
+            FlushSyncLiveBlocksToViewModel();
+            RefreshLiveBlockAt(idx, IsEditableLiveBlock(block) ? caret : null);
+            return;
+        }
+
+        var text = EditorTextBox.Text ?? string.Empty;
+        var caretPos = Math.Clamp(EditorTextBox.SelectionStart, 0, text.Length);
+        var lineStart = FindLineStart(text, caretPos);
+        var lineEnd = FindLineEnd(text, caretPos);
+        var line = text[lineStart..lineEnd].Trim();
+
+        if (line.StartsWith("<div", StringComparison.OrdinalIgnoreCase) &&
+            line.EndsWith("</div>", StringComparison.OrdinalIgnoreCase))
+        {
+            var firstClose = line.IndexOf('>');
+            if (firstClose > 0 && firstClose < line.Length - 6)
+                line = line[(firstClose + 1)..^6].Trim();
+        }
+
+        var replaced = alignment switch
+        {
+            TextAlignment.Center => $"<div align=\"center\">{line}</div>",
+            TextAlignment.Right => $"<div align=\"right\">{line}</div>",
+            _ => line
+        };
+
+        var updated = text[..lineStart] + replaced + text[lineEnd..];
+        ApplyEditorText(updated, lineStart + replaced.Length);
+        EditorTextBox.Focus(FocusState.Programmatic);
+    }
+
     private void OnEditorContextRequested(UIElement sender, ContextRequestedEventArgs e)
     {
         e.Handled = true;
 
-        if (sender is TextBox tb && tb.Tag is LiveDocBlock block)
+        if (ViewModel.CurrentViewMode == EditorViewMode.Live)
         {
-            _activeLiveBlock = block;
-            if (tb.FocusState == FocusState.Unfocused)
-                tb.Focus(FocusState.Programmatic);
+            if (sender is TextBox tb && tb.Tag is LiveDocBlock block)
+            {
+                _activeLiveBlock = block;
+                if (tb.FocusState == FocusState.Unfocused)
+                    tb.Focus(FocusState.Programmatic);
+            }
+            else if (e.TryGetPosition(LiveEditorPanel, out var livePos))
+            {
+                FocusNearestLiveBlockAtY(livePos.Y);
+            }
         }
-        else if (ReferenceEquals(sender, EditorTextBox) && EditorTextBox.FocusState == FocusState.Unfocused)
+        else if (EditorTextBox.FocusState == FocusState.Unfocused)
         {
             EditorTextBox.Focus(FocusState.Programmatic);
         }
@@ -2548,6 +2640,18 @@ public sealed partial class MainWindow : Window
                 _ = PickAndInsertNoteImageAsync();
                 return;
 
+            case "left":
+            case "center":
+            case "right":
+                ApplyEditorText(baseText, slashIndex);
+                SetEditorBlockAlignment(item.Id switch
+                {
+                    "center" => TextAlignment.Center,
+                    "right" => TextAlignment.Right,
+                    _ => TextAlignment.Left
+                });
+                return;
+
             default:
                 HideSlashMenuPopup();
                 return;
@@ -2665,6 +2769,18 @@ public sealed partial class MainWindow : Window
                 FlushSyncLiveBlocksToViewModel();
                 _ = PickAndInsertNoteImageAsync(block);
                 return;
+
+            case "left":
+            case "center":
+            case "right":
+                block.Content = cleaned;
+                block.BlockAlignment = item.Id switch
+                {
+                    "center" => TextAlignment.Center,
+                    "right" => TextAlignment.Right,
+                    _ => TextAlignment.Left
+                };
+                break;
 
             default:
                 return;

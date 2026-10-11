@@ -36,7 +36,18 @@ public sealed class LiveDocBlock
     public LiveBlockKind Kind { get; set; } = LiveBlockKind.Paragraph;
     public string Content { get; set; } = string.Empty;
     public bool IsChecked { get; set; }
-    public bool IsCentered { get; set; }
+    public TextAlignment BlockAlignment { get; set; } = TextAlignment.Left;
+    public bool IsCentered
+    {
+        get => BlockAlignment == TextAlignment.Center;
+        set => BlockAlignment = value ? TextAlignment.Center : TextAlignment.Left;
+    }
+    public HorizontalAlignment HorizontalBlockAlignment => BlockAlignment switch
+    {
+        TextAlignment.Center => HorizontalAlignment.Center,
+        TextAlignment.Right => HorizontalAlignment.Right,
+        _ => HorizontalAlignment.Left
+    };
     public bool IsBlockBold { get; set; }
     public bool IsBlockItalic { get; set; }
     public bool IsBlockStrikethrough { get; set; }
@@ -215,7 +226,7 @@ public static class MarkdownRenderer
                 continue;
             }
 
-            if (TryParseImageLine(trimmed, out _, out _, out _, out _))
+            if (TryParseImageLine(trimmed, out _, out _, out _, out _, out _))
             {
                 container.Children.Add(CreateLiveImageElement(
                     new LiveDocBlock { Kind = LiveBlockKind.ImageBlock, Content = raw },
@@ -755,7 +766,7 @@ public static class MarkdownRenderer
 
         var lines = markdown.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
         var inCodeBlock = false;
-        var inCenterDiv = false;
+        var currentDivAlign = TextAlignment.Left;
         var codeBuffer = new List<string>();
 
         for (var i = 0; i < lines.Length; i++)
@@ -791,14 +802,38 @@ public static class MarkdownRenderer
             if ((trimmed.StartsWith("<div", StringComparison.OrdinalIgnoreCase) && trimmed.EndsWith('>')) ||
                 trimmed.Equals("</div>", StringComparison.OrdinalIgnoreCase))
             {
+                // Single-line <div align="center">text</div> or <div align="right">text</div>
                 if (trimmed.StartsWith("<div", StringComparison.OrdinalIgnoreCase) &&
-                    trimmed.Contains("center", StringComparison.OrdinalIgnoreCase))
+                    trimmed.EndsWith("</div>", StringComparison.OrdinalIgnoreCase))
                 {
-                    inCenterDiv = true;
+                    var openClose = trimmed.IndexOf('>');
+                    if (openClose > 0 && openClose < trimmed.Length - 6)
+                    {
+                        var openTag = trimmed[..(openClose + 1)];
+                        var innerLine = trimmed[(openClose + 1)..^6];
+                        var lineAlign = openTag.Contains("right", StringComparison.OrdinalIgnoreCase)
+                            ? TextAlignment.Right
+                            : (openTag.Contains("center", StringComparison.OrdinalIgnoreCase) ? TextAlignment.Center : TextAlignment.Left);
+                        var innerBlocks = ParseLiveBlocks(innerLine);
+                        foreach (var ib in innerBlocks)
+                        {
+                            ib.BlockAlignment = lineAlign;
+                            blocks.Add(ib);
+                        }
+                        continue;
+                    }
+                }
+
+                if (trimmed.StartsWith("<div", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (trimmed.Contains("right", StringComparison.OrdinalIgnoreCase))
+                        currentDivAlign = TextAlignment.Right;
+                    else if (trimmed.Contains("center", StringComparison.OrdinalIgnoreCase))
+                        currentDivAlign = TextAlignment.Center;
                 }
                 else if (trimmed.Equals("</div>", StringComparison.OrdinalIgnoreCase))
                 {
-                    inCenterDiv = false;
+                    currentDivAlign = TextAlignment.Left;
                 }
 
                 blocks.Add(new LiveDocBlock
@@ -821,7 +856,7 @@ public static class MarkdownRenderer
                 blocks.Add(new LiveDocBlock
                 {
                     Kind = LiveBlockKind.TableBlock,
-                    IsCentered = inCenterDiv,
+                    BlockAlignment = currentDivAlign,
                     TableMatrix = ParseMarkdownTableMatrix(tableLines)
                 });
                 continue;
@@ -833,12 +868,12 @@ public static class MarkdownRenderer
                 continue;
             }
 
-            if (TryParseImageLine(trimmed, out _, out _, out _, out _))
+            if (TryParseImageLine(trimmed, out _, out _, out _, out _, out var imgAlign))
             {
                 blocks.Add(new LiveDocBlock
                 {
                     Kind = LiveBlockKind.ImageBlock,
-                    IsCentered = inCenterDiv,
+                    BlockAlignment = imgAlign ?? currentDivAlign,
                     Content = raw
                 });
                 continue;
@@ -847,7 +882,7 @@ public static class MarkdownRenderer
             if (trimmed.StartsWith("### ", StringComparison.Ordinal))
             {
                 var b = CreateTextLiveBlock(LiveBlockKind.Heading3, trimmed[4..]);
-                b.IsCentered = inCenterDiv;
+                b.BlockAlignment = currentDivAlign;
                 blocks.Add(b);
                 continue;
             }
@@ -855,7 +890,7 @@ public static class MarkdownRenderer
             if (trimmed.StartsWith("## ", StringComparison.Ordinal))
             {
                 var b = CreateTextLiveBlock(LiveBlockKind.Heading2, trimmed[3..]);
-                b.IsCentered = inCenterDiv;
+                b.BlockAlignment = currentDivAlign;
                 blocks.Add(b);
                 continue;
             }
@@ -863,7 +898,7 @@ public static class MarkdownRenderer
             if (trimmed.StartsWith("# ", StringComparison.Ordinal))
             {
                 var b = CreateTextLiveBlock(LiveBlockKind.Heading1, trimmed[2..]);
-                b.IsCentered = inCenterDiv;
+                b.BlockAlignment = currentDivAlign;
                 blocks.Add(b);
                 continue;
             }
@@ -872,26 +907,32 @@ public static class MarkdownRenderer
                 trimmed.StartsWith("- [x] ", StringComparison.OrdinalIgnoreCase))
             {
                 var isChecked = trimmed[3] is 'x' or 'X';
-                blocks.Add(CreateTextLiveBlock(LiveBlockKind.Checklist, trimmed[6..], isChecked));
+                var b = CreateTextLiveBlock(LiveBlockKind.Checklist, trimmed[6..], isChecked);
+                b.BlockAlignment = currentDivAlign;
+                blocks.Add(b);
                 continue;
             }
 
             if (trimmed.StartsWith("- ", StringComparison.Ordinal) ||
                 trimmed.StartsWith("* ", StringComparison.Ordinal))
             {
-                blocks.Add(CreateTextLiveBlock(LiveBlockKind.Bullet, trimmed[2..]));
+                var b = CreateTextLiveBlock(LiveBlockKind.Bullet, trimmed[2..]);
+                b.BlockAlignment = currentDivAlign;
+                blocks.Add(b);
                 continue;
             }
 
             if (trimmed.StartsWith("> ", StringComparison.Ordinal) || trimmed == ">")
             {
                 var quoteText = trimmed.Length > 2 ? trimmed[2..] : string.Empty;
-                blocks.Add(CreateTextLiveBlock(LiveBlockKind.Quote, quoteText));
+                var b = CreateTextLiveBlock(LiveBlockKind.Quote, quoteText);
+                b.BlockAlignment = currentDivAlign;
+                blocks.Add(b);
                 continue;
             }
 
             var pBlock = CreateTextLiveBlock(LiveBlockKind.Paragraph, raw);
-            pBlock.IsCentered = inCenterDiv;
+            pBlock.BlockAlignment = currentDivAlign;
             blocks.Add(pBlock);
         }
 
@@ -992,6 +1033,8 @@ public static class MarkdownRenderer
             return string.Empty;
 
         var lines = new List<string>(blocks.Count);
+        var activeWrapperAlign = TextAlignment.Left;
+
         foreach (var b in blocks)
         {
             switch (b.Kind)
@@ -1016,8 +1059,26 @@ public static class MarkdownRenderer
                     lines.Add("---");
                     break;
 
-                case LiveBlockKind.ImageBlock:
                 case LiveBlockKind.HtmlWrapper:
+                {
+                    var rawWrapper = b.Content ?? string.Empty;
+                    var trimmedWrapper = rawWrapper.Trim();
+                    if (trimmedWrapper.StartsWith("<div", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (trimmedWrapper.Contains("right", StringComparison.OrdinalIgnoreCase))
+                            activeWrapperAlign = TextAlignment.Right;
+                        else if (trimmedWrapper.Contains("center", StringComparison.OrdinalIgnoreCase))
+                            activeWrapperAlign = TextAlignment.Center;
+                    }
+                    else if (trimmedWrapper.Equals("</div>", StringComparison.OrdinalIgnoreCase))
+                    {
+                        activeWrapperAlign = TextAlignment.Left;
+                    }
+                    lines.Add(rawWrapper);
+                    break;
+                }
+
+                case LiveBlockKind.ImageBlock:
                     lines.Add(b.Content ?? string.Empty);
                     break;
 
@@ -1034,6 +1095,15 @@ public static class MarkdownRenderer
                         LiveBlockKind.Quote => string.IsNullOrEmpty(content) ? "> " : $"> {content}",
                         _ => content
                     };
+
+                    if (activeWrapperAlign == TextAlignment.Left &&
+                        !string.IsNullOrEmpty(line) &&
+                        b.BlockAlignment is TextAlignment.Center or TextAlignment.Right)
+                    {
+                        var alignAttr = b.BlockAlignment == TextAlignment.Right ? "right" : "center";
+                        line = $"<div align=\"{alignAttr}\">{line}</div>";
+                    }
+
                     lines.Add(line);
                     break;
                 }
@@ -1070,12 +1140,22 @@ public static class MarkdownRenderer
         out string src,
         out string alt,
         out double? width,
-        out double? height)
+        out double? height) =>
+        TryParseImageLine(line, out src, out alt, out width, out height, out _);
+
+    public static bool TryParseImageLine(
+        string? line,
+        out string src,
+        out string alt,
+        out double? width,
+        out double? height,
+        out TextAlignment? alignment)
     {
         src = string.Empty;
         alt = string.Empty;
         width = null;
         height = null;
+        alignment = null;
 
         if (string.IsNullOrWhiteSpace(line))
             return false;
@@ -1124,6 +1204,17 @@ public static class MarkdownRenderer
                     width = w;
                 if (double.TryParse(ExtractHtmlAttribute(trimmed, "height"), out var h) && h > 0)
                     height = h;
+
+                var alignVal = ExtractHtmlAttribute(trimmed, "align");
+                if (!string.IsNullOrWhiteSpace(alignVal))
+                {
+                    if (alignVal.Equals("center", StringComparison.OrdinalIgnoreCase))
+                        alignment = TextAlignment.Center;
+                    else if (alignVal.Equals("right", StringComparison.OrdinalIgnoreCase))
+                        alignment = TextAlignment.Right;
+                    else if (alignVal.Equals("left", StringComparison.OrdinalIgnoreCase))
+                        alignment = TextAlignment.Left;
+                }
 
                 return true;
             }
@@ -1282,7 +1373,25 @@ public static class MarkdownRenderer
         var badgeBgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(215, 20, 20, 24) : ColorHelper.FromArgb(225, 245, 245, 247));
         var badgeFgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(245, 245, 245, 247) : ColorHelper.FromArgb(245, 28, 28, 30));
 
-        TryParseImageLine(block.Content, out var src, out var alt, out var width, out var height);
+        TryParseImageLine(block.Content, out var src, out var alt, out var width, out var height, out var parsedAlign);
+        if (parsedAlign.HasValue && block.BlockAlignment == TextAlignment.Left)
+            block.BlockAlignment = parsedAlign.Value;
+
+        string BuildImageMarkup(double? currentWidth)
+        {
+            var safeAlt = (alt ?? string.Empty).Replace('"', '\'');
+            var alignAttr = block.BlockAlignment switch
+            {
+                TextAlignment.Center => " align=\"center\"",
+                TextAlignment.Right => " align=\"right\"",
+                _ => string.Empty
+            };
+            if (currentWidth is > 0 && !double.IsNaN(currentWidth.Value))
+                return $"<img src=\"{src}\" alt=\"{safeAlt}\" width=\"{Math.Round(currentWidth.Value):0}\"{alignAttr} />";
+            if (!string.IsNullOrWhiteSpace(alignAttr))
+                return $"<img src=\"{src}\" alt=\"{safeAlt}\"{alignAttr} />";
+            return block.Content;
+        }
 
         FrameworkElement CreateFallbackPlaceholder()
         {
@@ -1320,12 +1429,12 @@ public static class MarkdownRenderer
                 BorderBrush = borderBrush,
                 BorderThickness = new Thickness(1),
                 Padding = new Thickness(14, 10, 14, 10),
-                HorizontalAlignment = HorizontalAlignment.Left,
+                HorizontalAlignment = block.HorizontalBlockAlignment,
                 Child = row
             };
         }
 
-        var align = block.IsCentered ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        var align = block.HorizontalBlockAlignment;
         var hostBorder = new Border
         {
             CornerRadius = new CornerRadius(8),
@@ -1378,50 +1487,38 @@ public static class MarkdownRenderer
                 };
                 containerGrid.Children.Add(hoverFrame);
 
-                var rightResizeZone = new Border
+                Border CreateCornerResizeHandle(HorizontalAlignment hAlign, VerticalAlignment vAlign)
                 {
-                    Width = 18,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Stretch,
-                    Background = new SolidColorBrush(ColorHelper.FromArgb(1, 0, 0, 0)),
-                    Opacity = 0,
-                    Child = new Border
+                    var cornerHitZone = new Border
                     {
-                        Width = 5,
-                        Height = 40,
-                        CornerRadius = new CornerRadius(2.5),
-                        Background = pillBrush,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        VerticalAlignment = VerticalAlignment.Center,
-                        Margin = new Thickness(0, 0, 3, 0)
-                    }
-                };
-                ToolTipService.SetToolTip(rightResizeZone, "Drag to resize image");
-                containerGrid.Children.Add(rightResizeZone);
+                        Width = 26,
+                        Height = 26,
+                        HorizontalAlignment = hAlign,
+                        VerticalAlignment = vAlign,
+                        Background = new SolidColorBrush(ColorHelper.FromArgb(1, 0, 0, 0)),
+                        Opacity = 0,
+                        Child = new Border
+                        {
+                            Width = 12,
+                            Height = 12,
+                            CornerRadius = new CornerRadius(3.5),
+                            Background = badgeBgBrush,
+                            BorderBrush = pillBrush,
+                            BorderThickness = new Thickness(2),
+                            HorizontalAlignment = hAlign,
+                            VerticalAlignment = vAlign,
+                            Margin = new Thickness(2)
+                        }
+                    };
+                    ToolTipService.SetToolTip(cornerHitZone, "Drag corner to resize image");
+                    containerGrid.Children.Add(cornerHitZone);
+                    return cornerHitZone;
+                }
 
-                var cornerResizeGrip = new Border
-                {
-                    Width = 24,
-                    Height = 24,
-                    CornerRadius = new CornerRadius(6),
-                    Background = badgeBgBrush,
-                    BorderBrush = borderBrush,
-                    BorderThickness = new Thickness(1),
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Bottom,
-                    Margin = new Thickness(0, 0, 6, 6),
-                    Opacity = 0,
-                    Child = new FontIcon
-                    {
-                        Glyph = "\uE740",
-                        FontSize = 11,
-                        Foreground = badgeFgBrush,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Center
-                    }
-                };
-                ToolTipService.SetToolTip(cornerResizeGrip, "Drag to resize image");
-                containerGrid.Children.Add(cornerResizeGrip);
+                var topLeftGrip = CreateCornerResizeHandle(HorizontalAlignment.Left, VerticalAlignment.Top);
+                var topRightGrip = CreateCornerResizeHandle(HorizontalAlignment.Right, VerticalAlignment.Top);
+                var bottomLeftGrip = CreateCornerResizeHandle(HorizontalAlignment.Left, VerticalAlignment.Bottom);
+                var bottomRightGrip = CreateCornerResizeHandle(HorizontalAlignment.Right, VerticalAlignment.Bottom);
 
                 var sizeText = new TextBlock
                 {
@@ -1436,56 +1533,92 @@ public static class MarkdownRenderer
                     BorderBrush = borderBrush,
                     BorderThickness = new Thickness(1),
                     Padding = new Thickness(7, 3, 7, 3),
-                    HorizontalAlignment = HorizontalAlignment.Left,
+                    HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Bottom,
-                    Margin = new Thickness(8, 0, 0, 8),
+                    Margin = new Thickness(0, 0, 0, 8),
                     Opacity = 0,
                     IsHitTestVisible = false,
                     Child = sizeText
                 };
                 containerGrid.Children.Add(sizeBadge);
 
-                if (onRequestDeleteImage is not null)
+                var actionRow = new StackPanel
                 {
-                    var delBtn = new Button
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 2
+                };
+
+                Button CreateImageActionBtn(string glyph, string tooltip, Action onClick)
+                {
+                    var btn = new Button
                     {
                         Width = 26,
-                        Height = 26,
+                        Height = 24,
                         Padding = new Thickness(0),
-                        CornerRadius = new CornerRadius(6),
-                        Background = badgeBgBrush,
-                        BorderBrush = borderBrush,
-                        BorderThickness = new Thickness(1),
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        VerticalAlignment = VerticalAlignment.Top,
-                        Margin = new Thickness(0, 6, 6, 0),
-                        Opacity = 0,
+                        CornerRadius = new CornerRadius(5),
+                        Background = new SolidColorBrush(Colors.Transparent),
+                        BorderThickness = new Thickness(0),
                         Content = new FontIcon
                         {
-                            Glyph = "\uE74D",
-                            FontSize = 12,
+                            Glyph = glyph,
+                            FontSize = 11,
                             Foreground = badgeFgBrush
                         }
                     };
-                    ToolTipService.SetToolTip(delBtn, "Remove image");
-                    delBtn.Click += (_, _) => onRequestDeleteImage();
-                    containerGrid.Children.Add(delBtn);
-
-                    hostBorder.PointerEntered += (_, _) => delBtn.Opacity = 1;
-                    hostBorder.PointerExited += (_, _) => delBtn.Opacity = 0;
+                    ToolTipService.SetToolTip(btn, tooltip);
+                    btn.Click += (_, _) => onClick();
+                    return btn;
                 }
+
+                void SetImageAlignment(TextAlignment targetAlignment)
+                {
+                    block.BlockAlignment = targetAlignment;
+                    var hAlign = block.HorizontalBlockAlignment;
+                    hostBorder.HorizontalAlignment = hAlign;
+                    containerGrid.HorizontalAlignment = hAlign;
+                    img.HorizontalAlignment = hAlign;
+                    var currentW = !double.IsNaN(img.Width) && img.Width > 0 ? img.Width : width;
+                    block.Content = BuildImageMarkup(currentW);
+                    onImageMutated?.Invoke();
+                }
+
+                actionRow.Children.Add(CreateImageActionBtn("\uE8E4", "Align Left", () => SetImageAlignment(TextAlignment.Left)));
+                actionRow.Children.Add(CreateImageActionBtn("\uE8E3", "Align Center", () => SetImageAlignment(TextAlignment.Center)));
+                actionRow.Children.Add(CreateImageActionBtn("\uE8E2", "Align Right", () => SetImageAlignment(TextAlignment.Right)));
+                if (onRequestDeleteImage is not null)
+                    actionRow.Children.Add(CreateImageActionBtn("\uE74D", "Remove image", onRequestDeleteImage));
+
+                var actionToolbar = new Border
+                {
+                    CornerRadius = new CornerRadius(7),
+                    Background = badgeBgBrush,
+                    BorderBrush = borderBrush,
+                    BorderThickness = new Thickness(1),
+                    Padding = new Thickness(3, 2, 3, 2),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Top,
+                    Margin = new Thickness(0, 6, 0, 0),
+                    Opacity = 0,
+                    Child = actionRow
+                };
+                containerGrid.Children.Add(actionToolbar);
 
                 var isResizing = false;
                 var isPointerInside = false;
                 var startX = 0.0;
+                var startY = 0.0;
                 var startWidth = 0.0;
+                var startAspect = 1.5;
 
                 void UpdateHoverChrome(bool visible)
                 {
                     var alpha = (visible || isResizing) ? 1.0 : 0.0;
                     hoverFrame.Opacity = alpha;
-                    rightResizeZone.Opacity = alpha;
-                    cornerResizeGrip.Opacity = alpha;
+                    topLeftGrip.Opacity = alpha;
+                    topRightGrip.Opacity = alpha;
+                    bottomLeftGrip.Opacity = alpha;
+                    bottomRightGrip.Opacity = alpha;
+                    actionToolbar.Opacity = visible && !isResizing ? 1.0 : 0.0;
                 }
 
                 hostBorder.PointerEntered += (_, _) =>
@@ -1500,20 +1633,25 @@ public static class MarkdownRenderer
                     UpdateHoverChrome(false);
                 };
 
-                void WireResizeHandle(UIElement handle)
+                void WireResizeHandle(UIElement handle, double signX, double signY)
                 {
                     handle.PointerPressed += (_, e) =>
                     {
-                        var props = e.GetCurrentPoint(hostBorder).Properties;
-                        if (!props.IsLeftButtonPressed)
+                        var rootVisual = hostBorder.XamlRoot?.Content as UIElement ?? hostBorder;
+                        var pt = e.GetCurrentPoint(rootVisual);
+                        if (!pt.Properties.IsLeftButtonPressed)
                             return;
 
                         e.Handled = true;
                         isResizing = true;
-                        startX = e.GetCurrentPoint(hostBorder).Position.X;
+                        startX = pt.Position.X;
+                        startY = pt.Position.Y;
                         startWidth = !double.IsNaN(img.Width) && img.Width > 0
                             ? img.Width
                             : (img.ActualWidth > 0 ? img.ActualWidth : 360.0);
+                        startAspect = img.ActualHeight > 10 && img.ActualWidth > 10
+                            ? img.ActualWidth / img.ActualHeight
+                            : 1.5;
                         img.Height = double.NaN;
                         handle.CapturePointer(e.Pointer);
                         sizeText.Text = $"{Math.Round(startWidth):0} px";
@@ -1527,19 +1665,23 @@ public static class MarkdownRenderer
                             return;
 
                         e.Handled = true;
-                        var currentX = e.GetCurrentPoint(hostBorder).Position.X;
-                        var deltaX = currentX - startX;
-                        var newWidth = Math.Clamp(Math.Round(startWidth + deltaX), 80.0, 680.0);
+                        var rootVisual = hostBorder.XamlRoot?.Content as UIElement ?? hostBorder;
+                        var pos = e.GetCurrentPoint(rootVisual).Position;
+                        var dx = (pos.X - startX) * signX;
+                        var dy = (pos.Y - startY) * signY * startAspect;
+                        var delta = Math.Abs(dx) >= Math.Abs(dy) ? dx : dy;
+                        var newWidth = Math.Clamp(Math.Round(startWidth + delta), 80.0, 680.0);
                         img.Width = newWidth;
                         sizeText.Text = $"{newWidth:0} px";
                     };
 
-                    void EndResize(PointerRoutedEventArgs e)
+                    void EndResize(PointerRoutedEventArgs? e)
                     {
                         if (!isResizing)
                             return;
 
-                        e.Handled = true;
+                        if (e is not null)
+                            e.Handled = true;
                         isResizing = false;
                         handle.ReleasePointerCaptures();
                         sizeBadge.Opacity = 0;
@@ -1547,33 +1689,21 @@ public static class MarkdownRenderer
 
                         if (!double.IsNaN(img.Width) && img.Width > 0)
                         {
-                            var safeAlt = (alt ?? string.Empty).Replace('"', '\'');
-                            block.Content = $"<img src=\"{src}\" alt=\"{safeAlt}\" width=\"{Math.Round(img.Width):0}\" />";
+                            width = Math.Round(img.Width);
+                            block.Content = BuildImageMarkup(width);
                             onImageMutated?.Invoke();
                         }
                     }
 
                     handle.PointerReleased += (_, e) => EndResize(e);
                     handle.PointerCanceled += (_, e) => EndResize(e);
-                    handle.PointerCaptureLost += (_, _) =>
-                    {
-                        if (!isResizing)
-                            return;
-
-                        isResizing = false;
-                        sizeBadge.Opacity = 0;
-                        UpdateHoverChrome(isPointerInside);
-                        if (!double.IsNaN(img.Width) && img.Width > 0)
-                        {
-                            var safeAlt = (alt ?? string.Empty).Replace('"', '\'');
-                            block.Content = $"<img src=\"{src}\" alt=\"{safeAlt}\" width=\"{Math.Round(img.Width):0}\" />";
-                            onImageMutated?.Invoke();
-                        }
-                    };
+                    handle.PointerCaptureLost += (_, _) => EndResize(null);
                 }
 
-                WireResizeHandle(rightResizeZone);
-                WireResizeHandle(cornerResizeGrip);
+                WireResizeHandle(topLeftGrip, -1.0, -1.0);
+                WireResizeHandle(topRightGrip, 1.0, -1.0);
+                WireResizeHandle(bottomLeftGrip, -1.0, 1.0);
+                WireResizeHandle(bottomRightGrip, 1.0, 1.0);
 
                 img.ImageFailed += (_, _) =>
                 {
@@ -1632,6 +1762,7 @@ public static class MarkdownRenderer
         var subtleBorderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(26, 0, 0, 0));
         var accentBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 10, 132, 255));
         var buttonBgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(32, 255, 255, 255) : ColorHelper.FromArgb(18, 0, 0, 0));
+        var caretBgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 0, 0, 0) : ColorHelper.FromArgb(255, 255, 255, 255));
         var monoFont = new FontFamily("Cascadia Mono, Consolas, Courier New");
 
         var matrix = tableBlock.TableMatrix;
@@ -1652,7 +1783,7 @@ public static class MarkdownRenderer
         var wrapperGrid = new Grid
         {
             Margin = new Thickness(0, 6, 0, 10),
-            HorizontalAlignment = tableBlock.IsCentered ? HorizontalAlignment.Center : HorizontalAlignment.Left
+            HorizontalAlignment = tableBlock.HorizontalBlockAlignment
         };
         wrapperGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         wrapperGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -1813,7 +1944,7 @@ public static class MarkdownRenderer
                         FontSize = cellFontSize,
                         FontWeight = cellWeight,
                         Foreground = primaryBrush,
-                        Background = new SolidColorBrush(Colors.Transparent),
+                        Background = caretBgBrush,
                         SelectionHighlightColor = accentBrush,
                         BorderThickness = new Thickness(0),
                         Padding = new Thickness(10, 7, 10, 7),
@@ -1821,7 +1952,9 @@ public static class MarkdownRenderer
                         MinWidth = 60,
                         IsSpellCheckEnabled = false,
                         TextWrapping = TextWrapping.Wrap,
-                        VerticalAlignment = VerticalAlignment.Center
+                        VerticalAlignment = VerticalAlignment.Center,
+                        ContextFlyout = null,
+                        SelectionFlyout = null
                     };
                     if (Application.Current?.Resources.TryGetValue("BorderlessTextBoxStyle", out var styleObj) == true && styleObj is Style s)
                         tb.Style = s;
@@ -2047,7 +2180,9 @@ public static class MarkdownRenderer
             TextWrapping = TextWrapping.Wrap,
             LineHeight = fontSize * 1.65,
             Margin = margin,
-            IsTextSelectionEnabled = true
+            IsTextSelectionEnabled = true,
+            ContextFlyout = null,
+            SelectionFlyout = null
         };
 
         PopulateInlines(tb.Inlines, text, monoFont, accentBrush, sortedTitles, onMentionClicked);

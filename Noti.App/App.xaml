@@ -32,9 +32,9 @@
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#26FFFFFF" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#F0FFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackground" Color="#01000000" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#01000000" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#01000000" />
+                    <SolidColorBrush x:Key="TextControlBackground" Color="#FF000000" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FF000000" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FF000000" />
                     <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
@@ -75,9 +75,9 @@
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#26FFFFFF" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#F0FFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackground" Color="#01000000" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#01000000" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#01000000" />
+                    <SolidColorBrush x:Key="TextControlBackground" Color="#FF000000" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FF000000" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FF000000" />
                     <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
@@ -118,9 +118,9 @@
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#18000000" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#FFFFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackground" Color="#01FFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#01FFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#01FFFFFF" />
+                    <SolidColorBrush x:Key="TextControlBackground" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FFFFFFFF" />
                     <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
@@ -159,7 +159,7 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="TextBox">
-                            <Grid Background="{TemplateBinding Background}">
+                            <Grid Background="Transparent">
                                 <VisualStateManager.VisualStateGroups>
                                     <VisualStateGroup x:Name="CommonStates">
                                         <VisualState x:Name="Normal" />
@@ -171,7 +171,7 @@
                                 </VisualStateManager.VisualStateGroups>
                                 <Border
                                     x:Name="BorderElement"
-                                    Background="{TemplateBinding Background}"
+                                    Background="Transparent"
                                     BorderBrush="Transparent"
                                     BorderThickness="0" />
                                 <TextBlock
@@ -185,7 +185,7 @@
                                 <ScrollViewer
                                     x:Name="ContentElement"
                                     Foreground="{TemplateBinding Foreground}"
-                                    Background="{TemplateBinding Background}"
+                                    Background="Transparent"
                                     Padding="{TemplateBinding Padding}"
                                     HorizontalScrollMode="{TemplateBinding ScrollViewer.HorizontalScrollMode}"
                                     VerticalScrollMode="{TemplateBinding ScrollViewer.VerticalScrollMode}"

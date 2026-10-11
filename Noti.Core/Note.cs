@@ -73,8 +73,19 @@ public sealed class Note
             return string.Empty;
 
         var s = line.Trim();
-        if (s.StartsWith("```", StringComparison.Ordinal))
+        if (s.StartsWith("```", StringComparison.Ordinal) ||
+            s is "---" or "***" or "___" ||
+            (s.StartsWith("<div", StringComparison.OrdinalIgnoreCase) && s.EndsWith('>')) ||
+            s.Equals("</div>", StringComparison.OrdinalIgnoreCase) ||
+            (s.StartsWith("<img", StringComparison.OrdinalIgnoreCase) && s.EndsWith('>')) ||
+            (s.StartsWith("![", StringComparison.Ordinal) && s.EndsWith(')')) ||
+            (s.StartsWith("[![", StringComparison.Ordinal) && s.EndsWith(')')))
+        {
             return string.Empty;
+        }
+
+        if (s.StartsWith("<sub>", StringComparison.OrdinalIgnoreCase) && s.EndsWith("</sub>", StringComparison.OrdinalIgnoreCase) && s.Length >= 11)
+            s = s[5..^6].Trim();
 
         if (s.StartsWith('|') && s.Contains('|'))
         {

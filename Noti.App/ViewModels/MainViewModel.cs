@@ -619,7 +619,10 @@ public sealed class MainViewModel : ObservableObject
         new() { Id = "quote", Title = "Quote / Callout", Subtitle = "Callout block with clean left border", IconGlyph = "\uE9B1" },
         new() { Id = "code", Title = "Code Block", Subtitle = "Monospace code snippet block", IconGlyph = "\uE943" },
         new() { Id = "table", Title = "Interactive Table", Subtitle = "Visual table with rows, columns & Tab navigation", IconGlyph = "\uE80A" },
-        new() { Id = "image", Title = "Image / Photo", Subtitle = "Insert a photo (or drag & drop into note)", IconGlyph = "\uEB9F" }
+        new() { Id = "image", Title = "Image / Photo", Subtitle = "Insert a photo (or drag & drop into note)", IconGlyph = "\uEB9F" },
+        new() { Id = "left", Title = "Align Left", Subtitle = "Align current block to the left", IconGlyph = "\uE8E4" },
+        new() { Id = "center", Title = "Align Center", Subtitle = "Center current block in the page", IconGlyph = "\uE8E3" },
+        new() { Id = "right", Title = "Align Right", Subtitle = "Align current block to the right", IconGlyph = "\uE8E2" }
     ];
 
     public void UpdateSlashSuggestions(string query)

@@ -615,15 +615,19 @@
                         <ScrollViewer
                             x:Name="LiveEditorScrollViewer"
                             Visibility="{x:Bind ViewModel.LivePaneVisibility, Mode=OneWay}"
+                            BringIntoViewOnFocusChange="False"
+                            Background="Transparent"
+                            PointerPressed="OnLiveCanvasBackgroundPointerPressed"
                             VerticalScrollBarVisibility="Auto">
                             <Grid
                                 x:Name="LiveCanvasRootGrid"
                                 Background="Transparent"
+                                VerticalAlignment="Stretch"
                                 PointerPressed="OnLiveCanvasBackgroundPointerPressed">
                                 <StackPanel
                                     x:Name="LiveEditorPanel"
                                     UseLayoutRounding="True"
-                                    Padding="40,28,40,80"
+                                    Padding="40,28,40,140"
                                     Spacing="6" />
                             </Grid>
                         </ScrollViewer>
@@ -644,12 +648,11 @@
                             PointerReleased="OnEditorPointerReleased"
                             FontSize="{x:Bind ViewModel.EditorFontSize, Mode=OneWay}"
                             Foreground="{ThemeResource TextPrimaryBrush}"
-                            Background="Transparent"
                             BorderThickness="0"
                             Padding="40,28,40,16"
                             ScrollViewer.VerticalScrollBarVisibility="Auto" />
 
-                        <!-- Floating Selection Formatting Toolbar Pill (Bold, Italic, Strikethrough, Code, Link) -->
+                        <!-- Floating Selection Formatting Toolbar Pill (Bold, Italic, Strikethrough, Code, Link, Left/Center/Right) -->
                         <Border
                             x:Name="SelectionToolbarBorder"
                             UseLayoutRounding="True"
@@ -710,6 +713,36 @@
                                     Style="{StaticResource GlassPillButtonStyle}"
                                     Click="OnSelectionLinkClick"
                                     ToolTipService.ToolTip="Insert Link ([text](url))" />
+                                <Border
+                                    Width="1"
+                                    Height="16"
+                                    Margin="2,0"
+                                    Background="{ThemeResource SubtleDividerBrush}"
+                                    VerticalAlignment="Center" />
+                                <Button
+                                    Height="28"
+                                    Padding="8,0"
+                                    Style="{StaticResource GlassPillButtonStyle}"
+                                    Click="OnAlignLeftClick"
+                                    ToolTipService.ToolTip="Align Left">
+                                    <FontIcon Glyph="&#xE8E4;" FontSize="12" />
+                                </Button>
+                                <Button
+                                    Height="28"
+                                    Padding="8,0"
+                                    Style="{StaticResource GlassPillButtonStyle}"
+                                    Click="OnAlignCenterClick"
+                                    ToolTipService.ToolTip="Align Center">
+                                    <FontIcon Glyph="&#xE8E3;" FontSize="12" />
+                                </Button>
+                                <Button
+                                    Height="28"
+                                    Padding="8,0"
+                                    Style="{StaticResource GlassPillButtonStyle}"
+                                    Click="OnAlignRightClick"
+                                    ToolTipService.ToolTip="Align Right">
+                                    <FontIcon Glyph="&#xE8E2;" FontSize="12" />
+                                </Button>
                             </StackPanel>
                         </Border>
 
@@ -719,7 +752,7 @@
                             UseLayoutRounding="True"
                             Visibility="Collapsed"
                             Width="288"
-                            MaxHeight="320"
+                            MaxHeight="356"
                             HorizontalAlignment="Left"
                             VerticalAlignment="Top"
                             Margin="40,68,0,0"
@@ -739,13 +772,40 @@
                                     <TranslateTransform x:Name="SlashMenuTranslate" Y="0" />
                                 </TransformGroup>
                             </Border.RenderTransform>
-                            <StackPanel Spacing="4">
-                                <TextBlock
-                                    Text="INSERT BLOCK (/)"
-                                    Margin="8,2,8,2"
-                                    FontSize="10"
-                                    FontWeight="SemiBold"
-                                    Foreground="{ThemeResource TextSecondaryBrush}" />
+                            <StackPanel Spacing="6">
+                                <Grid Margin="6,2,6,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock
+                                        Grid.Column="0"
+                                        Text="INSERT BLOCK (/)"
+                                        FontSize="10"
+                                        FontWeight="SemiBold"
+                                        VerticalAlignment="Center"
+                                        Foreground="{ThemeResource TextSecondaryBrush}" />
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                        <Button
+                                            Style="{StaticResource SubtleIconButtonStyle}"
+                                            Click="OnAlignLeftClick"
+                                            ToolTipService.ToolTip="Align Left">
+                                            <FontIcon Glyph="&#xE8E4;" FontSize="12" />
+                                        </Button>
+                                        <Button
+                                            Style="{StaticResource SubtleIconButtonStyle}"
+                                            Click="OnAlignCenterClick"
+                                            ToolTipService.ToolTip="Align Center">
+                                            <FontIcon Glyph="&#xE8E3;" FontSize="12" />
+                                        </Button>
+                                        <Button
+                                            Style="{StaticResource SubtleIconButtonStyle}"
+                                            Click="OnAlignRightClick"
+                                            ToolTipService.ToolTip="Align Right">
+                                            <FontIcon Glyph="&#xE8E2;" FontSize="12" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
                                 <ListView
                                     x:Name="SlashMenuListView"
                                     MaxHeight="274"
