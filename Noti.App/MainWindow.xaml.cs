@@ -3988,7 +3988,7 @@ public sealed partial class MainWindow : Window
                 await ViewModel.CreateNoteInFolderAsync(targetFolder);
             }
 
-            var imagesDir = Path.Combine(Noti.Storage.AppSettings.AppDataDirectory, "images");
+            var imagesDir = Path.Combine(AppSettings.AppDataDirectory, "images");
             Directory.CreateDirectory(imagesDir);
 
             var rawStem = Path.GetFileNameWithoutExtension(sourceFilePath);
@@ -4132,7 +4132,7 @@ public sealed partial class MainWindow : Window
                 await ViewModel.CreateNoteInFolderAsync(targetFolder);
             }
 
-            var imagesDir = Path.Combine(Noti.Storage.AppSettings.AppDataDirectory, "images");
+            var imagesDir = Path.Combine(AppSettings.AppDataDirectory, "images");
             Directory.CreateDirectory(imagesDir);
 
             var fileName = $"pasted-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.png";

@@ -1324,7 +1324,7 @@ public static class MarkdownRenderer
             return false;
 
         var candidates = new List<string>(10);
-        var appImagesDir = System.IO.Path.Combine(Noti.Storage.AppSettings.AppDataDirectory, "images");
+        var appImagesDir = System.IO.Path.Combine(AppSettings.AppDataDirectory, "images");
         candidates.Add(System.IO.Path.Combine(appImagesDir, rel));
         var fileNameOnly = System.IO.Path.GetFileName(rel);
         if (!string.IsNullOrWhiteSpace(fileNameOnly))
