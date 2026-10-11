@@ -41,10 +41,14 @@ public sealed partial class MainWindow : Window
     private int _liveMaterializedCount;
     private readonly Stack<TextBox> _liveTextBoxPool = new(160);
     private readonly DispatcherTimer _liveSyncTimer;
+    private readonly DispatcherTimer _caretBlinkTimer;
+    private ulong _lastCanvasClickTimestamp;
 
     private static readonly SolidColorBrush TransparentBrush = new(Colors.Transparent);
     private static readonly SolidColorBrush AccentBrush = new(ColorHelper.FromArgb(255, 10, 132, 255));
     private static readonly SolidColorBrush SelectionUnfocusedBrush = new(ColorHelper.FromArgb(140, 10, 132, 255));
+    private static readonly SolidColorBrush CaretLightModeBrush = new(ColorHelper.FromArgb(255, 17, 17, 19));
+    private static readonly SolidColorBrush CaretDarkModeBrush = new(ColorHelper.FromArgb(255, 245, 245, 247));
     private static readonly FontFamily MonoFontFamily = new("Cascadia Mono, Consolas, Courier New");
     private static readonly FontFamily DefaultFontFamily = FontFamily.XamlAutoFontFamily;
 
@@ -83,20 +87,34 @@ public sealed partial class MainWindow : Window
         _liveSyncTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
         _liveSyncTimer.Tick += (_, _) => FlushSyncLiveBlocksToViewModel();
 
+        _caretBlinkTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(530) };
+        _caretBlinkTimer.Tick += (_, _) =>
+        {
+            if (EditorCaretBar.Visibility == Visibility.Visible)
+                EditorCaretBar.Opacity = EditorCaretBar.Opacity > 0.5 ? 0.0 : 1.0;
+        };
+
         RootGrid.Loaded += (_, _) =>
         {
             ApplyResponsiveLayout();
+            LiveCanvasRootGrid.MinHeight = Math.Max(0, LiveEditorScrollViewer.ActualHeight);
             ThemeIndicatorTranslate.X = ViewModel.ThemeIndicatorOffsetX;
             BackdropIndicatorTranslate.X = ViewModel.BackdropIndicatorOffsetX;
             ModeIndicatorTranslate.X = ViewModel.ModeIndicatorOffsetX;
             UpdateTitleBarPassthrough();
             ApplyEditorTextBoxTheme();
             RebuildLiveEditor(reparse: true);
+            UpdateCustomCaret(resetBlink: true);
         };
         RootGrid.SizeChanged += (_, _) =>
         {
             ApplyResponsiveLayout();
             UpdateTitleBarPassthrough();
+        };
+        LiveEditorScrollViewer.SizeChanged += (_, _) =>
+        {
+            LiveCanvasRootGrid.MinHeight = Math.Max(0, LiveEditorScrollViewer.ActualHeight);
+            UpdateCustomCaret(resetBlink: false);
         };
         SidebarToggleButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
         ViewSwitcherBorder.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
@@ -104,12 +122,17 @@ public sealed partial class MainWindow : Window
         ZoomBadgeButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
 
         LiveEditorScrollViewer.ViewChanged += OnLiveEditorScrollViewerViewChanged;
+        LiveEditorScrollViewer.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnLiveCanvasBackgroundPointerPressed), true);
         EditorPaneGrid.AddHandler(UIElement.ContextRequestedEvent, new TypedEventHandler<UIElement, ContextRequestedEventArgs>(OnEditorContextRequested), true);
         EditorPaneGrid.AddHandler(UIElement.RightTappedEvent, new RightTappedEventHandler(OnEditorPaneRightTapped), true);
         EditorTextBox.ContextRequested += OnEditorContextRequested;
         EditorTextBox.Paste += OnEditorTextBoxPaste;
         RootGrid.AddHandler(UIElement.DragOverEvent, new DragEventHandler(OnRootGridDragOver), true);
         RootGrid.AddHandler(UIElement.DropEvent, new DragEventHandler(OnRootGridDrop), true);
+        RootGrid.GotFocus += (_, _) => UpdateCustomCaret(resetBlink: true);
+        RootGrid.LostFocus += (_, _) => DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: false));
+        RootGrid.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, _) => DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: true))), true);
+        RootGrid.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler((_, _) => DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: true))), true);
         RootGrid.PreviewKeyDown += OnRootPreviewKeyDown;
         EditorTextBox.PreviewKeyDown += OnEditorPreviewKeyDown;
         EditorTextBox.TextChanged += OnEditorTextChanged;
@@ -627,6 +650,151 @@ public sealed partial class MainWindow : Window
         {
             EnsureLiveBlocksMaterializedThrough(Math.Min(_liveBlocks.Count - 1, _liveMaterializedCount + 48));
         }
+
+        UpdateCustomCaret(resetBlink: false);
+    }
+
+    private bool IsElementInsideEditorPane(DependencyObject? element)
+    {
+        var cur = element;
+        while (cur is not null)
+        {
+            if (ReferenceEquals(cur, EditorPaneGrid))
+                return true;
+            cur = VisualTreeHelper.GetParent(cur);
+        }
+        return false;
+    }
+
+    private void HideCustomCaret()
+    {
+        _caretBlinkTimer.Stop();
+        if (EditorCaretBar.Visibility != Visibility.Collapsed)
+            EditorCaretBar.Visibility = Visibility.Collapsed;
+    }
+
+    private void UpdateCustomCaret(bool resetBlink = false)
+    {
+        if (RootGrid.XamlRoot is null ||
+            ViewModel.IsSettingsOpen ||
+            _isCommandPaletteOpen ||
+            DeleteFolderConfirmOverlay.Visibility == Visibility.Visible)
+        {
+            HideCustomCaret();
+            return;
+        }
+
+        if (FocusManager.GetFocusedElement(RootGrid.XamlRoot) is not TextBox focusedTb ||
+            focusedTb.Visibility != Visibility.Visible ||
+            focusedTb.SelectionLength > 0 ||
+            !IsElementInsideEditorPane(focusedTb))
+        {
+            HideCustomCaret();
+            return;
+        }
+
+        try
+        {
+            if (focusedTb.ActualHeight <= 0)
+                focusedTb.UpdateLayout();
+
+            var text = focusedTb.Text ?? string.Empty;
+            var caret = Math.Clamp(focusedTb.SelectionStart, 0, text.Length);
+            var defaultLineHeight = Math.Max(16.0, Math.Round(focusedTb.FontSize * 1.28));
+            double localX;
+            double localY;
+            double caretHeight = defaultLineHeight;
+
+            if (text.Length == 0)
+            {
+                var contentW = Math.Max(0.0, focusedTb.ActualWidth - focusedTb.Padding.Left - focusedTb.Padding.Right);
+                localX = focusedTb.TextAlignment switch
+                {
+                    TextAlignment.Center => focusedTb.Padding.Left + (contentW / 2.0),
+                    TextAlignment.Right => focusedTb.Padding.Left + Math.Max(0.0, contentW - 2.0),
+                    _ => focusedTb.Padding.Left
+                };
+
+                var rect0 = focusedTb.GetRectFromCharacterIndex(0, false);
+                if (!rect0.IsEmpty && rect0.Height > 4)
+                {
+                    caretHeight = rect0.Height;
+                    localY = rect0.Y;
+                    if (focusedTb.Padding.Top > 0 && localY < focusedTb.Padding.Top - 1.0)
+                        localY += focusedTb.Padding.Top;
+                }
+                else
+                {
+                    var contentH = Math.Max(0.0, focusedTb.ActualHeight - focusedTb.Padding.Top - focusedTb.Padding.Bottom);
+                    localY = focusedTb.Padding.Top + Math.Max(0.0, (contentH - caretHeight) / 2.0);
+                }
+            }
+            else
+            {
+                Rect rect;
+                if (caret < text.Length)
+                {
+                    rect = focusedTb.GetRectFromCharacterIndex(caret, false);
+                }
+                else
+                {
+                    rect = focusedTb.GetRectFromCharacterIndex(text.Length - 1, true);
+                    if (text[^1] is '\r' or '\n')
+                    {
+                        var lh = (!rect.IsEmpty && rect.Height > 4) ? rect.Height : defaultLineHeight;
+                        rect = new Rect(focusedTb.Padding.Left, rect.Y + lh, 0, lh);
+                    }
+                }
+
+                if (!rect.IsEmpty && (rect.Height > 0 || rect.X > 0 || rect.Y > 0))
+                {
+                    localX = rect.X;
+                    localY = rect.Y;
+                    if (rect.Height > 4)
+                        caretHeight = rect.Height;
+
+                    if (focusedTb.Padding.Left > 0 && localX < focusedTb.Padding.Left - 1.0)
+                    {
+                        localX += focusedTb.Padding.Left;
+                        localY += focusedTb.Padding.Top;
+                    }
+                }
+                else
+                {
+                    localX = focusedTb.Padding.Left;
+                    localY = focusedTb.Padding.Top;
+                }
+            }
+
+            var pt = focusedTb.TransformToVisual(EditorCaretCanvas).TransformPoint(new Point(localX, localY));
+            var paneH = EditorPaneGrid.ActualHeight;
+            var paneW = EditorPaneGrid.ActualWidth;
+
+            if (paneH > 0 && (pt.Y + caretHeight < 0 || pt.Y > paneH || pt.X < -4 || (paneW > 0 && pt.X > paneW + 4)))
+            {
+                HideCustomCaret();
+                return;
+            }
+
+            EditorCaretBar.Height = Math.Clamp(Math.Round(caretHeight), 14.0, 56.0);
+            EditorCaretBar.Background = ViewModel.IsDarkMode ? CaretDarkModeBrush : CaretLightModeBrush;
+            Canvas.SetLeft(EditorCaretBar, Math.Round(pt.X));
+            Canvas.SetTop(EditorCaretBar, Math.Round(pt.Y));
+
+            if (EditorCaretBar.Visibility != Visibility.Visible)
+                EditorCaretBar.Visibility = Visibility.Visible;
+
+            if (resetBlink || !_caretBlinkTimer.IsEnabled)
+            {
+                EditorCaretBar.Opacity = 1.0;
+                _caretBlinkTimer.Stop();
+                _caretBlinkTimer.Start();
+            }
+        }
+        catch
+        {
+            HideCustomCaret();
+        }
     }
 
     private void ApplyEditorTextBoxTheme()
@@ -835,7 +1003,11 @@ public sealed partial class MainWindow : Window
 
     private void OnLiveCanvasBackgroundPointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (e.GetCurrentPoint(LiveCanvasRootGrid).Properties.IsRightButtonPressed)
+        var rootPt = e.GetCurrentPoint(null);
+        if (rootPt.Properties.IsRightButtonPressed)
+            return;
+
+        if (rootPt.Timestamp != 0 && rootPt.Timestamp == _lastCanvasClickTimestamp)
             return;
 
         if (_isContextSlashMenuOpen)
@@ -844,11 +1016,27 @@ public sealed partial class MainWindow : Window
         var cur = e.OriginalSource as DependencyObject;
         while (cur is not null && !ReferenceEquals(cur, LiveEditorScrollViewer))
         {
-            if (cur is TextBox or Button or CheckBox)
+            if (cur is TextBox or Button or CheckBox or ScrollBar or Thumb)
                 return;
+
+            if (cur is FrameworkElement fe)
+            {
+                for (var i = 0; i < _liveBlocks.Count; i++)
+                {
+                    var blk = _liveBlocks[i];
+                    if (ReferenceEquals(blk.RootElement, fe) &&
+                        blk.Kind is LiveBlockKind.ImageBlock or LiveBlockKind.TableBlock or LiveBlockKind.Divider)
+                    {
+                        return;
+                    }
+                }
+            }
+
             cur = VisualTreeHelper.GetParent(cur);
         }
 
+        _lastCanvasClickTimestamp = rootPt.Timestamp;
+        e.Handled = true;
         FocusNearestLiveBlockAtY(e.GetCurrentPoint(LiveEditorPanel).Position.Y);
     }
 
@@ -862,14 +1050,18 @@ public sealed partial class MainWindow : Window
         }
 
         var clamped = Math.Clamp(blockIndex, 0, _liveBlocks.Count - 1);
-        if (clamped + 1 < _liveBlocks.Count)
+        for (var next = clamped + 1; next < _liveBlocks.Count; next++)
         {
-            EnsureLiveBlocksMaterializedThrough(clamped + 1);
-            if (IsEditableLiveBlock(_liveBlocks[clamped + 1]))
+            if (_liveBlocks[next].Kind == LiveBlockKind.HtmlWrapper)
+                continue;
+
+            EnsureLiveBlocksMaterializedThrough(next);
+            if (IsEditableLiveBlock(_liveBlocks[next]))
             {
-                FocusLiveBlockAt(clamped + 1, 0);
+                FocusLiveBlockAt(next, 0);
                 return;
             }
+            break;
         }
 
         InsertLiveBlockAt(clamped + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
@@ -889,8 +1081,15 @@ public sealed partial class MainWindow : Window
 
         for (var i = 0; i < count; i++)
         {
+            if (_liveBlocks[i].Kind == LiveBlockKind.HtmlWrapper)
+                continue;
+
             var child = LiveEditorPanel.Children[i];
-            var bottom = child.ActualOffset.Y + child.ActualSize.Y + 4;
+            if (child.Visibility == Visibility.Collapsed)
+                continue;
+
+            var height = child is FrameworkElement fe && fe.ActualHeight > 0 ? fe.ActualHeight : child.ActualSize.Y;
+            var bottom = child.ActualOffset.Y + height + 4;
             if (clickY <= bottom)
             {
                 if (IsEditableLiveBlock(_liveBlocks[i]))
@@ -903,17 +1102,21 @@ public sealed partial class MainWindow : Window
 
         EnsureLiveBlocksMaterializedThrough(_liveBlocks.Count - 1);
 
-        var lastBlock = _liveBlocks[^1];
-        if (!IsEditableLiveBlock(lastBlock) ||
-            lastBlock.Kind == LiveBlockKind.CodeBlock ||
-            !string.IsNullOrWhiteSpace(lastBlock.Content))
+        for (var i = _liveBlocks.Count - 1; i >= 0; i--)
         {
-            InsertLiveBlockAt(_liveBlocks.Count, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
-            FlushSyncLiveBlocksToViewModel();
-            return;
+            if (_liveBlocks[i].Kind == LiveBlockKind.HtmlWrapper)
+                continue;
+
+            if (IsEditableLiveBlock(_liveBlocks[i]) && _liveBlocks[i].Kind != LiveBlockKind.CodeBlock)
+            {
+                FocusLiveBlockAt(i);
+                return;
+            }
+            break;
         }
 
-        FocusLiveBlockAt(_liveBlocks.Count - 1);
+        InsertLiveBlockAt(_liveBlocks.Count, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+        FlushSyncLiveBlocksToViewModel();
     }
 
     private void RebuildLiveEditor(bool reparse = true, int? focusBlockIndex = null, int? focusCaretIndex = null)
@@ -987,8 +1190,15 @@ public sealed partial class MainWindow : Window
             return;
 
         targetTb.Visibility = Visibility.Visible;
+        LiveEditorPanel.UpdateLayout();
 
         var caret = focusCaret ?? (targetTb.Text ?? string.Empty).Length;
+        var initialClamped = Math.Clamp(caret, 0, (targetTb.Text ?? string.Empty).Length);
+        targetTb.Focus(FocusState.Programmatic);
+        targetTb.SelectionStart = initialClamped;
+        targetTb.SelectionLength = 0;
+        UpdateCustomCaret(resetBlink: true);
+
         DispatcherQueue.TryEnqueue(() =>
         {
             if (ViewModel.CurrentViewMode != EditorViewMode.Live ||
@@ -1002,6 +1212,7 @@ public sealed partial class MainWindow : Window
             if (targetBlock.DisplayTextBlock is { } d)
                 d.Visibility = Visibility.Collapsed;
             targetTb.Visibility = Visibility.Visible;
+            LiveEditorPanel.UpdateLayout();
             targetTb.Focus(FocusState.Programmatic);
             var clamped = Math.Clamp(caret, 0, (targetTb.Text ?? string.Empty).Length);
             targetTb.SelectionStart = clamped;
@@ -1009,6 +1220,8 @@ public sealed partial class MainWindow : Window
 
             if (savedOffset > 4.0 && LiveEditorScrollViewer.VerticalOffset < 1.0 && index > 1)
                 LiveEditorScrollViewer.ChangeView(null, savedOffset, null, true);
+
+            UpdateCustomCaret(resetBlink: true);
         });
     }
 
@@ -1520,10 +1733,13 @@ public sealed partial class MainWindow : Window
                     dtb.Visibility = Visibility.Collapsed;
                 tb.Visibility = Visibility.Visible;
             }
+            UpdateCustomCaret(resetBlink: true);
         };
 
         tb.LostFocus += (_, _) =>
         {
+            DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: false));
+
             if (_isSyncingLiveEditor || tb.Tag is not LiveDocBlock block)
                 return;
 
@@ -1562,6 +1778,7 @@ public sealed partial class MainWindow : Window
             UpdateSlashMenuAutocomplete();
             UpdateMentionAutocomplete();
             UpdateActiveMentionJumpPill();
+            UpdateCustomCaret(resetBlink: true);
 
             if (ViewModel.IsFluidAnimationEnabled && tb.FocusState != FocusState.Unfocused)
             {
@@ -1582,6 +1799,7 @@ public sealed partial class MainWindow : Window
             UpdateSlashMenuAutocomplete();
             UpdateMentionAutocomplete();
             UpdateActiveMentionJumpPill();
+            UpdateCustomCaret(resetBlink: true);
         };
 
         tb.PointerReleased += (_, _) =>
@@ -2162,6 +2380,7 @@ public sealed partial class MainWindow : Window
         UpdateSlashMenuAutocomplete();
         UpdateMentionAutocomplete();
         UpdateActiveMentionJumpPill();
+        UpdateCustomCaret(resetBlink: true);
 
         if (!ViewModel.IsFluidAnimationEnabled || EditorTextBox.FocusState == FocusState.Unfocused)
             return;
@@ -2181,6 +2400,7 @@ public sealed partial class MainWindow : Window
         UpdateSlashMenuAutocomplete();
         UpdateMentionAutocomplete();
         UpdateActiveMentionJumpPill();
+        UpdateCustomCaret(resetBlink: true);
     }
 
     private void OnEditorPointerReleased(object sender, PointerRoutedEventArgs e)
@@ -3096,6 +3316,7 @@ public sealed partial class MainWindow : Window
                     RebuildLiveEditor(reparse: true);
                 }
                 UpdateActiveMentionJumpPill();
+                DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: true));
                 if (ViewModel.IsFluidAnimationEnabled)
                 {
                     PlayFluidTransition(ViewModel.CurrentViewMode == EditorViewMode.Live
@@ -3124,6 +3345,7 @@ public sealed partial class MainWindow : Window
                 else if (EditorTextBox.Text != ViewModel.EditorText)
                     EditorTextBox.Text = ViewModel.EditorText;
                 AnimateViewModeChange();
+                DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: true));
                 break;
 
             case nameof(MainViewModel.IsSidebarOpen):
@@ -3134,6 +3356,7 @@ public sealed partial class MainWindow : Window
                 if (_liveSyncTimer.IsEnabled)
                     FlushSyncLiveBlocksToViewModel();
                 AnimateSettingsModal(ViewModel.IsSettingsOpen);
+                DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: false));
                 break;
 
             case nameof(MainViewModel.CurrentThemeMode):
@@ -3150,10 +3373,12 @@ public sealed partial class MainWindow : Window
                 _liveTextBoxPool.Clear();
                 ApplyEditorTextBoxTheme();
                 RebuildLiveEditor(reparse: false);
+                DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: true));
                 break;
 
             case nameof(MainViewModel.EditorFontSize):
                 RebuildLiveEditor(reparse: false);
+                DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: true));
                 break;
         }
     }

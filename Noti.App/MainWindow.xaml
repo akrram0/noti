@@ -616,8 +616,8 @@
                             x:Name="LiveEditorScrollViewer"
                             Visibility="{x:Bind ViewModel.LivePaneVisibility, Mode=OneWay}"
                             BringIntoViewOnFocusChange="False"
+                            IsTabStop="False"
                             Background="Transparent"
-                            PointerPressed="OnLiveCanvasBackgroundPointerPressed"
                             VerticalScrollBarVisibility="Auto">
                             <Grid
                                 x:Name="LiveCanvasRootGrid"
@@ -626,6 +626,7 @@
                                 PointerPressed="OnLiveCanvasBackgroundPointerPressed">
                                 <StackPanel
                                     x:Name="LiveEditorPanel"
+                                    Background="Transparent"
                                     UseLayoutRounding="True"
                                     Padding="40,28,40,140"
                                     Spacing="6" />
@@ -651,6 +652,20 @@
                             BorderThickness="0"
                             Padding="40,28,40,16"
                             ScrollViewer.VerticalScrollBarVisibility="Auto" />
+
+                        <!-- Theme-Responsive High-Contrast Caret Overlay (bypasses WinUI 3 DestinationInvert backdrop inversion) -->
+                        <Canvas
+                            x:Name="EditorCaretCanvas"
+                            IsHitTestVisible="False">
+                            <Border
+                                x:Name="EditorCaretBar"
+                                Width="2"
+                                Height="20"
+                                CornerRadius="1"
+                                Visibility="Collapsed"
+                                IsHitTestVisible="False"
+                                Background="#FF111113" />
+                        </Canvas>
 
                         <!-- Floating Selection Formatting Toolbar Pill (Bold, Italic, Strikethrough, Code, Link, Left/Center/Right) -->
                         <Border
