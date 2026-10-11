@@ -18,6 +18,8 @@ public sealed class NoteService
         _store = store;
     }
 
+    public INoteStore Store => _store;
+
     public async Task<IReadOnlyList<Note>> LoadNotesAsync(CancellationToken cancellationToken = default)
     {
         var existing = await _store.LoadAllAsync(cancellationToken).ConfigureAwait(false);
@@ -34,21 +36,50 @@ public sealed class NoteService
         }
 
         if (userNotes.Count > 0)
-            return userNotes.OrderByDescending(n => n.UpdatedAt).ToList();
+            return userNotes.OrderByDescending(n => n.IsPinned).ThenByDescending(n => n.UpdatedAt).ToList();
 
         var initialNote = CreateNote(string.Empty);
         await _store.SaveAsync(initialNote, cancellationToken).ConfigureAwait(false);
         return [initialNote];
     }
 
-    public Note CreateNote(string initialContent = "")
+    public Task<IReadOnlyList<string>> GetFoldersAsync(CancellationToken cancellationToken = default) =>
+        _store.GetFoldersAsync(cancellationToken);
+
+    public Task CreateFolderAsync(string relativeFolderPath, CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativeFolderPath);
+        return _store.CreateFolderAsync(relativeFolderPath, cancellationToken);
+    }
+
+    public Note CreateNote(string initialContent = "", string? folderPath = null)
+    {
+        var baseId = $"note-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid().ToString("N")[..6]}";
+        var normalizedFolder = NormalizeFolderPath(folderPath);
+        var fullId = string.IsNullOrEmpty(normalizedFolder) ? baseId : $"{normalizedFolder}/{baseId}";
+
         return new Note
         {
-            Id = $"note-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid().ToString("N")[..6]}",
+            Id = fullId,
             Content = initialContent,
             UpdatedAt = DateTimeOffset.UtcNow
         };
+    }
+
+    public static string NormalizeFolderPath(string? folderPath)
+    {
+        if (string.IsNullOrWhiteSpace(folderPath))
+            return string.Empty;
+
+        var invalid = Path.GetInvalidFileNameChars();
+        var segments = folderPath
+            .Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(seg => string.Concat(seg.Split(invalid, StringSplitOptions.RemoveEmptyEntries)).Trim('.'))
+            .Where(seg => !string.IsNullOrWhiteSpace(seg))
+            .ToArray();
+
+        return string.Join("/", segments);
     }
 
     public async Task SaveNoteAsync(Note note, CancellationToken cancellationToken = default)
@@ -74,7 +105,8 @@ public sealed class NoteService
         return notes
             .Where(n =>
                 n.Title.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                n.Content.Contains(term, StringComparison.OrdinalIgnoreCase))
+                n.Content.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                n.FolderPath.Contains(term, StringComparison.OrdinalIgnoreCase))
             .ToList();
     }
 

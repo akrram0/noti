@@ -1,6 +1,6 @@
 # Noti Design System (`.agent/rules/design.md`)
 
-Derived from the project's two visual reference mockups (Main Editor view and Settings popover view) and Apple/macOS dark-first design principles.
+Derived from the project's visual reference mockups and Apple/macOS dark-first design principles.
 
 ## 1. Color Palette (Exact Hex & RGBA Tokens)
 
@@ -9,7 +9,8 @@ Derived from the project's two visual reference mockups (Main Editor view and Se
 - **Elevated Surface / Selected Card (`bg-surface-active`)**: `#1C1C1E`
 - **Hover Surface (`bg-surface-hover`)**: `#121214`
 - **Input Background (`bg-input`)**: `#121212`
-- **Settings Card Surface (`bg-flyout`)**: `#161618`
+- **Settings Modal Surface (`bg-flyout`)**: `#161618`
+- **Modal Backdrop (`bg-backdrop`)**: `rgba(0, 0, 0, 0.72)` (`#B8000000`)
 - **Structural Hairline Divider (`border-subtle`)**: `#161616`
 - **Input & Settings Card Border (`border-control`)**: `#262626`
 - **Primary Text (`text-primary`)**: `#F5F5F7`
@@ -21,7 +22,8 @@ Derived from the project's two visual reference mockups (Main Editor view and Se
 - **Elevated Surface / Selected Card (`bg-surface-active`)**: `#F2F2F7`
 - **Hover Surface (`bg-surface-hover`)**: `#F9F9FB`
 - **Input Background (`bg-input`)**: `#F2F2F7`
-- **Settings Card Surface (`bg-flyout`)**: `#F9F9FB`
+- **Settings Modal Surface (`bg-flyout`)**: `#F9F9FB`
+- **Modal Backdrop (`bg-backdrop`)**: `rgba(0, 0, 0, 0.44)` (`#70000000`)
 - **Structural Hairline Divider (`border-subtle`)**: `#E5E5EA`
 - **Input & Settings Card Border (`border-control`)**: `#D1D1D6`
 - **Primary Text (`text-primary`)**: `#1C1C1E`
@@ -35,44 +37,43 @@ Derived from the project's two visual reference mockups (Main Editor view and Se
 - **Glass Rim Border (`glass-border`)**: `rgba(255, 255, 255, 0.22)` (Dark) / `rgba(0, 0, 0, 0.14)` (Light)
 - **Toggle Track Fill (`toggle-track`)**: `rgba(255, 255, 255, 0.16)` (Dark) / `rgba(0, 0, 0, 0.10)` (Light)
 - **Toggle Thumb Fill (`toggle-thumb`)**: `rgba(255, 255, 255, 0.22)` (Dark) / `#FFFFFF` (Light)
-- **Backdrop Blur**: `blur(20px)` (`1px` specular rim stroke)
 
 ---
 
 ## 2. Spacing Scale (8pt Grid)
 All padding, margins, and layout gaps must strictly use values from this scale:
 - `4px` — Tight inline gaps (title-to-snippet vertical stack gap, toggle internal padding)
-- `8px` — Compact element spacing (list item gaps, icon-to-label gap, settings card to bottom bar gap)
-- `16px` — Standard container padding (sidebar outer padding, card internal padding, settings panel padding)
-- `24px` — Section separation
-- `32px` — Editor vertical padding
-- `48px` — Titlebar height and editor horizontal padding
-- `64px` — Large structural offsets
+- `8px` — Compact element spacing (list item gaps, icon-to-label gap)
+- `16px` — Standard container padding (sidebar outer padding, card internal padding)
+- `24px` — Modal internal padding and section separation
+- `32px` — Editor & preview vertical padding
+- `48px` — Titlebar height, status bar height, and editor/preview horizontal padding
+- `64px` — Large structural offsets / mode switcher segment width
 
 ---
 
 ## 3. Border-Radius Tiers & Usage Rules
 Never apply one uniform border-radius across unrelated component types:
-- **`sm` (`6px`)**: Compact inline chips, keyboard shortcut badges.
-- **`md` (`12px`)**: Note list item selection cards (`Welcome` active state card).
-- **`lg` (`16px`)**: Inline Settings panel card above the bottom bar (`Settings` / `Dark mode` container) and outer window frame rounding.
-- **`full` (`9999px` / `18px` on `36px` controls, `14px` on `28px` toggle)**: Search pill input, circular liquid-glass icon buttons (Sidebar toggle, `+` New Note button, Settings gear button), and the Dark mode pill toggle switch + circular thumb.
+- **`sm` (`6px`–`8px`)**: Compact inline chips, folder badge, action pills (`Import .md`, `Export .md`), subtle icon buttons.
+- **`md` (`12px`)**: Note list item selection cards, settings section containers, code/tree block cards, floating word-pop typing badge.
+- **`lg` (`16px`)**: Full Settings Modal card (`600×520px`) and outer window frame rounding.
+- **`full` (`9999px` / `18px` on `36px` controls, `16px` on `32px` mode switcher)**: Search pill input, circular liquid-glass icon buttons, `Write | Split | View` mode switcher pill, and toggle switches.
 
 ---
 
 ## 4. Typography Scale
-- **Font Family**: `Segoe UI Variable Text`, `-apple-system`, `SF Pro Text`, `Inter` (strictly max 2 weights per screen: Regular `400` and SemiBold `600`).
+- **Font Family**: `Segoe UI Variable Text`, `-apple-system`, `SF Pro Text`, `Inter` (strictly max 2 weights per screen: Regular `400` and SemiBold `600`; `Cascadia Mono` / `Consolas` for code and tree blocks).
 - **Hierarchy Levels**:
-  - **Editor Body (`16px`, Regular `400`, line-height `28px`)**: Primary writing canvas text.
-  - **Note Card Title & Settings Option Label (`14px`, SemiBold `600`, line-height `20px`)**: Sidebar note title (`Welcome`, `Shopping`, `Ideas`) and `"Dark mode"` label.
-  - **Window Title / Search Input (`14px`, Regular `400` / SemiBold `600`, line-height `20px`)**: Top bar `"Noti"` label and search box text.
-  - **Snippet, Section Header & Status Metadata (`12px`, Regular `400` / SemiBold `600`, line-height `16px`)**: Sidebar single-line note snippet preview, `"Settings"` card header, `"3 notes"` counter, `"17 words"` counter, and `"Saved"` status indicator.
+  - **Editor & Preview Body (`16px` default, configurable `13–22px`, Regular `400`, line-height `1.65`)**: Primary writing canvas and rendered Markdown body.
+  - **Settings Modal Header (`18px`, SemiBold `600`)**: Modal title.
+  - **Note Card Title, Folder Name & Settings Option Label (`13–14px`, SemiBold `600`, line-height `20px`)**: Sidebar file tree items and setting rows.
+  - **Snippet, Section Header & Status Metadata (`11–12px`, Regular `400` / SemiBold `600`, line-height `16px`)**: Sidebar note snippet preview, section headers, note counter, word counter, and autosave indicator.
 
 ---
 
-## 5. Layout & Composition Hierarchy
-1. **Primary Action & Dominant Visual Weight**: The **Main Editor** canvas occupies `1*` (all remaining horizontal width, ~73% of a `1040×640` window) with generous `32px` top / `48px` horizontal breathing room and zero borders.
-2. **Secondary Navigation**: Collapsible **Sidebar** (`280px` fixed width when expanded, `0px` when collapsed), separated by a `1px` hairline (`#161616`).
-3. **Inline Settings Card**: Docked directly above the sidebar bottom bar (`16px` horizontal margin, `8px` bottom margin, `16px` internal padding, `lg` `16px` corner radius, `#161618` fill, `#262626` `1px` border), containing the `"Settings"` header (`12px`) and `"Dark mode"` row (`14px`) with a `48×28px` pill toggle switch (`full` radius).
-4. **Top Chrome Bar**: `48px` height with left-aligned liquid-glass sidebar toggle (`36×36px`) + `"Noti"` label, separated by a `1px` bottom hairline (`#161616`).
-5. **Bottom Status Row**: `48px` height aligned across both panes — left pane shows the `36×36px` liquid-glass Settings gear button + note count; right pane shows word count (left) and autosave status (right).
+## 5. Layout, Composition & Motion Hierarchy
+1. **Primary Action & Dominant Visual Weight**: The **Main Canvas** occupies `1*` (`Write`, `Split` 50/50, or `View` 100% rendered Markdown) with `32px` vertical / `48px` horizontal padding and zero borders.
+2. **Secondary Navigation (Nested File Tree Sidebar)**: `280px` width when expanded, smoothly animated (`Width` `280` $\leftrightarrow$ `0`, `TranslateX` `0` $\leftrightarrow$ `-32`, `Opacity` `1` $\leftrightarrow$ `0` over `220ms` `CubicEase` `EaseOut`). Supports nested folders (`14px` per depth level), collapsible folder chevrons, Pin-to-top, and Delete.
+3. **Top Chrome Bar (`48px`)**: Left sidebar toggle + `"Noti"` + active folder badge; Center `Write | Split | View` switcher with a `64px` sliding pill indicator; Right `Import .md` and `Export .md` pills.
+4. **Full Settings Modal (`600×520px` centered over backdrop)**: Smooth fade + scale (`0.92` $\leftrightarrow$ `1.0`) + vertical glide (`16px` $\leftrightarrow$ `0`) entrance and exit.
+5. **Micro-Interactions**: All buttons and list items animate scale on hover (`1.04–1.06`) and press (`0.90–0.93`). Typing in the editor triggers a subtle vertical micro-spring and floating word-pop chip (`0.86` $\rightarrow$ `1.0` scale).

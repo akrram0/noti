@@ -4,40 +4,44 @@ namespace Noti.Storage;
 
 public sealed class MarkdownNoteStore : INoteStore
 {
-    private readonly string _directoryPath;
+    private string _directoryPath;
 
     public MarkdownNoteStore(string? directoryPath = null)
     {
-        if (!string.IsNullOrWhiteSpace(directoryPath))
-        {
-            _directoryPath = directoryPath;
-        }
-        else
-        {
-            var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            if (string.IsNullOrWhiteSpace(docs))
-                docs = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Documents");
-
-            _directoryPath = Path.Combine(docs, "Noti");
-        }
+        _directoryPath = ResolveDirectoryPath(directoryPath);
     }
 
     public string DirectoryPath => _directoryPath;
 
+    public void SetDirectoryPath(string directoryPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(directoryPath);
+        _directoryPath = ResolveDirectoryPath(directoryPath);
+        Directory.CreateDirectory(_directoryPath);
+    }
+
     public async Task<IReadOnlyList<Note>> LoadAllAsync(CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(_directoryPath);
-        var files = Directory.EnumerateFiles(_directoryPath, "*.md", SearchOption.TopDirectoryOnly);
+        var files = Directory.EnumerateFiles(_directoryPath, "*.md", SearchOption.AllDirectories);
         var notes = new List<Note>();
 
         foreach (var file in files)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var relPath = Path.GetRelativePath(_directoryPath, file).Replace('\\', '/');
+            if (relPath.StartsWith('.') || relPath.Contains("/.", StringComparison.Ordinal))
+                continue;
+
+            var id = relPath.EndsWith(".md", StringComparison.OrdinalIgnoreCase)
+                ? relPath[..^3]
+                : relPath;
+
             var content = await File.ReadAllTextAsync(file, cancellationToken).ConfigureAwait(false);
             var updatedAt = new DateTimeOffset(File.GetLastWriteTimeUtc(file), TimeSpan.Zero);
             notes.Add(new Note
             {
-                Id = Path.GetFileNameWithoutExtension(file),
+                Id = id,
                 Content = content,
                 UpdatedAt = updatedAt
             });
@@ -46,12 +50,43 @@ public sealed class MarkdownNoteStore : INoteStore
         return notes.OrderByDescending(n => n.UpdatedAt).ToList();
     }
 
+    public Task<IReadOnlyList<string>> GetFoldersAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Directory.CreateDirectory(_directoryPath);
+
+        var folders = Directory
+            .EnumerateDirectories(_directoryPath, "*", SearchOption.AllDirectories)
+            .Select(dir => Path.GetRelativePath(_directoryPath, dir).Replace('\\', '/'))
+            .Where(rel => !string.IsNullOrWhiteSpace(rel) && !rel.StartsWith('.') && !rel.Contains("/.", StringComparison.Ordinal))
+            .OrderBy(rel => rel, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<string>>(folders);
+    }
+
+    public Task CreateFolderAsync(string relativeFolderPath, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var normalized = NoteService.NormalizeFolderPath(relativeFolderPath);
+        if (string.IsNullOrWhiteSpace(normalized))
+            throw new ArgumentException("Folder name is invalid.", nameof(relativeFolderPath));
+
+        var fullFolder = GetSafeFolderPath(normalized);
+        Directory.CreateDirectory(fullFolder);
+        return Task.CompletedTask;
+    }
+
     public async Task SaveAsync(Note note, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(note);
         Directory.CreateDirectory(_directoryPath);
 
         var filePath = GetFilePath(note.Id);
+        var parentDir = Path.GetDirectoryName(filePath);
+        if (!string.IsNullOrEmpty(parentDir))
+            Directory.CreateDirectory(parentDir);
+
         var normalized = (note.Content ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", Environment.NewLine);
         await File.WriteAllTextAsync(filePath, normalized, cancellationToken).ConfigureAwait(false);
         File.SetLastWriteTimeUtc(filePath, note.UpdatedAt.UtcDateTime);
@@ -67,13 +102,50 @@ public sealed class MarkdownNoteStore : INoteStore
         return Task.CompletedTask;
     }
 
-    private string GetFilePath(string id)
+    public string GetFilePath(string id)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        var safeName = string.Concat(Path.GetFileName(id).Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
-        if (string.IsNullOrWhiteSpace(safeName))
+        var invalid = Path.GetInvalidFileNameChars();
+        var parts = id
+            .Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(seg => string.Concat(seg.Split(invalid, StringSplitOptions.RemoveEmptyEntries)).Trim('.'))
+            .Where(seg => !string.IsNullOrWhiteSpace(seg))
+            .ToArray();
+
+        if (parts.Length == 0)
             throw new ArgumentException("Note ID resolves to an invalid file name.", nameof(id));
 
-        return Path.Combine(_directoryPath, $"{safeName}.md");
+        var relative = Path.Combine(parts) + ".md";
+        var fullRoot = Path.GetFullPath(_directoryPath);
+        var combined = Path.GetFullPath(Path.Combine(fullRoot, relative));
+
+        if (!combined.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Note path escapes the vault directory.", nameof(id));
+
+        return combined;
+    }
+
+    private string GetSafeFolderPath(string normalizedFolder)
+    {
+        var fullRoot = Path.GetFullPath(_directoryPath);
+        var combined = Path.GetFullPath(Path.Combine(fullRoot, normalizedFolder.Replace('/', Path.DirectorySeparatorChar)));
+
+        if (!combined.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Folder path escapes the vault directory.", nameof(normalizedFolder));
+
+        return combined;
+    }
+
+    private static string ResolveDirectoryPath(string? directoryPath)
+    {
+        if (!string.IsNullOrWhiteSpace(directoryPath))
+            return Path.GetFullPath(directoryPath);
+
+        var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        if (string.IsNullOrWhiteSpace(docs))
+            docs = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Documents");
+
+        return Path.Combine(docs, "Noti");
     }
 }

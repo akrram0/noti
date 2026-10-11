@@ -44,14 +44,28 @@ public sealed class NoteServiceTests
     }
 
     [Fact]
-    public void FilterNotes_MatchesTitleOrContent_CaseInsensitive()
+    public void Note_StripsTreeAndMarkdownSymbolsFromSnippet()
+    {
+        var note = new Note
+        {
+            Id = "Work/Roadmap",
+            Content = "# Project Roadmap\n├─ Design UI\n│\n└── Ship installer"
+        };
+
+        Assert.Equal("Work", note.FolderPath);
+        Assert.Equal("Project Roadmap", note.Title);
+        Assert.Equal("Design UI Ship installer", note.Snippet);
+    }
+
+    [Fact]
+    public void FilterNotes_MatchesTitleContentOrFolder_CaseInsensitive()
     {
         var store = new InMemoryNoteStore();
         var service = new NoteService(store);
         var notes = new[]
         {
-            new Note { Id = "1", Content = "Shopping\nBread\nOlive oil" },
-            new Note { Id = "2", Content = "Ideas\nBuild a minimal markdown app" }
+            new Note { Id = "Home/1", Content = "Shopping\nBread\nOlive oil" },
+            new Note { Id = "Work/2", Content = "Ideas\nBuild a minimal markdown app" }
         };
 
         var matchByContent = service.FilterNotes(notes, "olive");
@@ -62,12 +76,16 @@ public sealed class NoteServiceTests
         Assert.Single(matchByTitle);
         Assert.Equal("Ideas", matchByTitle[0].Title);
 
+        var matchByFolder = service.FilterNotes(notes, "work");
+        Assert.Single(matchByFolder);
+        Assert.Equal("Ideas", matchByFolder[0].Title);
+
         var allWhenBlank = service.FilterNotes(notes, "   ");
         Assert.Equal(2, allWhenBlank.Count);
     }
 
     [Fact]
-    public async Task MarkdownNoteStore_SavesLoadsAndDeletesMarkdownFilesSafely()
+    public async Task MarkdownNoteStore_SupportsNestedFoldersAndMarkdownFilesSafely()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"noti-store-{Guid.NewGuid():N}");
         try
@@ -75,11 +93,17 @@ public sealed class NoteServiceTests
             var store = new MarkdownNoteStore(tempDir);
             var service = new NoteService(store);
 
-            var created = service.CreateNote("# Project Plan\nShip unpackaged WinUI build.");
+            await service.CreateFolderAsync("Work/Specs");
+            var folders = await service.GetFoldersAsync();
+            Assert.Contains("Work", folders);
+            Assert.Contains("Work/Specs", folders);
+
+            var created = service.CreateNote("# Project Plan\nShip unpackaged WinUI build.", "Work/Specs");
             await service.SaveNoteAsync(created);
 
             var loaded = await store.LoadAllAsync();
             Assert.Single(loaded);
+            Assert.Equal("Work/Specs", loaded[0].FolderPath);
             Assert.Equal("Project Plan", loaded[0].Title);
             Assert.Equal("Ship unpackaged WinUI build.", loaded[0].Snippet);
 

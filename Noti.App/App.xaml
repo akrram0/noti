@@ -16,6 +16,7 @@
                     <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#FF121214" />
                     <SolidColorBrush x:Key="InputBackgroundBrush" Color="#FF121212" />
                     <SolidColorBrush x:Key="SettingsSurfaceBrush" Color="#FF161618" />
+                    <SolidColorBrush x:Key="ModalBackdropBrush" Color="#B8000000" />
                     <SolidColorBrush x:Key="SubtleDividerBrush" Color="#FF161616" />
                     <SolidColorBrush x:Key="ControlBorderBrush" Color="#FF262626" />
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFF5F5F7" />
@@ -34,21 +35,6 @@
                     </LinearGradientBrush>
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#29FFFFFF" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#40FFFFFF" />
-
-                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlForeground" Color="#FFF5F5F7" />
-                    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFF5F5F7" />
-                    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFF5F5F7" />
-                    <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8E8E93" />
-                    <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8E8E93" />
-                    <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF8E8E93" />
-                    <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
-                    <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
                 </ResourceDictionary>
 
                 <ResourceDictionary x:Key="Dark">
@@ -57,6 +43,7 @@
                     <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#FF121214" />
                     <SolidColorBrush x:Key="InputBackgroundBrush" Color="#FF121212" />
                     <SolidColorBrush x:Key="SettingsSurfaceBrush" Color="#FF161618" />
+                    <SolidColorBrush x:Key="ModalBackdropBrush" Color="#B8000000" />
                     <SolidColorBrush x:Key="SubtleDividerBrush" Color="#FF161616" />
                     <SolidColorBrush x:Key="ControlBorderBrush" Color="#FF262626" />
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFF5F5F7" />
@@ -75,21 +62,6 @@
                     </LinearGradientBrush>
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#29FFFFFF" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#40FFFFFF" />
-
-                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlForeground" Color="#FFF5F5F7" />
-                    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFF5F5F7" />
-                    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFF5F5F7" />
-                    <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8E8E93" />
-                    <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8E8E93" />
-                    <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF8E8E93" />
-                    <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
-                    <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
                 </ResourceDictionary>
 
                 <ResourceDictionary x:Key="Light">
@@ -98,6 +70,7 @@
                     <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#FFF9F9FB" />
                     <SolidColorBrush x:Key="InputBackgroundBrush" Color="#FFF2F2F7" />
                     <SolidColorBrush x:Key="SettingsSurfaceBrush" Color="#FFF9F9FB" />
+                    <SolidColorBrush x:Key="ModalBackdropBrush" Color="#70000000" />
                     <SolidColorBrush x:Key="SubtleDividerBrush" Color="#FFE5E5EA" />
                     <SolidColorBrush x:Key="ControlBorderBrush" Color="#FFD1D1D6" />
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FF1C1C1E" />
@@ -116,24 +89,10 @@
                     </LinearGradientBrush>
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#1A000000" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#FFFFFFFF" />
-
-                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlForeground" Color="#FF1C1C1E" />
-                    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FF1C1C1E" />
-                    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FF1C1C1E" />
-                    <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF6C6C70" />
-                    <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF6C6C70" />
-                    <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF6C6C70" />
-                    <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
-                    <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
+            <!-- Circular 36x36 Liquid Glass Icon Button with Smooth Scale Micro-Interactions -->
             <Style x:Key="GlassIconButtonStyle" TargetType="Button">
                 <Setter Property="Width" Value="36" />
                 <Setter Property="Height" Value="36" />
@@ -146,16 +105,32 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <Grid Width="36" Height="36" Background="Transparent">
+                            <Grid Width="36" Height="36" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="RootScale" ScaleX="1" ScaleY="1" />
+                                </Grid.RenderTransform>
                                 <VisualStateManager.VisualStateGroups>
                                     <VisualStateGroup x:Name="CommonStates">
-                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="Normal">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.15" />
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.15" />
+                                            </Storyboard>
+                                        </VisualState>
                                         <VisualState x:Name="PointerOver">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="1.06" Duration="0:0:0.12" />
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="1.06" Duration="0:0:0.12" />
+                                            </Storyboard>
                                             <VisualState.Setters>
                                                 <Setter Target="GlassSurface.Fill" Value="{ThemeResource GlassFillHoverBrush}" />
                                             </VisualState.Setters>
                                         </VisualState>
                                         <VisualState x:Name="Pressed">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="0.90" Duration="0:0:0.08" />
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="0.90" Duration="0:0:0.08" />
+                                            </Storyboard>
                                             <VisualState.Setters>
                                                 <Setter Target="GlassSurface.Fill" Value="{ThemeResource GlassFillPressedBrush}" />
                                             </VisualState.Setters>
@@ -181,6 +156,179 @@
                 </Setter>
             </Style>
 
+            <!-- Compact 26x26 Subtle Action Icon Button (for Pin / Delete / Add in Folder) -->
+            <Style x:Key="SubtleIconButtonStyle" TargetType="Button">
+                <Setter Property="Width" Value="26" />
+                <Setter Property="Height" Value="26" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border
+                                x:Name="BtnBorder"
+                                Width="26"
+                                Height="26"
+                                CornerRadius="6"
+                                Background="{TemplateBinding Background}"
+                                RenderTransformOrigin="0.5,0.5">
+                                <Border.RenderTransform>
+                                    <ScaleTransform x:Name="RootScale" ScaleX="1" ScaleY="1" />
+                                </Border.RenderTransform>
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.14" />
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.14" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="PointerOver">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="1.10" Duration="0:0:0.10" />
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="1.10" Duration="0:0:0.10" />
+                                            </Storyboard>
+                                            <VisualState.Setters>
+                                                <Setter Target="BtnBorder.Background" Value="{ThemeResource GlassFillHoverBrush}" />
+                                                <Setter Target="Presenter.Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="0.88" Duration="0:0:0.07" />
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="0.88" Duration="0:0:0.07" />
+                                            </Storyboard>
+                                            <VisualState.Setters>
+                                                <Setter Target="BtnBorder.Background" Value="{ThemeResource GlassFillPressedBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                                <ContentPresenter
+                                    x:Name="Presenter"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Foreground="{TemplateBinding Foreground}" />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Liquid Glass Pill Action Button (for Import / Export / Folder Actions) -->
+            <Style x:Key="GlassPillButtonStyle" TargetType="Button">
+                <Setter Property="Height" Value="30" />
+                <Setter Property="Padding" Value="12,0" />
+                <Setter Property="Background" Value="{ThemeResource GlassFillBrush}" />
+                <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource GlassBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border
+                                x:Name="PillBorder"
+                                Height="{TemplateBinding Height}"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="8"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                RenderTransformOrigin="0.5,0.5">
+                                <Border.RenderTransform>
+                                    <ScaleTransform x:Name="RootScale" ScaleX="1" ScaleY="1" />
+                                </Border.RenderTransform>
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.15" />
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.15" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="PointerOver">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="1.04" Duration="0:0:0.12" />
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="1.04" Duration="0:0:0.12" />
+                                            </Storyboard>
+                                            <VisualState.Setters>
+                                                <Setter Target="PillBorder.Background" Value="{ThemeResource GlassFillHoverBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="0.93" Duration="0:0:0.08" />
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="0.93" Duration="0:0:0.08" />
+                                            </Storyboard>
+                                            <VisualState.Setters>
+                                                <Setter Target="PillBorder.Background" Value="{ThemeResource GlassFillPressedBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                                <ContentPresenter
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Foreground="{TemplateBinding Foreground}" />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Segment Tab Button for Write / Split / View Switcher -->
+            <Style x:Key="SegmentTabButtonStyle" TargetType="Button">
+                <Setter Property="Width" Value="64" />
+                <Setter Property="Height" Value="26" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Grid Width="64" Height="26" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="RootScale" ScaleX="1" ScaleY="1" />
+                                </Grid.RenderTransform>
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.12" />
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.12" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="PointerOver">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="1.05" Duration="0:0:0.10" />
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="1.05" Duration="0:0:0.10" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleX" To="0.92" Duration="0:0:0.07" />
+                                                <DoubleAnimation Storyboard.TargetName="RootScale" Storyboard.TargetProperty="ScaleY" To="0.92" Duration="0:0:0.07" />
+                                            </Storyboard>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                                <ContentPresenter
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Foreground="{TemplateBinding Foreground}" />
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <Style x:Key="MinimalListViewItemStyle" TargetType="ListViewItem">
                 <Setter Property="Padding" Value="0" />
                 <Setter Property="Margin" Value="0" />
@@ -190,9 +338,36 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="ListViewItem">
-                            <ContentPresenter
-                                HorizontalAlignment="Stretch"
-                                VerticalAlignment="Stretch" />
+                            <Grid RenderTransformOrigin="0.5,0.5" Background="Transparent">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="ItemScale" ScaleX="1" ScaleY="1" />
+                                </Grid.RenderTransform>
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="ItemScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.12" />
+                                                <DoubleAnimation Storyboard.TargetName="ItemScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.12" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="PointerOver">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="ItemScale" Storyboard.TargetProperty="ScaleX" To="1.012" Duration="0:0:0.10" />
+                                                <DoubleAnimation Storyboard.TargetName="ItemScale" Storyboard.TargetProperty="ScaleY" To="1.012" Duration="0:0:0.10" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="ItemScale" Storyboard.TargetProperty="ScaleX" To="0.98" Duration="0:0:0.07" />
+                                                <DoubleAnimation Storyboard.TargetName="ItemScale" Storyboard.TargetProperty="ScaleY" To="0.98" Duration="0:0:0.07" />
+                                            </Storyboard>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                                <ContentPresenter
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch" />
+                            </Grid>
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>

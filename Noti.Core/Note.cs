@@ -4,9 +4,20 @@ public sealed class Note
 {
     private const int MaxSnippetLength = 38;
 
-    public required string Id { get; init; }
+    public required string Id { get; set; }
     public string Content { get; set; } = string.Empty;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public bool IsPinned { get; set; }
+
+    public string FolderPath
+    {
+        get
+        {
+            var normalized = Id.Replace('\\', '/').Trim('/');
+            var lastSlash = normalized.LastIndexOf('/');
+            return lastSlash > 0 ? normalized[..lastSlash] : string.Empty;
+        }
+    }
 
     public string Title
     {
@@ -14,7 +25,7 @@ public sealed class Note
         {
             foreach (var rawLine in EnumerateLines(Content))
             {
-                var cleaned = rawLine.TrimStart('#', ' ', '\t').Trim();
+                var cleaned = CleanDisplayLine(rawLine);
                 if (!string.IsNullOrEmpty(cleaned))
                     return cleaned;
             }
@@ -31,8 +42,8 @@ public sealed class Note
 
             foreach (var rawLine in EnumerateLines(Content))
             {
-                var trimmed = rawLine.Trim();
-                if (string.IsNullOrEmpty(trimmed))
+                var cleaned = CleanDisplayLine(rawLine);
+                if (string.IsNullOrEmpty(cleaned))
                     continue;
 
                 if (!skippedTitle)
@@ -41,7 +52,7 @@ public sealed class Note
                     continue;
                 }
 
-                parts.Add(trimmed);
+                parts.Add(cleaned);
             }
 
             if (parts.Count == 0)
@@ -49,12 +60,58 @@ public sealed class Note
 
             var joined = string.Join(" ", parts);
             return joined.Length > MaxSnippetLength
-                ? string.Concat(joined.AsSpan(0, MaxSnippetLength), "...")
+                ? $"{joined[..MaxSnippetLength]}..."
                 : joined;
         }
     }
 
     public int WordCount => NoteService.CountWords(Content);
+
+    public static string CleanDisplayLine(string? line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+            return string.Empty;
+
+        var s = line.Trim();
+
+        // Strip tree connectors and markdown prefixes
+        while (s.Length > 0)
+        {
+            if (s.StartsWith("├─", StringComparison.Ordinal) ||
+                s.StartsWith("└─", StringComparison.Ordinal))
+            {
+                s = s[2..].TrimStart('─', ' ', '\t');
+                continue;
+            }
+
+            if (s[0] is '│' or '├' or '└' or '─' or '#' or '>' or '\t' or ' ')
+            {
+                s = s[1..];
+                continue;
+            }
+
+            if (s.StartsWith("- [ ] ", StringComparison.OrdinalIgnoreCase) ||
+                s.StartsWith("- [x] ", StringComparison.OrdinalIgnoreCase))
+            {
+                s = s[6..];
+                continue;
+            }
+
+            if (s.StartsWith("- ", StringComparison.Ordinal) ||
+                s.StartsWith("* ", StringComparison.Ordinal))
+            {
+                s = s[2..];
+                continue;
+            }
+
+            break;
+        }
+
+        return s.Replace("**", string.Empty, StringComparison.Ordinal)
+                .Replace("__", string.Empty, StringComparison.Ordinal)
+                .Replace("`", string.Empty, StringComparison.Ordinal)
+                .Trim();
+    }
 
     private static IEnumerable<string> EnumerateLines(string? text)
     {
