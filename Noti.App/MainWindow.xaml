@@ -1350,7 +1350,7 @@
                                         Background="{ThemeResource InputBackgroundBrush}"
                                         VerticalAlignment="Center">
                                         <TextBlock
-                                            Text="{x:Bind Badge}"
+                                            Text="{x:Bind ShortcutHint}"
                                             FontSize="11"
                                             FontWeight="SemiBold"
                                             Foreground="{ThemeResource TextSecondaryBrush}" />
