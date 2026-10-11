@@ -41,6 +41,8 @@ public sealed class LiveDocBlock
     public List<double> ColumnWidths { get; set; } = [];
     public TextBox? PrimaryTextBox { get; set; }
     public Border? RichDisplayHost { get; set; }
+    public Grid? CellHostGrid { get; set; }
+    public TextBlock? DisplayTextBlock { get; set; }
     public FrameworkElement? RootElement { get; set; }
 }
 
@@ -1371,6 +1373,9 @@ public static class MarkdownRenderer
         List<string> sortedTitles,
         Action<string>? onMentionClicked)
     {
+        if (text.Contains("<sub>", StringComparison.OrdinalIgnoreCase))
+            text = text.Replace("<sub>", string.Empty, StringComparison.OrdinalIgnoreCase).Replace("</sub>", string.Empty, StringComparison.OrdinalIgnoreCase);
+
         var i = 0;
         while (i < text.Length)
         {
@@ -1431,6 +1436,38 @@ public static class MarkdownRenderer
                 }
             }
 
+            // Linked image badge ([![alt](imgUrl)](linkUrl))
+            if (i + 4 < text.Length && text[i] == '[' && text[i + 1] == '!' && text[i + 2] == '[')
+            {
+                var altClose = text.IndexOf("](", i + 3, StringComparison.Ordinal);
+                if (altClose > i + 3)
+                {
+                    var imgParenClose = text.IndexOf(")](", altClose + 2, StringComparison.Ordinal);
+                    if (imgParenClose > altClose + 2)
+                    {
+                        var linkParenClose = text.IndexOf(')', imgParenClose + 3);
+                        if (linkParenClose > imgParenClose + 3)
+                        {
+                            var altText = text[(i + 3)..altClose];
+                            var linkUrl = text[(imgParenClose + 3)..linkParenClose].Trim();
+                            var link = new Hyperlink
+                            {
+                                UnderlineStyle = UnderlineStyle.Single,
+                                Foreground = accentBrush
+                            };
+                            if (Uri.TryCreate(linkUrl, UriKind.Absolute, out var uri))
+                                link.NavigateUri = uri;
+                            var bold = new Bold();
+                            bold.Inlines.Add(new Run { Text = $"↗ {altText}" });
+                            link.Inlines.Add(bold);
+                            inlines.Add(link);
+                            i = linkParenClose + 1;
+                            continue;
+                        }
+                    }
+                }
+            }
+
             // Markdown link ([label](url))
             if (text[i] == '[')
             {
@@ -1440,7 +1477,7 @@ public static class MarkdownRenderer
                     var closeParen = text.IndexOf(')', closeBracket + 2);
                     if (closeParen > closeBracket + 2)
                     {
-                        var labelText = text[(i + 1)..closeBracket];
+                        var labelText = text[(i + 1)..closeBracket].Replace("**", string.Empty).Replace("`", string.Empty);
                         var urlText = text[(closeBracket + 2)..closeParen].Trim();
                         var link = new Hyperlink
                         {
@@ -1477,8 +1514,16 @@ public static class MarkdownRenderer
                 var close = text.IndexOf("**", i + 2, StringComparison.Ordinal);
                 if (close > i + 2)
                 {
+                    var inner = text[(i + 2)..close];
+                    var isInnerCode = inner.Length >= 2 && inner.StartsWith('`') && inner.EndsWith('`');
+                    if (isInnerCode)
+                        inner = inner[1..^1];
+
                     var bold = new Bold();
-                    bold.Inlines.Add(new Run { Text = text[(i + 2)..close] });
+                    var run = new Run { Text = inner };
+                    if (isInnerCode)
+                        run.FontFamily = monoFont;
+                    bold.Inlines.Add(run);
                     inlines.Add(bold);
                     i = close + 2;
                     continue;
