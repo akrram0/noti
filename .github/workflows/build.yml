@@ -22,7 +22,7 @@ jobs:
       - name: Run Core & Storage unit tests
         run: dotnet test Noti.Tests/Noti.Tests.csproj --configuration Release --verbosity normal
 
-      - name: Publish Noti.App (win-x64, self-contained, single-file, unpackaged)
+      - name: Publish Noti.App (win-x64, self-contained, unpackaged)
         run: >
           dotnet publish Noti.App/Noti.App.csproj
           --configuration Release
@@ -31,21 +31,23 @@ jobs:
           -p:Platform=x64
           -p:WindowsPackageType=None
           -p:WindowsAppSDKSelfContained=true
-          -p:PublishSingleFile=true
-          -p:IncludeAllContentForSelfExtract=true
           -p:DebugType=none
           -p:DebugSymbols=false
           --output "${{ runner.temp }}/noti-publish"
 
-      - name: Package distributable zip archive
+      - name: Build Windows Setup Installer (Noti-Setup-win-x64.exe)
         shell: pwsh
         run: |
           Remove-Item -Path "${{ runner.temp }}/noti-publish/*.pdb" -Force -ErrorAction SilentlyContinue
-          Compress-Archive -Path "${{ runner.temp }}/noti-publish/*" -DestinationPath "${{ github.workspace }}/Noti-win-x64.zip" -Force
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          & $iscc "/DPublishDir=${{ runner.temp }}\noti-publish" "/DOutputDir=${{ github.workspace }}" "installer\noti.iss"
 
-      - name: Upload distributable zip artifact
+      - name: Upload Setup Installer Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Noti-win-x64
-          path: ${{ github.workspace }}/Noti-win-x64.zip
+          name: Noti-Setup-win-x64
+          path: ${{ github.workspace }}/Noti-Setup-win-x64.exe
           if-no-files-found: error

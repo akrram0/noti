@@ -20,6 +20,7 @@ public sealed partial class MainWindow : Window
 
         RootGrid.Loaded += (_, _) => UpdateTitleBarPassthrough();
         RootGrid.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
+        SidebarToggleButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
     }
 
     public MainViewModel ViewModel { get; }
@@ -27,6 +28,10 @@ public sealed partial class MainWindow : Window
     private void ConfigureWindowChrome()
     {
         AppWindow.Resize(new SizeInt32(1040, 640));
+
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Noti.ico");
+        if (File.Exists(iconPath))
+            AppWindow.SetIcon(iconPath);
 
         if (AppWindowTitleBar.IsCustomizationSupported())
         {

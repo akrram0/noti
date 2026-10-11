@@ -89,28 +89,19 @@
                         CornerRadius="18"
                         Background="{ThemeResource InputBackgroundBrush}"
                         BorderBrush="{ThemeResource ControlBorderBrush}"
-                        BorderThickness="1"
-                        Padding="14,0">
+                        BorderThickness="1">
                         <TextBox
                             PlaceholderText="Search"
                             Text="{x:Bind ViewModel.SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                             FontSize="14"
+                            MinHeight="0"
+                            Height="34"
+                            Padding="14,6,14,6"
+                            IsSpellCheckEnabled="False"
                             Foreground="{ThemeResource TextPrimaryBrush}"
                             Background="Transparent"
                             BorderThickness="0"
-                            Padding="0"
-                            VerticalAlignment="Center">
-                            <TextBox.Resources>
-                                <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-                                <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-                                <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
-                                <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
-                                <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
-                                <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
-                                <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
-                                <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
-                            </TextBox.Resources>
-                        </TextBox>
+                            VerticalAlignment="Center" />
                     </Border>
 
                     <Button
@@ -261,6 +252,8 @@
                     Grid.Row="0"
                     AcceptsReturn="True"
                     TextWrapping="Wrap"
+                    IsSpellCheckEnabled="False"
+                    MinHeight="0"
                     PlaceholderText="Start writing..."
                     Text="{x:Bind ViewModel.EditorText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                     FontSize="16"
@@ -268,18 +261,7 @@
                     Background="Transparent"
                     BorderThickness="0"
                     Padding="48,32,48,16"
-                    ScrollViewer.VerticalScrollBarVisibility="Auto">
-                    <TextBox.Resources>
-                        <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-                        <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-                        <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
-                        <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
-                        <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
-                        <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
-                        <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
-                        <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
-                    </TextBox.Resources>
-                </TextBox>
+                    ScrollViewer.VerticalScrollBarVisibility="Auto" />
 
                 <!-- Status Bar -->
                 <Grid Grid.Row="1" Padding="48,0">

@@ -52,7 +52,8 @@ public sealed class MarkdownNoteStore : INoteStore
         Directory.CreateDirectory(_directoryPath);
 
         var filePath = GetFilePath(note.Id);
-        await File.WriteAllTextAsync(filePath, note.Content ?? string.Empty, cancellationToken).ConfigureAwait(false);
+        var normalized = (note.Content ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", Environment.NewLine);
+        await File.WriteAllTextAsync(filePath, normalized, cancellationToken).ConfigureAwait(false);
         File.SetLastWriteTimeUtc(filePath, note.UpdatedAt.UtcDateTime);
     }
 

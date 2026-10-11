@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Noti.Core;
 
@@ -9,6 +10,7 @@ namespace Noti.App.ViewModels;
 public sealed class MainViewModel : ObservableObject
 {
     private readonly NoteService _noteService;
+    private readonly DispatcherQueue? _dispatcherQueue;
     private readonly List<NoteItemViewModel> _allNotes = new();
     private CancellationTokenSource? _autosaveCts;
     private bool _suppressAutosave;
@@ -25,6 +27,7 @@ public sealed class MainViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(noteService);
         _noteService = noteService;
+        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
 
         CreateNoteCommand = new AsyncRelayCommand(CreateNoteAsync);
         ToggleSidebarCommand = new RelayCommand(() => IsSidebarOpen = !IsSidebarOpen);
@@ -75,7 +78,21 @@ public sealed class MainViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(WordCountText));
 
-                if (_selectedNote is not null && !_suppressAutosave)
+                if (_suppressAutosave)
+                    return;
+
+                if (_selectedNote is null && !string.IsNullOrEmpty(value))
+                {
+                    var note = _noteService.CreateNote(value);
+                    var vm = new NoteItemViewModel(note) { IsSelected = true };
+                    _allNotes.Insert(0, vm);
+                    FilteredNotes.Insert(0, vm);
+                    _selectedNote = vm;
+                    OnPropertyChanged(nameof(SelectedNote));
+                    OnPropertyChanged(nameof(NoteCountText));
+                }
+
+                if (_selectedNote is not null)
                 {
                     _selectedNote.Content = value;
                     QueueAutosave(_selectedNote.Model);
@@ -204,7 +221,7 @@ public sealed class MainViewModel : ObservableObject
         var cts = new CancellationTokenSource();
         _autosaveCts = cts;
 
-        SaveStatusText = "Saving...";
+        SetSaveStatus("Saving...");
         _ = RunAutosaveAsync(note, cts.Token);
     }
 
@@ -215,10 +232,23 @@ public sealed class MainViewModel : ObservableObject
             await Task.Delay(300, cancellationToken);
             await _noteService.SaveNoteAsync(note, cancellationToken);
             if (!cancellationToken.IsCancellationRequested)
-                SaveStatusText = "Saved";
+                SetSaveStatus("Saved");
         }
         catch (OperationCanceledException)
         {
         }
+        catch (Exception)
+        {
+            if (!cancellationToken.IsCancellationRequested)
+                SetSaveStatus("Retry");
+        }
+    }
+
+    private void SetSaveStatus(string status)
+    {
+        if (_dispatcherQueue is null || _dispatcherQueue.HasThreadAccess)
+            SaveStatusText = status;
+        else
+            _dispatcherQueue.TryEnqueue(() => SaveStatusText = status);
     }
 }
