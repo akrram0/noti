@@ -583,7 +583,7 @@ public sealed partial class MainWindow : Window
     }
 
     private static bool IsEditableLiveBlock(LiveDocBlock block) =>
-        block.Kind is not (LiveBlockKind.Divider or LiveBlockKind.TableBlock);
+        block.Kind is not (LiveBlockKind.Divider or LiveBlockKind.TableBlock or LiveBlockKind.ImageBlock);
 
     private TextBox GetActiveEditorTextBox()
     {
@@ -648,7 +648,7 @@ public sealed partial class MainWindow : Window
 
     private void RecycleBlockTextBox(LiveDocBlock block)
     {
-        if (block.Kind is LiveBlockKind.CodeBlock or LiveBlockKind.TableBlock or LiveBlockKind.Divider)
+        if (block.Kind is LiveBlockKind.CodeBlock or LiveBlockKind.TableBlock or LiveBlockKind.Divider or LiveBlockKind.ImageBlock)
             return;
 
         if (block.PrimaryTextBox is not { } tb)
@@ -832,7 +832,7 @@ public sealed partial class MainWindow : Window
         EnsureLiveBlocksMaterializedThrough(_liveBlocks.Count - 1);
 
         var lastBlock = _liveBlocks[^1];
-        if (lastBlock.Kind is LiveBlockKind.TableBlock or LiveBlockKind.Divider or LiveBlockKind.CodeBlock)
+        if (lastBlock.Kind is LiveBlockKind.TableBlock or LiveBlockKind.Divider or LiveBlockKind.CodeBlock or LiveBlockKind.ImageBlock)
         {
             InsertLiveBlockAt(_liveBlocks.Count, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
             FlushSyncLiveBlocksToViewModel();
@@ -1099,6 +1099,44 @@ public sealed partial class MainWindow : Window
                 }
             };
             return dividerContainer;
+        }
+
+        if (block.Kind == LiveBlockKind.ImageBlock)
+        {
+            return MarkdownRenderer.CreateLiveImageElement(
+                block,
+                isDarkMode,
+                baseFontSize,
+                ViewModel.SelectedNote?.FolderPath,
+                ViewModel.VaultDirectoryPath,
+                onRequestEditRaw: () =>
+                {
+                    var idx = _liveBlocks.IndexOf(block);
+                    if (idx >= 0)
+                    {
+                        block.Kind = LiveBlockKind.Paragraph;
+                        RefreshLiveBlockAt(idx, (block.Content ?? string.Empty).Length);
+                    }
+                },
+                onRequestClickBelow: () =>
+                {
+                    var idx = _liveBlocks.IndexOf(block);
+                    if (idx < 0)
+                        return;
+
+                    if (idx + 1 < _liveBlocks.Count)
+                    {
+                        EnsureLiveBlocksMaterializedThrough(idx + 1);
+                        if (IsEditableLiveBlock(_liveBlocks[idx + 1]))
+                        {
+                            FocusLiveBlockAt(idx + 1, 0);
+                            return;
+                        }
+                    }
+
+                    InsertLiveBlockAt(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+                    FlushSyncLiveBlocksToViewModel();
+                });
         }
 
         if (block.Kind == LiveBlockKind.CodeBlock)
@@ -1477,6 +1515,17 @@ public sealed partial class MainWindow : Window
                 FlushSyncLiveBlocksToViewModel();
                 return true;
             }
+            if (MarkdownRenderer.TryParseImageLine(text, out var parsedSrc, out _, out _, out _) &&
+                MarkdownRenderer.TryResolveImageUri(parsedSrc, ViewModel.SelectedNote?.FolderPath, ViewModel.VaultDirectoryPath, out _))
+            {
+                block.Kind = LiveBlockKind.ImageBlock;
+                block.Content = text;
+                RefreshLiveBlockAt(idx);
+                if (idx == _liveBlocks.Count - 1)
+                    InsertLiveBlockAt(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+                FlushSyncLiveBlocksToViewModel();
+                return true;
+            }
         }
 
         if (block.Kind != LiveBlockKind.CodeBlock && block.Kind != LiveBlockKind.TableBlock)
@@ -1654,6 +1703,17 @@ public sealed partial class MainWindow : Window
         {
             e.Handled = true;
 
+            if (block.Kind == LiveBlockKind.Paragraph &&
+                MarkdownRenderer.TryParseImageLine(text.Trim(), out _, out _, out _, out _))
+            {
+                block.Kind = LiveBlockKind.ImageBlock;
+                block.Content = text;
+                RefreshLiveBlockAt(blockIdx);
+                InsertLiveBlockAt(blockIdx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+                FlushSyncLiveBlocksToViewModel();
+                return;
+            }
+
             if (shiftDown && ViewModel.IsTreeShortcutEnabled)
             {
                 if (TryParseTreeLine(text, out var treeIndent, out var isMid, out var treeBody))
@@ -1741,7 +1801,7 @@ public sealed partial class MainWindow : Window
             {
                 e.Handled = true;
                 var prevBlock = _liveBlocks[blockIdx - 1];
-                if (prevBlock.Kind == LiveBlockKind.Divider)
+                if (prevBlock.Kind is LiveBlockKind.Divider or LiveBlockKind.ImageBlock)
                 {
                     _liveBlocks.RemoveAt(blockIdx - 1);
                     if (blockIdx - 1 < LiveEditorPanel.Children.Count)

@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
 using Windows.System;
 using Windows.UI;
@@ -25,7 +26,8 @@ public enum LiveBlockKind
     Quote,
     CodeBlock,
     TableBlock,
-    Divider
+    Divider,
+    ImageBlock
 }
 
 public sealed class LiveDocBlock
@@ -208,6 +210,17 @@ public static class MarkdownRenderer
                     Background = borderBrush,
                     Margin = new Thickness(0, 12, 0, 12)
                 });
+                continue;
+            }
+
+            if (TryParseImageLine(trimmed, out _, out _, out _, out _))
+            {
+                container.Children.Add(CreateLiveImageElement(
+                    new LiveDocBlock { Kind = LiveBlockKind.ImageBlock, Content = raw },
+                    isDarkMode,
+                    baseFontSize,
+                    noteFolderPath: null,
+                    vaultRootPath: null));
                 continue;
             }
 
@@ -793,6 +806,16 @@ public static class MarkdownRenderer
                 continue;
             }
 
+            if (TryParseImageLine(trimmed, out _, out _, out _, out _))
+            {
+                blocks.Add(new LiveDocBlock
+                {
+                    Kind = LiveBlockKind.ImageBlock,
+                    Content = raw
+                });
+                continue;
+            }
+
             if (trimmed.StartsWith("### ", StringComparison.Ordinal))
             {
                 blocks.Add(CreateTextLiveBlock(LiveBlockKind.Heading3, trimmed[4..]));
@@ -954,6 +977,10 @@ public static class MarkdownRenderer
                     lines.Add("---");
                     break;
 
+                case LiveBlockKind.ImageBlock:
+                    lines.Add(b.Content ?? string.Empty);
+                    break;
+
                 default:
                 {
                     var content = FormatBlockInlineContent(b);
@@ -996,6 +1023,323 @@ public static class MarkdownRenderer
             return $"*{content}*";
 
         return content;
+    }
+
+    public static bool TryParseImageLine(
+        string? line,
+        out string src,
+        out string alt,
+        out double? width,
+        out double? height)
+    {
+        src = string.Empty;
+        alt = string.Empty;
+        width = null;
+        height = null;
+
+        if (string.IsNullOrWhiteSpace(line))
+            return false;
+
+        var trimmed = line.Trim();
+
+        // Standard Markdown: ![alt](path_or_url)
+        if (trimmed.StartsWith("![", StringComparison.Ordinal) && trimmed.EndsWith(')'))
+        {
+            var closeBracket = trimmed.IndexOf("](", 2, StringComparison.Ordinal);
+            if (closeBracket >= 2 && closeBracket + 2 < trimmed.Length - 1)
+            {
+                alt = trimmed[2..closeBracket].Trim();
+                var rawTarget = trimmed[(closeBracket + 2)..^1].Trim();
+                if (rawTarget.EndsWith('"') || rawTarget.EndsWith('\''))
+                {
+                    var quoteChar = rawTarget[^1];
+                    var openQuote = rawTarget.LastIndexOf(quoteChar, rawTarget.Length - 2);
+                    if (openQuote > 0 && char.IsWhiteSpace(rawTarget[openQuote - 1]))
+                        rawTarget = rawTarget[..(openQuote - 1)].Trim();
+                }
+
+                if (rawTarget.Length >= 2 && rawTarget.StartsWith('<') && rawTarget.EndsWith('>'))
+                    rawTarget = rawTarget[1..^1].Trim();
+
+                if (!string.IsNullOrWhiteSpace(rawTarget))
+                {
+                    src = rawTarget;
+                    return true;
+                }
+            }
+        }
+
+        // HTML syntax: <img src="path_or_url" ... />
+        if (trimmed.StartsWith("<img", StringComparison.OrdinalIgnoreCase) &&
+            trimmed.EndsWith('>') &&
+            (trimmed.Length == 4 || char.IsWhiteSpace(trimmed[4])))
+        {
+            var extractedSrc = ExtractHtmlAttribute(trimmed, "src");
+            if (!string.IsNullOrWhiteSpace(extractedSrc))
+            {
+                src = extractedSrc;
+                alt = ExtractHtmlAttribute(trimmed, "alt") ?? string.Empty;
+
+                if (double.TryParse(ExtractHtmlAttribute(trimmed, "width"), out var w) && w > 0)
+                    width = w;
+                if (double.TryParse(ExtractHtmlAttribute(trimmed, "height"), out var h) && h > 0)
+                    height = h;
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string? ExtractHtmlAttribute(string tag, string attributeName)
+    {
+        var idx = 0;
+        while (idx < tag.Length)
+        {
+            var found = tag.IndexOf(attributeName, idx, StringComparison.OrdinalIgnoreCase);
+            if (found < 0)
+                return null;
+
+            var prevOk = found == 0 || char.IsWhiteSpace(tag[found - 1]);
+            var afterAttr = found + attributeName.Length;
+            while (afterAttr < tag.Length && char.IsWhiteSpace(tag[afterAttr]))
+                afterAttr++;
+
+            if (prevOk && afterAttr < tag.Length && tag[afterAttr] == '=')
+            {
+                var valStart = afterAttr + 1;
+                while (valStart < tag.Length && char.IsWhiteSpace(tag[valStart]))
+                    valStart++;
+
+                if (valStart < tag.Length && (tag[valStart] == '"' || tag[valStart] == '\''))
+                {
+                    var quote = tag[valStart];
+                    var closeQuote = tag.IndexOf(quote, valStart + 1);
+                    if (closeQuote > valStart)
+                        return tag[(valStart + 1)..closeQuote].Trim();
+                }
+                else if (valStart < tag.Length)
+                {
+                    var valEnd = valStart;
+                    while (valEnd < tag.Length && !char.IsWhiteSpace(tag[valEnd]) && tag[valEnd] is not ('>' or '/'))
+                        valEnd++;
+                    if (valEnd > valStart)
+                        return tag[valStart..valEnd].Trim();
+                }
+            }
+
+            idx = found + attributeName.Length;
+        }
+
+        return null;
+    }
+
+    public static bool TryResolveImageUri(
+        string rawSrc,
+        string? noteFolderPath,
+        string? vaultRootPath,
+        out Uri? resolvedUri)
+    {
+        resolvedUri = null;
+        if (string.IsNullOrWhiteSpace(rawSrc))
+            return false;
+
+        var clean = rawSrc.Trim().Trim('"', '\'');
+        if (Uri.TryCreate(clean, UriKind.Absolute, out var absUri))
+        {
+            if (absUri.Scheme is "http" or "https" or "ms-appx")
+            {
+                resolvedUri = absUri;
+                return true;
+            }
+
+            if (absUri.IsFile && File.Exists(absUri.LocalPath))
+            {
+                resolvedUri = absUri;
+                return true;
+            }
+        }
+
+        if (Path.IsPathRooted(clean) && File.Exists(clean))
+        {
+            resolvedUri = new Uri(Path.GetFullPath(clean));
+            return true;
+        }
+
+        var rel = clean.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+        while (rel.StartsWith($".{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            rel = rel[2..];
+        rel = rel.TrimStart(Path.DirectorySeparatorChar);
+
+        if (string.IsNullOrWhiteSpace(rel))
+            return false;
+
+        var candidates = new List<string>(6);
+        if (!string.IsNullOrWhiteSpace(vaultRootPath))
+        {
+            if (!string.IsNullOrWhiteSpace(noteFolderPath))
+            {
+                var normalizedFolder = noteFolderPath
+                    .Replace('/', Path.DirectorySeparatorChar)
+                    .Replace('\\', Path.DirectorySeparatorChar)
+                    .Trim(Path.DirectorySeparatorChar);
+                candidates.Add(Path.Combine(vaultRootPath, normalizedFolder, rel));
+            }
+
+            candidates.Add(Path.Combine(vaultRootPath, rel));
+        }
+
+        var appBase = AppContext.BaseDirectory;
+        if (!string.IsNullOrWhiteSpace(appBase))
+        {
+            candidates.Add(Path.Combine(appBase, rel));
+            var appPrefix = $"Noti.App{Path.DirectorySeparatorChar}";
+            if (rel.StartsWith(appPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var stripped = rel[appPrefix.Length..];
+                if (!string.IsNullOrWhiteSpace(vaultRootPath))
+                    candidates.Add(Path.Combine(vaultRootPath, stripped));
+                candidates.Add(Path.Combine(appBase, stripped));
+            }
+        }
+
+        foreach (var candidate in candidates)
+        {
+            try
+            {
+                var full = Path.GetFullPath(candidate);
+                if (File.Exists(full))
+                {
+                    resolvedUri = new Uri(full);
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        return false;
+    }
+
+    public static FrameworkElement CreateLiveImageElement(
+        LiveDocBlock block,
+        bool isDarkMode,
+        double baseFontSize,
+        string? noteFolderPath,
+        string? vaultRootPath,
+        Action? onRequestEditRaw = null,
+        Action? onRequestClickBelow = null)
+    {
+        var secondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 108, 108, 112));
+        var surfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(30, 255, 255, 255) : ColorHelper.FromArgb(18, 0, 0, 0));
+        var borderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(38, 255, 255, 255) : ColorHelper.FromArgb(28, 0, 0, 0));
+
+        TryParseImageLine(block.Content, out var src, out var alt, out var width, out var height);
+
+        FrameworkElement CreateFallbackPlaceholder()
+        {
+            var labelText = string.IsNullOrWhiteSpace(alt)
+                ? (string.IsNullOrWhiteSpace(src) ? "Image not found" : src)
+                : (string.IsNullOrWhiteSpace(src) ? alt : $"{alt} ({src})");
+
+            var row = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 10,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            row.Children.Add(new FontIcon
+            {
+                Glyph = "\uEB9F",
+                FontSize = 16,
+                Foreground = secondaryBrush,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            row.Children.Add(new TextBlock
+            {
+                Text = labelText,
+                FontSize = Math.Max(12, baseFontSize - 2),
+                Foreground = secondaryBrush,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxWidth = 560
+            });
+
+            return new Border
+            {
+                CornerRadius = new CornerRadius(8),
+                Background = surfaceBrush,
+                BorderBrush = borderBrush,
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(14, 10, 14, 10),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Child = row
+            };
+        }
+
+        var hostBorder = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            MaxWidth = 680,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 6, 0, 8)
+        };
+
+        if (TryResolveImageUri(src, noteFolderPath, vaultRootPath, out var resolvedUri) && resolvedUri is not null)
+        {
+            try
+            {
+                var bitmap = new BitmapImage(resolvedUri);
+                var img = new Image
+                {
+                    Source = bitmap,
+                    Stretch = Stretch.Uniform,
+                    MaxWidth = 680,
+                    HorizontalAlignment = HorizontalAlignment.Left
+                };
+                if (width is > 0)
+                    img.Width = Math.Min(width.Value, 680);
+                if (height is > 0)
+                    img.Height = height.Value;
+                if (!string.IsNullOrWhiteSpace(alt))
+                    ToolTipService.SetToolTip(img, alt);
+
+                img.ImageFailed += (_, _) =>
+                {
+                    hostBorder.Child = CreateFallbackPlaceholder();
+                };
+
+                hostBorder.Child = img;
+            }
+            catch
+            {
+                hostBorder.Child = CreateFallbackPlaceholder();
+            }
+        }
+        else
+        {
+            hostBorder.Child = CreateFallbackPlaceholder();
+        }
+
+        hostBorder.PointerPressed += (_, e) =>
+        {
+            if (e.GetCurrentPoint(hostBorder).Properties.IsRightButtonPressed && onRequestEditRaw is not null)
+            {
+                e.Handled = true;
+                onRequestEditRaw();
+                return;
+            }
+
+            if (onRequestClickBelow is not null)
+            {
+                e.Handled = true;
+                onRequestClickBelow();
+            }
+        };
+
+        return hostBorder;
     }
 
     public static FrameworkElement CreateLiveTableElement(
