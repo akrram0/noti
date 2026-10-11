@@ -413,11 +413,11 @@ public static class MarkdownRenderer
 
         if (!TableColumnWidths.TryGetValue(initialStartLine, out var colWidths))
         {
-            colWidths = Enumerable.Repeat(150.0, colCount).ToList();
+            colWidths = ComputeDefaultTableColumnWidths(matrix, colCount, baseFontSize);
             TableColumnWidths[initialStartLine] = colWidths;
         }
         while (colWidths.Count < colCount)
-            colWidths.Add(150.0);
+            colWidths.Add(168.0);
 
         var wrapperGrid = new Grid
         {
@@ -503,7 +503,7 @@ public static class MarkdownRenderer
             var rCount = matrix.Count;
             var cCount = matrix.Count > 0 ? matrix[0].Count : 3;
             while (colWidths.Count < cCount)
-                colWidths.Add(150.0);
+                colWidths.Add(168.0);
 
             var grid = new Grid();
             var colDefs = new List<ColumnDefinition>(cCount);
@@ -511,7 +511,7 @@ public static class MarkdownRenderer
             {
                 var cd = new ColumnDefinition
                 {
-                    Width = new GridLength(Math.Clamp(colWidths[c], 76.0, 480.0), GridUnitType.Pixel)
+                    Width = new GridLength(Math.Clamp(colWidths[c], 76.0, 640.0), GridUnitType.Pixel)
                 };
                 colDefs.Add(cd);
                 grid.ColumnDefinitions.Add(cd);
@@ -547,7 +547,7 @@ public static class MarkdownRenderer
                         FontSize = Math.Max(12, baseFontSize - 2),
                         FontWeight = isHeader ? FontWeights.SemiBold : FontWeights.Normal,
                         Foreground = primaryBrush,
-                        Background = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(1, 0, 0, 0) : ColorHelper.FromArgb(1, 255, 255, 255)),
+                        Background = new SolidColorBrush(Colors.Transparent),
                         RequestedTheme = isDarkMode ? ElementTheme.Dark : ElementTheme.Light,
                         SelectionHighlightColor = accentBrush,
                         BorderThickness = new Thickness(0),
@@ -1786,7 +1786,7 @@ public static class MarkdownRenderer
         var subtleBorderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(26, 0, 0, 0));
         var accentBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 10, 132, 255));
         var buttonBgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(32, 255, 255, 255) : ColorHelper.FromArgb(18, 0, 0, 0));
-        var caretBgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 0, 0, 0) : ColorHelper.FromArgb(255, 255, 255, 255));
+        var caretBgBrush = new SolidColorBrush(Colors.Transparent);
         var monoFont = new FontFamily("Cascadia Mono, Consolas, Courier New");
 
         var matrix = tableBlock.TableMatrix;
@@ -1801,8 +1801,10 @@ public static class MarkdownRenderer
         }
 
         var colWidths = tableBlock.ColumnWidths;
+        if (colWidths.Count == 0)
+            colWidths.AddRange(ComputeDefaultTableColumnWidths(matrix, colCount, baseFontSize));
         while (colWidths.Count < colCount)
-            colWidths.Add(156.0);
+            colWidths.Add(168.0);
 
         var wrapperGrid = new Grid
         {
@@ -1907,7 +1909,7 @@ public static class MarkdownRenderer
             var rCount = matrix.Count;
             var cCount = matrix.Count > 0 ? matrix[0].Count : 3;
             while (colWidths.Count < cCount)
-                colWidths.Add(156.0);
+                colWidths.Add(168.0);
 
             var grid = new Grid();
             var colDefs = new List<ColumnDefinition>(cCount);
@@ -1915,7 +1917,7 @@ public static class MarkdownRenderer
             {
                 var cd = new ColumnDefinition
                 {
-                    Width = new GridLength(Math.Clamp(colWidths[c], 76.0, 480.0), GridUnitType.Pixel)
+                    Width = new GridLength(Math.Clamp(colWidths[c], 76.0, 640.0), GridUnitType.Pixel)
                 };
                 colDefs.Add(cd);
                 grid.ColumnDefinitions.Add(cd);
@@ -2138,7 +2140,7 @@ public static class MarkdownRenderer
                 resizeHandle.ManipulationDelta += (_, e) =>
                 {
                     var currentWidth = colDef.Width.Value;
-                    var nextWidth = Math.Clamp(currentWidth + e.Delta.Translation.X, 76.0, 480.0);
+                    var nextWidth = Math.Clamp(currentWidth + e.Delta.Translation.X, 76.0, 640.0);
                     colDef.Width = new GridLength(nextWidth, GridUnitType.Pixel);
                     colWidths[capturedCol] = nextWidth;
                 };
@@ -2168,7 +2170,7 @@ public static class MarkdownRenderer
             for (var r = 0; r < matrix.Count; r++)
                 matrix[r].Add(r == 0 ? $"Column {newColIndex + 1}" : string.Empty);
 
-            colWidths.Add(156.0);
+            colWidths.Add(168.0);
             onTableMutated();
             BuildTableGrid(focusRow: 0, focusCol: newColIndex);
         };
@@ -2183,6 +2185,70 @@ public static class MarkdownRenderer
 
         BuildTableGrid();
         return wrapperGrid;
+    }
+
+    private static List<double> ComputeDefaultTableColumnWidths(
+        List<List<string>> matrix,
+        int colCount,
+        double baseFontSize)
+    {
+        var widths = new List<double>(colCount);
+        var charPx = Math.Max(7.5, baseFontSize * 0.54);
+        var hasDataContent = false;
+
+        for (var r = 1; r < matrix.Count && !hasDataContent; r++)
+        {
+            for (var c = 0; c < matrix[r].Count; c++)
+            {
+                if (!string.IsNullOrWhiteSpace(matrix[r][c]))
+                {
+                    hasDataContent = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasDataContent)
+        {
+            for (var c = 0; c < colCount; c++)
+                widths.Add(168.0);
+            return widths;
+        }
+
+        for (var c = 0; c < colCount; c++)
+        {
+            var maxLen = 0;
+            for (var r = 0; r < matrix.Count; r++)
+            {
+                if (c >= matrix[r].Count)
+                    continue;
+                var cell = matrix[r][c]
+                    .Replace("**", string.Empty, StringComparison.Ordinal)
+                    .Replace("~~", string.Empty, StringComparison.Ordinal)
+                    .Replace("`", string.Empty, StringComparison.Ordinal)
+                    .Trim();
+                if (cell.Length > maxLen)
+                    maxLen = cell.Length;
+            }
+
+            // shortcut: char-count width estimate instead of per-cell Measure(), keeps large tables instant
+            var colW = maxLen <= 40
+                ? Math.Clamp((maxLen * charPx) + 32.0, 108.0, 260.0)
+                : Math.Clamp(240.0 + ((maxLen - 40) * charPx * 0.42), 260.0, 420.0);
+
+            widths.Add(Math.Round(colW));
+        }
+
+        var total = widths.Sum();
+        const double maxTotalWidth = 860.0;
+        if (total > maxTotalWidth && total > 0)
+        {
+            var scale = maxTotalWidth / total;
+            for (var c = 0; c < widths.Count; c++)
+                widths[c] = Math.Max(92.0, Math.Round(widths[c] * scale));
+        }
+
+        return widths;
     }
 
     public static TextBlock CreateFormattedTextBlock(
