@@ -36,6 +36,7 @@ public sealed partial class MainWindow : Window
     private List<LiveDocBlock> _liveBlocks = [];
     private LiveDocBlock? _activeLiveBlock;
     private bool _isSyncingLiveEditor;
+    private string? _lastRenderedLiveMarkdown;
     private readonly DispatcherTimer _liveSyncTimer;
 
     private static readonly (string Name, string Hex)[] PaletteColors =
@@ -610,7 +611,10 @@ public sealed partial class MainWindow : Window
     private void RebuildLiveEditor(bool reparse = true, int? focusBlockIndex = null, int? focusCaretIndex = null)
     {
         if (reparse)
+        {
+            _lastRenderedLiveMarkdown = ViewModel.EditorText;
             _liveBlocks = MarkdownRenderer.ParseLiveBlocks(ViewModel.EditorText);
+        }
 
         if (_liveBlocks.Count == 0)
             _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
@@ -709,6 +713,7 @@ public sealed partial class MainWindow : Window
     {
         _liveSyncTimer.Stop();
         var markdown = MarkdownRenderer.SerializeLiveBlocks(_liveBlocks);
+        _lastRenderedLiveMarkdown = markdown;
         _isSyncingLiveEditor = true;
         try
         {
@@ -727,11 +732,13 @@ public sealed partial class MainWindow : Window
         var isDarkMode = ViewModel.IsDarkMode;
         var baseFontSize = ViewModel.EditorFontSize;
 
+        var transparentBrush = new SolidColorBrush(Colors.Transparent);
         var primaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 245, 245, 247) : ColorHelper.FromArgb(255, 28, 28, 30));
         var secondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 108, 108, 112));
         var surfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(22, 0, 0, 0));
         var borderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(38, 255, 255, 255) : ColorHelper.FromArgb(28, 0, 0, 0));
         var accentBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 10, 132, 255));
+        var selectionUnfocusedBrush = new SolidColorBrush(ColorHelper.FromArgb(140, 10, 132, 255));
         var monoFont = new FontFamily("Cascadia Mono, Consolas, Courier New");
         var borderlessStyle = Application.Current?.Resources.TryGetValue("BorderlessTextBoxStyle", out var styleObj) == true
             ? styleObj as Style
@@ -787,7 +794,7 @@ public sealed partial class MainWindow : Window
             var dividerContainer = new Grid
             {
                 Padding = new Thickness(0, 10, 0, 10),
-                Background = new SolidColorBrush(Colors.Transparent)
+                Background = transparentBrush
             };
             dividerContainer.Children.Add(new Border
             {
@@ -820,6 +827,9 @@ public sealed partial class MainWindow : Window
                 FontFamily = monoFont,
                 FontSize = Math.Max(13, baseFontSize - 2),
                 Foreground = primaryBrush,
+                Background = transparentBrush,
+                SelectionHighlightColor = accentBrush,
+                SelectionHighlightColorWhenNotFocused = selectionUnfocusedBrush,
                 BorderThickness = new Thickness(0),
                 Padding = new Thickness(0),
                 MinHeight = 28
@@ -888,6 +898,9 @@ public sealed partial class MainWindow : Window
             FontWeight = fontWeight,
             FontStyle = fontStyle,
             Foreground = textForeground,
+            Background = transparentBrush,
+            SelectionHighlightColor = accentBrush,
+            SelectionHighlightColorWhenNotFocused = selectionUnfocusedBrush,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(0, 2, 0, 2),
             MinHeight = Math.Max(26, Math.Round(fontSize * 1.45)),
@@ -901,20 +914,12 @@ public sealed partial class MainWindow : Window
 
         var richHost = new Border
         {
-            Background = new SolidColorBrush(Colors.Transparent),
+            Background = transparentBrush,
             Padding = new Thickness(0, 2, 0, 2),
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Stretch,
+            IsHitTestVisible = false,
             Visibility = Visibility.Collapsed
-        };
-        richHost.PointerPressed += (_, e) =>
-        {
-            e.Handled = true;
-            _activeLiveBlock = block;
-            UpdateBlockInlineRichDisplay(block, isFocused: true);
-            tb.Focus(FocusState.Programmatic);
-            tb.SelectionStart = (tb.Text ?? string.Empty).Length;
-            tb.SelectionLength = 0;
         };
 
         block.PrimaryTextBox = tb;
@@ -924,11 +929,12 @@ public sealed partial class MainWindow : Window
 
         var cellGrid = new Grid
         {
+            Background = transparentBrush,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Center
         };
-        cellGrid.Children.Add(tb);
         cellGrid.Children.Add(richHost);
+        cellGrid.Children.Add(tb);
 
         if (block.IsBlockStrikethrough)
         {
@@ -970,6 +976,7 @@ public sealed partial class MainWindow : Window
             {
                 var row = new Grid
                 {
+                    Background = transparentBrush,
                     Margin = new Thickness(0, 2, 0, 2),
                     ColumnSpacing = 8
                 };
@@ -1002,6 +1009,7 @@ public sealed partial class MainWindow : Window
             {
                 var row = new Grid
                 {
+                    Background = transparentBrush,
                     Margin = new Thickness(0, 2, 0, 2),
                     ColumnSpacing = 10
                 };
@@ -1039,13 +1047,13 @@ public sealed partial class MainWindow : Window
             }
 
             case LiveBlockKind.Heading1:
-                return new Border { Margin = new Thickness(0, 10, 0, 4), Child = cellGrid };
+                return new Border { Background = transparentBrush, Margin = new Thickness(0, 10, 0, 4), Child = cellGrid };
 
             case LiveBlockKind.Heading2:
-                return new Border { Margin = new Thickness(0, 8, 0, 3), Child = cellGrid };
+                return new Border { Background = transparentBrush, Margin = new Thickness(0, 8, 0, 3), Child = cellGrid };
 
             case LiveBlockKind.Heading3:
-                return new Border { Margin = new Thickness(0, 6, 0, 2), Child = cellGrid };
+                return new Border { Background = transparentBrush, Margin = new Thickness(0, 6, 0, 2), Child = cellGrid };
 
             default:
             {
@@ -1063,6 +1071,7 @@ public sealed partial class MainWindow : Window
 
                 return new Border
                 {
+                    Background = transparentBrush,
                     Margin = new Thickness(0, 1, 0, 1),
                     Child = cellGrid
                 };
@@ -1076,6 +1085,7 @@ public sealed partial class MainWindow : Window
             return;
 
         if (!isFocused &&
+            tb.SelectionLength == 0 &&
             !string.IsNullOrWhiteSpace(block.Content) &&
             MarkdownRenderer.HasInlineMarkdownFormatting(block.Content))
         {
@@ -1109,8 +1119,8 @@ public sealed partial class MainWindow : Window
 
             richHost.Child = formattedTb;
             richHost.Visibility = Visibility.Visible;
-            tb.Opacity = 0.0;
-            tb.IsHitTestVisible = false;
+            tb.Opacity = 0.005;
+            tb.IsHitTestVisible = true;
         }
         else
         {
@@ -1123,6 +1133,12 @@ public sealed partial class MainWindow : Window
 
     private void WireLiveBlockTextBoxEvents(LiveDocBlock block, TextBox tb)
     {
+        tb.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) =>
+        {
+            _activeLiveBlock = block;
+            UpdateBlockInlineRichDisplay(block, isFocused: true);
+        }), true);
+
         tb.GotFocus += (_, _) =>
         {
             _activeLiveBlock = block;
@@ -1131,7 +1147,8 @@ public sealed partial class MainWindow : Window
 
         tb.LostFocus += (_, _) =>
         {
-            UpdateBlockInlineRichDisplay(block, isFocused: false);
+            if (tb.SelectionLength == 0)
+                UpdateBlockInlineRichDisplay(block, isFocused: false);
         };
 
         tb.TextChanged += (_, _) =>
@@ -2381,12 +2398,25 @@ public sealed partial class MainWindow : Window
                 HideMentionPopup();
                 HideSlashMenuPopup();
                 SelectionToolbarBorder.Visibility = Visibility.Collapsed;
-                RebuildLiveEditor(reparse: true);
+                if (!string.Equals(_lastRenderedLiveMarkdown, ViewModel.EditorText, StringComparison.Ordinal) ||
+                    LiveEditorPanel.Children.Count == 0)
+                {
+                    RebuildLiveEditor(reparse: true);
+                }
                 UpdateActiveMentionJumpPill();
                 if (ViewModel.IsFluidAnimationEnabled)
                 {
                     PlayFluidTransition(LiveEditorScrollViewer);
                     PlayFluidTransition(EditorTextBox);
+                }
+                break;
+
+            case nameof(MainViewModel.EditorText):
+                if (!_isSyncingLiveEditor &&
+                    ViewModel.CurrentViewMode == EditorViewMode.Live &&
+                    !string.Equals(_lastRenderedLiveMarkdown, ViewModel.EditorText, StringComparison.Ordinal))
+                {
+                    RebuildLiveEditor(reparse: true);
                 }
                 break;
 

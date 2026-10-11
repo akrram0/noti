@@ -215,6 +215,7 @@
                             Padding="14,8,14,8"
                             IsSpellCheckEnabled="False"
                             Foreground="{ThemeResource TextPrimaryBrush}"
+                            Background="Transparent"
                             BorderThickness="0"
                             VerticalAlignment="Center" />
                     </Grid>
@@ -280,6 +281,7 @@
                             Height="26"
                             Padding="4,4,4,4"
                             Foreground="{ThemeResource TextPrimaryBrush}"
+                            Background="Transparent"
                             BorderThickness="0"
                             VerticalAlignment="Center" />
                         <Button
@@ -644,6 +646,7 @@
                             PointerReleased="OnEditorPointerReleased"
                             FontSize="{x:Bind ViewModel.EditorFontSize, Mode=OneWay}"
                             Foreground="{ThemeResource TextPrimaryBrush}"
+                            Background="Transparent"
                             BorderThickness="0"
                             Padding="40,28,40,16"
                             ScrollViewer.VerticalScrollBarVisibility="Auto" />
@@ -1000,6 +1003,7 @@
                                                 MinHeight="0"
                                                 Padding="14,8"
                                                 Foreground="{ThemeResource TextPrimaryBrush}"
+                                                Background="Transparent"
                                                 BorderThickness="0"
                                                 VerticalAlignment="Center" />
                                         </Border>
@@ -1523,6 +1527,7 @@
                                 Height="34"
                                 Padding="10,6"
                                 Foreground="{ThemeResource TextPrimaryBrush}"
+                                Background="Transparent"
                                 BorderThickness="0"
                                 VerticalAlignment="Center" />
                             <Border

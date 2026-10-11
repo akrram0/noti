@@ -31,9 +31,10 @@
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#26FFFFFF" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#F0FFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackground" Color="#03000000" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#03000000" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#03000000" />
+                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
@@ -43,6 +44,7 @@
                     <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8E8E93" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8E8E93" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF8E8E93" />
+                    <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="#FF0A84FF" />
                     <SolidColorBrush x:Key="TextControlElevationBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlElevationBorderFocusedBrush" Color="Transparent" />
                     <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
@@ -71,9 +73,10 @@
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#26FFFFFF" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#F0FFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackground" Color="#03000000" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#03000000" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#03000000" />
+                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
@@ -83,6 +86,7 @@
                     <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8E8E93" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8E8E93" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF8E8E93" />
+                    <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="#FF0A84FF" />
                     <SolidColorBrush x:Key="TextControlElevationBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlElevationBorderFocusedBrush" Color="Transparent" />
                     <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
@@ -111,9 +115,10 @@
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#18000000" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#FFFFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackground" Color="#03FFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#03FFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#03FFFFFF" />
+                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
@@ -123,6 +128,7 @@
                     <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF6C6C70" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF6C6C70" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF6C6C70" />
+                    <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="#FF0A84FF" />
                     <SolidColorBrush x:Key="TextControlElevationBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlElevationBorderFocusedBrush" Color="Transparent" />
                     <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
@@ -133,10 +139,11 @@
             <!-- Clean Borderless TextBox Style (eliminates WinUI Fluent bottom underline / elevation border artifact) -->
             <Style x:Key="BorderlessTextBoxStyle" TargetType="TextBox">
                 <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
-                <Setter Property="Background" Value="{ThemeResource TextControlBackground}" />
+                <Setter Property="Background" Value="Transparent" />
                 <Setter Property="BorderBrush" Value="Transparent" />
                 <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="SelectionHighlightColor" Value="#FF0A84FF" />
+                <Setter Property="SelectionHighlightColorWhenNotFocused" Value="#880A84FF" />
                 <Setter Property="Padding" Value="0" />
                 <Setter Property="UseSystemFocusVisuals" Value="False" />
                 <Setter Property="FocusVisualPrimaryThickness" Value="0" />
@@ -149,7 +156,7 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="TextBox">
-                            <Grid Background="{TemplateBinding Background}">
+                            <Grid Background="Transparent">
                                 <VisualStateManager.VisualStateGroups>
                                     <VisualStateGroup x:Name="CommonStates">
                                         <VisualState x:Name="Normal" />
@@ -159,6 +166,11 @@
                                         <VisualState x:Name="Focused" />
                                     </VisualStateGroup>
                                 </VisualStateManager.VisualStateGroups>
+                                <Border
+                                    x:Name="BorderElement"
+                                    Background="Transparent"
+                                    BorderBrush="Transparent"
+                                    BorderThickness="0" />
                                 <TextBlock
                                     x:Name="PlaceholderTextContentPresenter"
                                     Margin="{TemplateBinding Padding}"
@@ -169,6 +181,7 @@
                                     IsHitTestVisible="False" />
                                 <ScrollViewer
                                     x:Name="ContentElement"
+                                    Background="Transparent"
                                     Padding="{TemplateBinding Padding}"
                                     HorizontalScrollMode="{TemplateBinding ScrollViewer.HorizontalScrollMode}"
                                     VerticalScrollMode="{TemplateBinding ScrollViewer.VerticalScrollMode}"

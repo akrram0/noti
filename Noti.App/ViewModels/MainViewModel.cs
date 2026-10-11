@@ -240,8 +240,10 @@ public sealed class MainViewModel : ObservableObject
                 return;
             }
 
-            if (SetProperty(ref _selectedNote, value))
+            if (!ReferenceEquals(_selectedNote, value))
             {
+                _selectedNote = value;
+
                 foreach (var item in _allNotes)
                     item.IsSelected = ReferenceEquals(item, value);
 
@@ -254,6 +256,8 @@ public sealed class MainViewModel : ObservableObject
                 _suppressAutosave = true;
                 EditorText = value?.Content ?? string.Empty;
                 _suppressAutosave = false;
+
+                OnPropertyChanged();
             }
         }
     }
