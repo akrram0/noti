@@ -478,6 +478,8 @@ public sealed class MainViewModel : ObservableObject
                 _settings.IsDarkMode = value;
                 OnPropertyChanged(nameof(CurrentElementTheme));
                 OnPropertyChanged(nameof(ToggleThumbAlignment));
+                OnPropertyChanged(nameof(SurfaceOpacity));
+                OnPropertyChanged(nameof(SidebarSurfaceOpacity));
             }
         }
     }
@@ -553,9 +555,11 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    public double SurfaceOpacity => _currentBackdropMode == BackdropMode.Blur
-        ? (_surfaceOpacityPercent / 100.0) * 0.36
-        : _surfaceOpacityPercent / 100.0;
+    public double SurfaceOpacity => !_isDarkMode
+        ? Math.Clamp(0.76 + ((_surfaceOpacityPercent / 100.0) * 0.24), 0.76, 1.0)
+        : (_currentBackdropMode == BackdropMode.Blur
+            ? (_surfaceOpacityPercent / 100.0) * 0.36
+            : _surfaceOpacityPercent / 100.0);
 
     public double SidebarSurfaceOpacity => _currentBackdropMode == BackdropMode.Blur
         ? Math.Clamp((_surfaceOpacityPercent / 100.0) * 0.45, 0.06, 0.85)

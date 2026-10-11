@@ -932,7 +932,18 @@ public static class MarkdownRenderer
             }
 
             var pBlock = CreateTextLiveBlock(LiveBlockKind.Paragraph, raw);
-            pBlock.BlockAlignment = currentDivAlign;
+            if (currentDivAlign != TextAlignment.Left)
+            {
+                pBlock.BlockAlignment = currentDivAlign;
+            }
+            else if (string.IsNullOrEmpty(raw))
+            {
+                pBlock.BlockAlignment = blocks.LastOrDefault(b => b.Kind != LiveBlockKind.HtmlWrapper)?.BlockAlignment ?? TextAlignment.Left;
+            }
+            else
+            {
+                pBlock.BlockAlignment = TextAlignment.Left;
+            }
             blocks.Add(pBlock);
         }
 
@@ -948,7 +959,12 @@ public static class MarkdownRenderer
         if (blocks.Count == 0 ||
             blocks[^1].Kind is LiveBlockKind.ImageBlock or LiveBlockKind.TableBlock or LiveBlockKind.Divider or LiveBlockKind.CodeBlock or LiveBlockKind.HtmlWrapper)
         {
-            blocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+            var trailingAlign = blocks.LastOrDefault(b => b.Kind != LiveBlockKind.HtmlWrapper)?.BlockAlignment ?? currentDivAlign;
+            blocks.Add(new LiveDocBlock
+            {
+                Kind = LiveBlockKind.Paragraph,
+                BlockAlignment = trailingAlign
+            });
         }
 
         return blocks;
@@ -1097,7 +1113,7 @@ public static class MarkdownRenderer
                     };
 
                     if (activeWrapperAlign == TextAlignment.Left &&
-                        !string.IsNullOrEmpty(line) &&
+                        (!string.IsNullOrEmpty(line) || blocks.Count == 1) &&
                         b.BlockAlignment is TextAlignment.Center or TextAlignment.Right)
                     {
                         var alignAttr = b.BlockAlignment == TextAlignment.Right ? "right" : "center";
@@ -1307,7 +1323,13 @@ public static class MarkdownRenderer
         if (string.IsNullOrWhiteSpace(rel))
             return false;
 
-        var candidates = new List<string>(6);
+        var candidates = new List<string>(10);
+        var appImagesDir = System.IO.Path.Combine(Noti.Storage.AppSettings.AppDataDirectory, "images");
+        candidates.Add(System.IO.Path.Combine(appImagesDir, rel));
+        var fileNameOnly = System.IO.Path.GetFileName(rel);
+        if (!string.IsNullOrWhiteSpace(fileNameOnly))
+            candidates.Add(System.IO.Path.Combine(appImagesDir, fileNameOnly));
+
         if (!string.IsNullOrWhiteSpace(vaultRootPath))
         {
             if (!string.IsNullOrWhiteSpace(noteFolderPath))
@@ -1320,6 +1342,8 @@ public static class MarkdownRenderer
             }
 
             candidates.Add(System.IO.Path.Combine(vaultRootPath, rel));
+            if (!string.IsNullOrWhiteSpace(fileNameOnly))
+                candidates.Add(System.IO.Path.Combine(vaultRootPath, "assets", fileNameOnly));
         }
 
         var appBase = AppContext.BaseDirectory;

@@ -41,14 +41,12 @@ public sealed partial class MainWindow : Window
     private int _liveMaterializedCount;
     private readonly Stack<TextBox> _liveTextBoxPool = new(160);
     private readonly DispatcherTimer _liveSyncTimer;
-    private readonly DispatcherTimer _caretBlinkTimer;
+    private TextAlignment _activeEditorAlignment = TextAlignment.Left;
     private ulong _lastCanvasClickTimestamp;
 
     private static readonly SolidColorBrush TransparentBrush = new(Colors.Transparent);
     private static readonly SolidColorBrush AccentBrush = new(ColorHelper.FromArgb(255, 10, 132, 255));
     private static readonly SolidColorBrush SelectionUnfocusedBrush = new(ColorHelper.FromArgb(140, 10, 132, 255));
-    private static readonly SolidColorBrush CaretLightModeBrush = new(ColorHelper.FromArgb(255, 17, 17, 19));
-    private static readonly SolidColorBrush CaretDarkModeBrush = new(ColorHelper.FromArgb(255, 245, 245, 247));
     private static readonly FontFamily MonoFontFamily = new("Cascadia Mono, Consolas, Courier New");
     private static readonly FontFamily DefaultFontFamily = FontFamily.XamlAutoFontFamily;
 
@@ -87,13 +85,6 @@ public sealed partial class MainWindow : Window
         _liveSyncTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
         _liveSyncTimer.Tick += (_, _) => FlushSyncLiveBlocksToViewModel();
 
-        _caretBlinkTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(530) };
-        _caretBlinkTimer.Tick += (_, _) =>
-        {
-            if (EditorCaretBar.Visibility == Visibility.Visible)
-                EditorCaretBar.Opacity = EditorCaretBar.Opacity > 0.5 ? 0.0 : 1.0;
-        };
-
         RootGrid.Loaded += (_, _) =>
         {
             ApplyResponsiveLayout();
@@ -104,7 +95,6 @@ public sealed partial class MainWindow : Window
             UpdateTitleBarPassthrough();
             ApplyEditorTextBoxTheme();
             RebuildLiveEditor(reparse: true);
-            UpdateCustomCaret(resetBlink: true);
         };
         RootGrid.SizeChanged += (_, _) =>
         {
@@ -114,7 +104,6 @@ public sealed partial class MainWindow : Window
         LiveEditorScrollViewer.SizeChanged += (_, _) =>
         {
             LiveCanvasRootGrid.MinHeight = Math.Max(0, LiveEditorScrollViewer.ActualHeight);
-            UpdateCustomCaret(resetBlink: false);
         };
         SidebarToggleButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
         ViewSwitcherBorder.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
@@ -129,10 +118,6 @@ public sealed partial class MainWindow : Window
         EditorTextBox.Paste += OnEditorTextBoxPaste;
         RootGrid.AddHandler(UIElement.DragOverEvent, new DragEventHandler(OnRootGridDragOver), true);
         RootGrid.AddHandler(UIElement.DropEvent, new DragEventHandler(OnRootGridDrop), true);
-        RootGrid.GotFocus += (_, _) => UpdateCustomCaret(resetBlink: true);
-        RootGrid.LostFocus += (_, _) => DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: false));
-        RootGrid.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, _) => DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: true))), true);
-        RootGrid.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler((_, _) => DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: true))), true);
         RootGrid.PreviewKeyDown += OnRootPreviewKeyDown;
         EditorTextBox.PreviewKeyDown += OnEditorPreviewKeyDown;
         EditorTextBox.TextChanged += OnEditorTextChanged;
@@ -650,151 +635,6 @@ public sealed partial class MainWindow : Window
         {
             EnsureLiveBlocksMaterializedThrough(Math.Min(_liveBlocks.Count - 1, _liveMaterializedCount + 48));
         }
-
-        UpdateCustomCaret(resetBlink: false);
-    }
-
-    private bool IsElementInsideEditorPane(DependencyObject? element)
-    {
-        var cur = element;
-        while (cur is not null)
-        {
-            if (ReferenceEquals(cur, EditorPaneGrid))
-                return true;
-            cur = VisualTreeHelper.GetParent(cur);
-        }
-        return false;
-    }
-
-    private void HideCustomCaret()
-    {
-        _caretBlinkTimer.Stop();
-        if (EditorCaretBar.Visibility != Visibility.Collapsed)
-            EditorCaretBar.Visibility = Visibility.Collapsed;
-    }
-
-    private void UpdateCustomCaret(bool resetBlink = false)
-    {
-        if (RootGrid.XamlRoot is null ||
-            ViewModel.IsSettingsOpen ||
-            _isCommandPaletteOpen ||
-            DeleteFolderConfirmOverlay.Visibility == Visibility.Visible)
-        {
-            HideCustomCaret();
-            return;
-        }
-
-        if (FocusManager.GetFocusedElement(RootGrid.XamlRoot) is not TextBox focusedTb ||
-            focusedTb.Visibility != Visibility.Visible ||
-            focusedTb.SelectionLength > 0 ||
-            !IsElementInsideEditorPane(focusedTb))
-        {
-            HideCustomCaret();
-            return;
-        }
-
-        try
-        {
-            if (focusedTb.ActualHeight <= 0)
-                focusedTb.UpdateLayout();
-
-            var text = focusedTb.Text ?? string.Empty;
-            var caret = Math.Clamp(focusedTb.SelectionStart, 0, text.Length);
-            var defaultLineHeight = Math.Max(16.0, Math.Round(focusedTb.FontSize * 1.28));
-            double localX;
-            double localY;
-            double caretHeight = defaultLineHeight;
-
-            if (text.Length == 0)
-            {
-                var contentW = Math.Max(0.0, focusedTb.ActualWidth - focusedTb.Padding.Left - focusedTb.Padding.Right);
-                localX = focusedTb.TextAlignment switch
-                {
-                    TextAlignment.Center => focusedTb.Padding.Left + (contentW / 2.0),
-                    TextAlignment.Right => focusedTb.Padding.Left + Math.Max(0.0, contentW - 2.0),
-                    _ => focusedTb.Padding.Left
-                };
-
-                var rect0 = focusedTb.GetRectFromCharacterIndex(0, false);
-                if (!rect0.IsEmpty && rect0.Height > 4)
-                {
-                    caretHeight = rect0.Height;
-                    localY = rect0.Y;
-                    if (focusedTb.Padding.Top > 0 && localY < focusedTb.Padding.Top - 1.0)
-                        localY += focusedTb.Padding.Top;
-                }
-                else
-                {
-                    var contentH = Math.Max(0.0, focusedTb.ActualHeight - focusedTb.Padding.Top - focusedTb.Padding.Bottom);
-                    localY = focusedTb.Padding.Top + Math.Max(0.0, (contentH - caretHeight) / 2.0);
-                }
-            }
-            else
-            {
-                Rect rect;
-                if (caret < text.Length)
-                {
-                    rect = focusedTb.GetRectFromCharacterIndex(caret, false);
-                }
-                else
-                {
-                    rect = focusedTb.GetRectFromCharacterIndex(text.Length - 1, true);
-                    if (text[^1] is '\r' or '\n')
-                    {
-                        var lh = (!rect.IsEmpty && rect.Height > 4) ? rect.Height : defaultLineHeight;
-                        rect = new Rect(focusedTb.Padding.Left, rect.Y + lh, 0, lh);
-                    }
-                }
-
-                if (!rect.IsEmpty && (rect.Height > 0 || rect.X > 0 || rect.Y > 0))
-                {
-                    localX = rect.X;
-                    localY = rect.Y;
-                    if (rect.Height > 4)
-                        caretHeight = rect.Height;
-
-                    if (focusedTb.Padding.Left > 0 && localX < focusedTb.Padding.Left - 1.0)
-                    {
-                        localX += focusedTb.Padding.Left;
-                        localY += focusedTb.Padding.Top;
-                    }
-                }
-                else
-                {
-                    localX = focusedTb.Padding.Left;
-                    localY = focusedTb.Padding.Top;
-                }
-            }
-
-            var pt = focusedTb.TransformToVisual(EditorCaretCanvas).TransformPoint(new Point(localX, localY));
-            var paneH = EditorPaneGrid.ActualHeight;
-            var paneW = EditorPaneGrid.ActualWidth;
-
-            if (paneH > 0 && (pt.Y + caretHeight < 0 || pt.Y > paneH || pt.X < -4 || (paneW > 0 && pt.X > paneW + 4)))
-            {
-                HideCustomCaret();
-                return;
-            }
-
-            EditorCaretBar.Height = Math.Clamp(Math.Round(caretHeight), 14.0, 56.0);
-            EditorCaretBar.Background = ViewModel.IsDarkMode ? CaretDarkModeBrush : CaretLightModeBrush;
-            Canvas.SetLeft(EditorCaretBar, Math.Round(pt.X));
-            Canvas.SetTop(EditorCaretBar, Math.Round(pt.Y));
-
-            if (EditorCaretBar.Visibility != Visibility.Visible)
-                EditorCaretBar.Visibility = Visibility.Visible;
-
-            if (resetBlink || !_caretBlinkTimer.IsEnabled)
-            {
-                EditorCaretBar.Opacity = 1.0;
-                _caretBlinkTimer.Stop();
-                _caretBlinkTimer.Start();
-            }
-        }
-        catch
-        {
-            HideCustomCaret();
-        }
     }
 
     private void ApplyEditorTextBoxTheme()
@@ -1137,11 +977,18 @@ public sealed partial class MainWindow : Window
             {
                 _lastRenderedLiveMarkdown = ViewModel.EditorText;
                 _liveBlocks = MarkdownRenderer.ParseLiveBlocks(ViewModel.EditorText);
+                _activeEditorAlignment = _liveBlocks.LastOrDefault(b => b.Kind != LiveBlockKind.HtmlWrapper)?.BlockAlignment ?? TextAlignment.Left;
                 LiveEditorScrollViewer.ChangeView(null, 0, null, true);
             }
 
             if (_liveBlocks.Count == 0)
-                _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+            {
+                _liveBlocks.Add(new LiveDocBlock
+                {
+                    Kind = LiveBlockKind.Paragraph,
+                    BlockAlignment = _activeEditorAlignment
+                });
+            }
 
             const int InitialViewportBatchSize = 28;
             var initialTarget = focusBlockIndex is int fIdx
@@ -1182,6 +1029,8 @@ public sealed partial class MainWindow : Window
 
         var targetBlock = _liveBlocks[index];
         _activeLiveBlock = targetBlock;
+        if (!string.IsNullOrEmpty(targetBlock.Content) || targetBlock.BlockAlignment != TextAlignment.Left)
+            _activeEditorAlignment = targetBlock.BlockAlignment;
 
         if (targetBlock.DisplayTextBlock is { } dtb)
             dtb.Visibility = Visibility.Collapsed;
@@ -1197,7 +1046,6 @@ public sealed partial class MainWindow : Window
         targetTb.Focus(FocusState.Programmatic);
         targetTb.SelectionStart = initialClamped;
         targetTb.SelectionLength = 0;
-        UpdateCustomCaret(resetBlink: true);
 
         DispatcherQueue.TryEnqueue(() =>
         {
@@ -1220,8 +1068,6 @@ public sealed partial class MainWindow : Window
 
             if (savedOffset > 4.0 && LiveEditorScrollViewer.VerticalOffset < 1.0 && index > 1)
                 LiveEditorScrollViewer.ChangeView(null, savedOffset, null, true);
-
-            UpdateCustomCaret(resetBlink: true);
         });
     }
 
@@ -1260,6 +1106,9 @@ public sealed partial class MainWindow : Window
     private void InsertLiveBlockAt(int index, LiveDocBlock block, int? focusCaret = null)
     {
         var clampedIdx = Math.Clamp(index, 0, _liveBlocks.Count);
+        if (block.BlockAlignment == TextAlignment.Left && _activeEditorAlignment != TextAlignment.Left)
+            block.BlockAlignment = _activeEditorAlignment;
+
         if (clampedIdx > 0)
             EnsureLiveBlocksMaterializedThrough(clampedIdx - 1);
 
@@ -1512,6 +1361,7 @@ public sealed partial class MainWindow : Window
         tb.Background = _cachedInputBgBrush;
         tb.RequestedTheme = ViewModel.CurrentElementTheme;
         tb.TextAlignment = block.BlockAlignment;
+        tb.MinWidth = 0;
         tb.MinHeight = Math.Max(26, Math.Round(fontSize * 1.45));
         tb.Opacity = 1.0;
         tb.Visibility = Visibility.Visible;
@@ -1603,7 +1453,7 @@ public sealed partial class MainWindow : Window
             };
             var strikeGrid = new Grid
             {
-                HorizontalAlignment = HorizontalAlignment.Left,
+                HorizontalAlignment = block.HorizontalBlockAlignment,
                 VerticalAlignment = VerticalAlignment.Center,
                 IsHitTestVisible = false
             };
@@ -1616,14 +1466,22 @@ public sealed partial class MainWindow : Window
         {
             case LiveBlockKind.Checklist:
             {
+                var isAligned = block.BlockAlignment != TextAlignment.Left;
+                if (isAligned)
+                {
+                    tb.TextAlignment = TextAlignment.Left;
+                    tb.MinWidth = 40;
+                }
+
                 var row = new Grid
                 {
                     Background = TransparentBrush,
                     Margin = new Thickness(0, 2, 0, 2),
-                    ColumnSpacing = 8
+                    ColumnSpacing = 8,
+                    HorizontalAlignment = isAligned ? block.HorizontalBlockAlignment : HorizontalAlignment.Stretch
                 };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = isAligned ? GridLength.Auto : new GridLength(1, GridUnitType.Star) });
 
                 var checkBox = new CheckBox
                 {
@@ -1651,14 +1509,22 @@ public sealed partial class MainWindow : Window
 
             case LiveBlockKind.Bullet:
             {
+                var isAligned = block.BlockAlignment != TextAlignment.Left;
+                if (isAligned)
+                {
+                    tb.TextAlignment = TextAlignment.Left;
+                    tb.MinWidth = 40;
+                }
+
                 var row = new Grid
                 {
                     Background = TransparentBrush,
                     Margin = new Thickness(0, 2, 0, 2),
-                    ColumnSpacing = 10
+                    ColumnSpacing = 10,
+                    HorizontalAlignment = isAligned ? block.HorizontalBlockAlignment : HorizontalAlignment.Stretch
                 };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = isAligned ? GridLength.Auto : new GridLength(1, GridUnitType.Star) });
 
                 var dot = new TextBlock
                 {
@@ -1729,17 +1595,16 @@ public sealed partial class MainWindow : Window
             if (tb.Tag is LiveDocBlock block)
             {
                 _activeLiveBlock = block;
+                if (!string.IsNullOrEmpty(block.Content) || block.BlockAlignment != TextAlignment.Left)
+                    _activeEditorAlignment = block.BlockAlignment;
                 if (block.DisplayTextBlock is { } dtb)
                     dtb.Visibility = Visibility.Collapsed;
                 tb.Visibility = Visibility.Visible;
             }
-            UpdateCustomCaret(resetBlink: true);
         };
 
         tb.LostFocus += (_, _) =>
         {
-            DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: false));
-
             if (_isSyncingLiveEditor || tb.Tag is not LiveDocBlock block)
                 return;
 
@@ -1778,7 +1643,6 @@ public sealed partial class MainWindow : Window
             UpdateSlashMenuAutocomplete();
             UpdateMentionAutocomplete();
             UpdateActiveMentionJumpPill();
-            UpdateCustomCaret(resetBlink: true);
 
             if (ViewModel.IsFluidAnimationEnabled && tb.FocusState != FocusState.Unfocused)
             {
@@ -1799,7 +1663,6 @@ public sealed partial class MainWindow : Window
             UpdateSlashMenuAutocomplete();
             UpdateMentionAutocomplete();
             UpdateActiveMentionJumpPill();
-            UpdateCustomCaret(resetBlink: true);
         };
 
         tb.PointerReleased += (_, _) =>
@@ -2096,6 +1959,7 @@ public sealed partial class MainWindow : Window
         if (e.Key == VirtualKey.Enter && block.Kind != LiveBlockKind.CodeBlock)
         {
             e.Handled = true;
+            _activeEditorAlignment = block.BlockAlignment;
 
             if (block.Kind == LiveBlockKind.Paragraph &&
                 MarkdownRenderer.TryParseImageLine(text.Trim(), out _, out _, out _, out _))
@@ -2103,7 +1967,11 @@ public sealed partial class MainWindow : Window
                 block.Kind = LiveBlockKind.ImageBlock;
                 block.Content = text;
                 RefreshLiveBlockAt(blockIdx);
-                InsertLiveBlockAt(blockIdx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+                InsertLiveBlockAt(blockIdx + 1, new LiveDocBlock
+                {
+                    Kind = LiveBlockKind.Paragraph,
+                    BlockAlignment = block.BlockAlignment
+                }, focusCaret: 0);
                 FlushSyncLiveBlocksToViewModel();
                 return;
             }
@@ -2131,6 +1999,7 @@ public sealed partial class MainWindow : Window
                     InsertLiveBlockAt(blockIdx + 1, new LiveDocBlock
                     {
                         Kind = LiveBlockKind.Paragraph,
+                        BlockAlignment = block.BlockAlignment,
                         Content = nextTreeLine
                     }, focusCaret: nextTreeLine.Length);
                     FlushSyncLiveBlocksToViewModel();
@@ -2140,6 +2009,7 @@ public sealed partial class MainWindow : Window
                 InsertLiveBlockAt(blockIdx + 1, new LiveDocBlock
                 {
                     Kind = LiveBlockKind.Paragraph,
+                    BlockAlignment = block.BlockAlignment,
                     Content = BranchEnd
                 }, focusCaret: BranchEnd.Length);
                 FlushSyncLiveBlocksToViewModel();
@@ -2169,6 +2039,7 @@ public sealed partial class MainWindow : Window
             InsertLiveBlockAt(blockIdx + 1, new LiveDocBlock
             {
                 Kind = nextKind,
+                BlockAlignment = block.BlockAlignment,
                 Content = after
             }, focusCaret: 0);
             FlushSyncLiveBlocksToViewModel();
@@ -2380,7 +2251,6 @@ public sealed partial class MainWindow : Window
         UpdateSlashMenuAutocomplete();
         UpdateMentionAutocomplete();
         UpdateActiveMentionJumpPill();
-        UpdateCustomCaret(resetBlink: true);
 
         if (!ViewModel.IsFluidAnimationEnabled || EditorTextBox.FocusState == FocusState.Unfocused)
             return;
@@ -2400,7 +2270,6 @@ public sealed partial class MainWindow : Window
         UpdateSlashMenuAutocomplete();
         UpdateMentionAutocomplete();
         UpdateActiveMentionJumpPill();
-        UpdateCustomCaret(resetBlink: true);
     }
 
     private void OnEditorPointerReleased(object sender, PointerRoutedEventArgs e)
@@ -2480,6 +2349,7 @@ public sealed partial class MainWindow : Window
     private void SetEditorBlockAlignment(TextAlignment alignment)
     {
         HideSlashMenuPopup();
+        _activeEditorAlignment = alignment;
 
         if (ViewModel.CurrentViewMode == EditorViewMode.Live)
         {
@@ -2492,6 +2362,16 @@ public sealed partial class MainWindow : Window
                 return;
 
             block.BlockAlignment = alignment;
+            for (var i = idx + 1; i < _liveBlocks.Count; i++)
+            {
+                if (_liveBlocks[i].Kind == LiveBlockKind.Paragraph && string.IsNullOrEmpty(_liveBlocks[i].Content))
+                {
+                    _liveBlocks[i].BlockAlignment = alignment;
+                    if (_liveBlocks[i].PrimaryTextBox is { } trailingTb)
+                        trailingTb.TextAlignment = alignment;
+                }
+            }
+
             var caret = block.PrimaryTextBox?.SelectionStart ?? (block.Content?.Length ?? 0);
             FlushSyncLiveBlocksToViewModel();
             RefreshLiveBlockAt(idx, IsEditableLiveBlock(block) ? caret : null);
@@ -2993,14 +2873,27 @@ public sealed partial class MainWindow : Window
             case "left":
             case "center":
             case "right":
-                block.Content = cleaned;
-                block.BlockAlignment = item.Id switch
+            {
+                var targetAlign = item.Id switch
                 {
                     "center" => TextAlignment.Center,
                     "right" => TextAlignment.Right,
                     _ => TextAlignment.Left
                 };
+                _activeEditorAlignment = targetAlign;
+                block.Content = cleaned;
+                block.BlockAlignment = targetAlign;
+                for (var i = idx + 1; i < _liveBlocks.Count; i++)
+                {
+                    if (_liveBlocks[i].Kind == LiveBlockKind.Paragraph && string.IsNullOrEmpty(_liveBlocks[i].Content))
+                    {
+                        _liveBlocks[i].BlockAlignment = targetAlign;
+                        if (_liveBlocks[i].PrimaryTextBox is { } trailingTb)
+                            trailingTb.TextAlignment = targetAlign;
+                    }
+                }
                 break;
+            }
 
             default:
                 return;
@@ -3316,7 +3209,6 @@ public sealed partial class MainWindow : Window
                     RebuildLiveEditor(reparse: true);
                 }
                 UpdateActiveMentionJumpPill();
-                DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: true));
                 if (ViewModel.IsFluidAnimationEnabled)
                 {
                     PlayFluidTransition(ViewModel.CurrentViewMode == EditorViewMode.Live
@@ -3345,7 +3237,6 @@ public sealed partial class MainWindow : Window
                 else if (EditorTextBox.Text != ViewModel.EditorText)
                     EditorTextBox.Text = ViewModel.EditorText;
                 AnimateViewModeChange();
-                DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: true));
                 break;
 
             case nameof(MainViewModel.IsSidebarOpen):
@@ -3356,7 +3247,6 @@ public sealed partial class MainWindow : Window
                 if (_liveSyncTimer.IsEnabled)
                     FlushSyncLiveBlocksToViewModel();
                 AnimateSettingsModal(ViewModel.IsSettingsOpen);
-                DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: false));
                 break;
 
             case nameof(MainViewModel.CurrentThemeMode):
@@ -3373,12 +3263,10 @@ public sealed partial class MainWindow : Window
                 _liveTextBoxPool.Clear();
                 ApplyEditorTextBoxTheme();
                 RebuildLiveEditor(reparse: false);
-                DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: true));
                 break;
 
             case nameof(MainViewModel.EditorFontSize):
                 RebuildLiveEditor(reparse: false);
-                DispatcherQueue.TryEnqueue(() => UpdateCustomCaret(resetBlink: true));
                 break;
         }
     }
@@ -4090,16 +3978,18 @@ public sealed partial class MainWindow : Window
         try
         {
             if (ViewModel.SelectedNote is null || ViewModel.SelectedNote.IsFolder)
-                await ViewModel.CreateNoteInFolderAsync(ViewModel.ActiveFolderPath);
+            {
+                var targetFolder = ViewModel.ActiveFolderPath;
+                if (targetFolder.Equals("assets", StringComparison.OrdinalIgnoreCase) ||
+                    targetFolder.EndsWith("/assets", StringComparison.OrdinalIgnoreCase))
+                {
+                    targetFolder = string.Empty;
+                }
+                await ViewModel.CreateNoteInFolderAsync(targetFolder);
+            }
 
-            var vaultDir = ViewModel.VaultDirectoryPath;
-            var noteFolder = ViewModel.SelectedNote?.FolderPath;
-            var baseDir = !string.IsNullOrWhiteSpace(noteFolder)
-                ? Path.Combine(vaultDir, noteFolder.Replace('/', Path.DirectorySeparatorChar))
-                : vaultDir;
-
-            var assetsDir = Path.Combine(baseDir, "assets");
-            Directory.CreateDirectory(assetsDir);
+            var imagesDir = Path.Combine(Noti.Storage.AppSettings.AppDataDirectory, "images");
+            Directory.CreateDirectory(imagesDir);
 
             var rawStem = Path.GetFileNameWithoutExtension(sourceFilePath);
             var safeStem = string.Concat(rawStem.Select(ch => ch is ' ' or '(' or ')' or '[' or ']' ? '-' : ch)).Trim('-');
@@ -4111,14 +4001,14 @@ public sealed partial class MainWindow : Window
                 ext = ".png";
 
             var destFileName = $"{safeStem}{ext}";
-            var destPath = Path.Combine(assetsDir, destFileName);
+            var destPath = Path.Combine(imagesDir, destFileName);
             var fullSource = Path.GetFullPath(sourceFilePath);
             var fullDest = Path.GetFullPath(destPath);
 
             if (File.Exists(destPath) && !string.Equals(fullSource, fullDest, StringComparison.OrdinalIgnoreCase))
             {
                 destFileName = $"{safeStem}-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}{ext}";
-                destPath = Path.Combine(assetsDir, destFileName);
+                destPath = Path.Combine(imagesDir, destFileName);
                 fullDest = Path.GetFullPath(destPath);
             }
 
@@ -4126,7 +4016,10 @@ public sealed partial class MainWindow : Window
                 await Task.Run(() => File.Copy(sourceFilePath, destPath, overwrite: true));
 
             var altText = string.IsNullOrWhiteSpace(rawStem) ? "image" : rawStem;
-            var markdownImage = $"![{altText}](assets/{destFileName})";
+            var markdownImage = MarkdownRenderer.BuildMarkdownImageLine(
+                destFileName,
+                altText,
+                align: _activeEditorAlignment);
 
             if (ViewModel.CurrentViewMode == EditorViewMode.Live)
             {
@@ -4137,14 +4030,24 @@ public sealed partial class MainWindow : Window
 
                 if (_liveBlocks.Count == 0)
                 {
-                    _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.ImageBlock, Content = markdownImage });
-                    _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+                    _liveBlocks.Add(new LiveDocBlock
+                    {
+                        Kind = LiveBlockKind.ImageBlock,
+                        BlockAlignment = _activeEditorAlignment,
+                        Content = markdownImage
+                    });
+                    _liveBlocks.Add(new LiveDocBlock
+                    {
+                        Kind = LiveBlockKind.Paragraph,
+                        BlockAlignment = _activeEditorAlignment
+                    });
                     RebuildLiveEditor(reparse: false, focusBlockIndex: 1, focusCaretIndex: 0);
                 }
                 else if (_liveBlocks[idx].Kind == LiveBlockKind.Paragraph &&
                          string.IsNullOrWhiteSpace(_liveBlocks[idx].Content))
                 {
                     _liveBlocks[idx].Kind = LiveBlockKind.ImageBlock;
+                    _liveBlocks[idx].BlockAlignment = _activeEditorAlignment;
                     _liveBlocks[idx].Content = markdownImage;
                     RefreshLiveBlockAt(idx);
                     FocusOrInsertParagraphAfter(idx);
@@ -4154,6 +4057,7 @@ public sealed partial class MainWindow : Window
                     InsertLiveBlockAt(idx + 1, new LiveDocBlock
                     {
                         Kind = LiveBlockKind.ImageBlock,
+                        BlockAlignment = _activeEditorAlignment,
                         Content = markdownImage
                     });
                     FocusOrInsertParagraphAfter(idx + 1);
@@ -4218,19 +4122,21 @@ public sealed partial class MainWindow : Window
         try
         {
             if (ViewModel.SelectedNote is null || ViewModel.SelectedNote.IsFolder)
-                await ViewModel.CreateNoteInFolderAsync(ViewModel.ActiveFolderPath);
+            {
+                var targetFolder = ViewModel.ActiveFolderPath;
+                if (targetFolder.Equals("assets", StringComparison.OrdinalIgnoreCase) ||
+                    targetFolder.EndsWith("/assets", StringComparison.OrdinalIgnoreCase))
+                {
+                    targetFolder = string.Empty;
+                }
+                await ViewModel.CreateNoteInFolderAsync(targetFolder);
+            }
 
-            var vaultDir = ViewModel.VaultDirectoryPath;
-            var noteFolder = ViewModel.SelectedNote?.FolderPath;
-            var baseDir = !string.IsNullOrWhiteSpace(noteFolder)
-                ? Path.Combine(vaultDir, noteFolder.Replace('/', Path.DirectorySeparatorChar))
-                : vaultDir;
-
-            var assetsDir = Path.Combine(baseDir, "assets");
-            Directory.CreateDirectory(assetsDir);
+            var imagesDir = Path.Combine(Noti.Storage.AppSettings.AppDataDirectory, "images");
+            Directory.CreateDirectory(imagesDir);
 
             var fileName = $"pasted-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.png";
-            var destPath = Path.Combine(assetsDir, fileName);
+            var destPath = Path.Combine(imagesDir, fileName);
 
             using (var inputStream = await bitmapRef.OpenReadAsync())
             {

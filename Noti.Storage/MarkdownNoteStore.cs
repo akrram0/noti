@@ -55,13 +55,35 @@ public sealed class MarkdownNoteStore : INoteStore
         cancellationToken.ThrowIfCancellationRequested();
         Directory.CreateDirectory(_directoryPath);
 
-        var folders = Directory
-            .EnumerateDirectories(_directoryPath, "*", SearchOption.AllDirectories)
-            .Select(dir => Path.GetRelativePath(_directoryPath, dir).Replace('\\', '/'))
-            .Where(rel => !string.IsNullOrWhiteSpace(rel) && !rel.StartsWith('.') && !rel.Contains("/.", StringComparison.Ordinal))
-            .OrderBy(rel => rel, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var folders = new List<string>();
+        foreach (var dir in Directory.EnumerateDirectories(_directoryPath, "*", SearchOption.AllDirectories))
+        {
+            var rel = Path.GetRelativePath(_directoryPath, dir).Replace('\\', '/');
+            if (string.IsNullOrWhiteSpace(rel) || rel.StartsWith('.') || rel.Contains("/.", StringComparison.Ordinal))
+                continue;
 
+            if (rel.Equals("assets", StringComparison.OrdinalIgnoreCase) ||
+                rel.EndsWith("/assets", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    if (!Directory.EnumerateFiles(dir, "*.md", SearchOption.AllDirectories).Any())
+                    {
+                        if (!Directory.EnumerateFileSystemEntries(dir).Any())
+                            Directory.Delete(dir, recursive: false);
+                        continue;
+                    }
+                }
+                catch
+                {
+                    continue;
+                }
+            }
+
+            folders.Add(rel);
+        }
+
+        folders.Sort(StringComparer.OrdinalIgnoreCase);
         return Task.FromResult<IReadOnlyList<string>>(folders);
     }
 

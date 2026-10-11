@@ -653,20 +653,6 @@
                             Padding="40,28,40,16"
                             ScrollViewer.VerticalScrollBarVisibility="Auto" />
 
-                        <!-- Theme-Responsive High-Contrast Caret Overlay (bypasses WinUI 3 DestinationInvert backdrop inversion) -->
-                        <Canvas
-                            x:Name="EditorCaretCanvas"
-                            IsHitTestVisible="False">
-                            <Border
-                                x:Name="EditorCaretBar"
-                                Width="2"
-                                Height="20"
-                                CornerRadius="1"
-                                Visibility="Collapsed"
-                                IsHitTestVisible="False"
-                                Background="#FF111113" />
-                        </Canvas>
-
                         <!-- Floating Selection Formatting Toolbar Pill (Bold, Italic, Strikethrough, Code, Link, Left/Center/Right) -->
                         <Border
                             x:Name="SelectionToolbarBorder"
