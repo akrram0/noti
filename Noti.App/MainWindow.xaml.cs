@@ -25,6 +25,7 @@ public sealed partial class MainWindow : Window
     public const string BranchIndent = "│   ";
 
     private Storyboard? _typingWordStoryboard;
+    private string? _pendingDeleteFolderPath;
 
     public MainWindow(MainViewModel viewModel)
     {
@@ -117,6 +118,12 @@ public sealed partial class MainWindow : Window
     {
         if (e.Key == VirtualKey.Escape)
         {
+            if (DeleteFolderConfirmOverlay.Visibility == Visibility.Visible)
+            {
+                ShowDeleteFolderOverlay(open: false);
+                e.Handled = true;
+                return;
+            }
             if (ViewModel.IsSettingsOpen)
             {
                 ViewModel.IsSettingsOpen = false;
@@ -834,31 +841,62 @@ public sealed partial class MainWindow : Window
             _ = ViewModel.CreateNoteInFolderAsync(folderPath);
     }
 
-    private async void OnDeleteFolderClick(object sender, RoutedEventArgs e)
+    private void OnDeleteFolderClick(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { Tag: string folderPath } || string.IsNullOrWhiteSpace(folderPath) || RootGrid.XamlRoot is null)
+        if (sender is not Button { Tag: string folderPath } || string.IsNullOrWhiteSpace(folderPath))
             return;
 
-        try
-        {
-            var dialog = new ContentDialog
-            {
-                Title = $"Delete \"{folderPath}\"?",
-                Content = "Are you sure you want to delete this folder and all notes inside it?",
-                PrimaryButtonText = "Delete",
-                CloseButtonText = "Cancel",
-                DefaultButton = ContentDialogButton.Close,
-                XamlRoot = RootGrid.XamlRoot,
-                RequestedTheme = ViewModel.CurrentElementTheme
-            };
+        _pendingDeleteFolderPath = folderPath;
+        DeleteFolderConfirmTitle.Text = $"Delete \"{folderPath}\"?";
+        ShowDeleteFolderOverlay(open: true);
+    }
 
-            var result = await dialog.ShowAsync();
-            if (result == ContentDialogResult.Primary)
-                await ViewModel.DeleteFolderAsync(folderPath);
-        }
-        catch
+    private void OnCancelDeleteFolderClick(object sender, RoutedEventArgs e)
+    {
+        _pendingDeleteFolderPath = null;
+        ShowDeleteFolderOverlay(open: false);
+    }
+
+    private async void OnConfirmDeleteFolderClick(object sender, RoutedEventArgs e)
+    {
+        var folderPath = _pendingDeleteFolderPath;
+        _pendingDeleteFolderPath = null;
+        ShowDeleteFolderOverlay(open: false);
+
+        if (!string.IsNullOrWhiteSpace(folderPath))
+            await ViewModel.DeleteFolderAsync(folderPath);
+    }
+
+    private void ShowDeleteFolderOverlay(bool open)
+    {
+        if (open)
+            DeleteFolderConfirmOverlay.Visibility = Visibility.Visible;
+
+        var targetOpacity = open ? 1.0 : 0.0;
+        var sb = new Storyboard();
+        var fade = new DoubleAnimation
         {
+            From = open ? 0.0 : 1.0,
+            To = targetOpacity,
+            Duration = new Duration(TimeSpan.FromMilliseconds(open ? 160 : 120)),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(fade, DeleteFolderConfirmOverlay);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+        DeleteFolderConfirmOverlay.Opacity = targetOpacity;
+        sb.Children.Add(fade);
+
+        if (!open)
+        {
+            sb.Completed += (_, _) =>
+            {
+                if (_pendingDeleteFolderPath is null)
+                    DeleteFolderConfirmOverlay.Visibility = Visibility.Collapsed;
+            };
         }
+
+        sb.Begin();
     }
 
     private void OnTogglePinNoteClick(object sender, RoutedEventArgs e)

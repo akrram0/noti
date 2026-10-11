@@ -218,30 +218,32 @@ public sealed class MainViewModel : ObservableObject
         get => _userName;
         set
         {
-            var next = string.IsNullOrWhiteSpace(value) ? "Writer" : value.Trim();
-            if (SetProperty(ref _userName, next))
+            var raw = value ?? string.Empty;
+            if (SetProperty(ref _userName, raw))
             {
-                _settings.UserName = next;
+                _settings.UserName = DisplayUserName;
                 _settings.Save();
+                OnPropertyChanged(nameof(DisplayUserName));
                 OnPropertyChanged(nameof(UserInitials));
             }
         }
     }
 
+    public string DisplayUserName =>
+        string.IsNullOrWhiteSpace(_userName) ? "Writer" : _userName.Trim();
+
     public string UserInitials
     {
         get
         {
-            if (string.IsNullOrWhiteSpace(_userName))
-                return "W";
-
-            var parts = _userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var effective = DisplayUserName;
+            var parts = effective.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length >= 2)
                 return $"{char.ToUpperInvariant(parts[0][0])}{char.ToUpperInvariant(parts[1][0])}";
 
-            return _userName.Length >= 2
-                ? _userName[..2].ToUpperInvariant()
-                : _userName.ToUpperInvariant();
+            return effective.Length >= 2
+                ? effective[..2].ToUpperInvariant()
+                : effective.ToUpperInvariant();
         }
     }
 
