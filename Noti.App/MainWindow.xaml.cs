@@ -4016,10 +4016,12 @@ public sealed partial class MainWindow : Window
                 await Task.Run(() => File.Copy(sourceFilePath, destPath, overwrite: true));
 
             var altText = string.IsNullOrWhiteSpace(rawStem) ? "image" : rawStem;
-            var markdownImage = MarkdownRenderer.BuildMarkdownImageLine(
-                destFileName,
-                altText,
-                align: _activeEditorAlignment);
+            var markdownImage = _activeEditorAlignment switch
+            {
+                TextAlignment.Center => $"<img src=\"{destFileName}\" alt=\"{altText.Replace('"', '\'')}\" align=\"center\" />",
+                TextAlignment.Right => $"<img src=\"{destFileName}\" alt=\"{altText.Replace('"', '\'')}\" align=\"right\" />",
+                _ => $"![{altText}]({destFileName})"
+            };
 
             if (ViewModel.CurrentViewMode == EditorViewMode.Live)
             {
