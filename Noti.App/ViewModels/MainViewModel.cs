@@ -22,6 +22,8 @@ public sealed class MainViewModel : ObservableObject
     private bool _isSidebarOpen = true;
     private bool _isSettingsOpen;
     private bool _isDarkMode = true;
+    private bool _isFluidAnimationEnabled = true;
+    private bool _isTreeShortcutEnabled = true;
 
     public MainViewModel(NoteService noteService)
     {
@@ -33,6 +35,8 @@ public sealed class MainViewModel : ObservableObject
         ToggleSidebarCommand = new RelayCommand(() => IsSidebarOpen = !IsSidebarOpen);
         ToggleSettingsCommand = new RelayCommand(() => IsSettingsOpen = !IsSettingsOpen);
         ToggleThemeCommand = new RelayCommand(() => IsDarkMode = !IsDarkMode);
+        ToggleFluidAnimationCommand = new RelayCommand(() => IsFluidAnimationEnabled = !IsFluidAnimationEnabled);
+        ToggleTreeShortcutCommand = new RelayCommand(() => IsTreeShortcutEnabled = !IsTreeShortcutEnabled);
     }
 
     public ObservableCollection<NoteItemViewModel> FilteredNotes { get; } = new();
@@ -41,6 +45,8 @@ public sealed class MainViewModel : ObservableObject
     public IRelayCommand ToggleSidebarCommand { get; }
     public IRelayCommand ToggleSettingsCommand { get; }
     public IRelayCommand ToggleThemeCommand { get; }
+    public IRelayCommand ToggleFluidAnimationCommand { get; }
+    public IRelayCommand ToggleTreeShortcutCommand { get; }
 
     public NoteItemViewModel? SelectedNote
     {
@@ -162,6 +168,30 @@ public sealed class MainViewModel : ObservableObject
     public ElementTheme CurrentElementTheme => _isDarkMode ? ElementTheme.Dark : ElementTheme.Light;
     public HorizontalAlignment ToggleThumbAlignment => _isDarkMode ? HorizontalAlignment.Right : HorizontalAlignment.Left;
 
+    public bool IsFluidAnimationEnabled
+    {
+        get => _isFluidAnimationEnabled;
+        set
+        {
+            if (SetProperty(ref _isFluidAnimationEnabled, value))
+                OnPropertyChanged(nameof(FluidToggleThumbAlignment));
+        }
+    }
+
+    public HorizontalAlignment FluidToggleThumbAlignment => _isFluidAnimationEnabled ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+
+    public bool IsTreeShortcutEnabled
+    {
+        get => _isTreeShortcutEnabled;
+        set
+        {
+            if (SetProperty(ref _isTreeShortcutEnabled, value))
+                OnPropertyChanged(nameof(TreeToggleThumbAlignment));
+        }
+    }
+
+    public HorizontalAlignment TreeToggleThumbAlignment => _isTreeShortcutEnabled ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+
     public async Task InitializeAsync()
     {
         var loaded = await _noteService.LoadNotesAsync();
@@ -190,7 +220,7 @@ public sealed class MainViewModel : ObservableObject
 
         RefreshFilteredNotes();
         SelectedNote = vm;
-        SaveStatusText = "Saved";
+        SetSaveStatus("Saved");
         OnPropertyChanged(nameof(NoteCountText));
     }
 

@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -51,3 +54,17 @@ jobs:
           name: Noti-Setup-win-x64
           path: ${{ github.workspace }}/Noti-Setup-win-x64.exe
           if-no-files-found: error
+
+      - name: Publish to GitHub Release (latest)
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "latest"
+          $exists = gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag "${{ github.workspace }}/Noti-Setup-win-x64.exe" --title "Noti Latest Setup (win-x64)" --notes "Automated Windows Setup installer for Noti."
+          } else {
+            gh release upload $tag "${{ github.workspace }}/Noti-Setup-win-x64.exe" --clobber
+          }

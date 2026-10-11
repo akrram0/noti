@@ -101,7 +101,62 @@
                             Foreground="{ThemeResource TextPrimaryBrush}"
                             Background="Transparent"
                             BorderThickness="0"
-                            VerticalAlignment="Center" />
+                            VerticalAlignment="Center">
+                            <TextBox.Resources>
+                                <ResourceDictionary>
+                                    <ResourceDictionary.ThemeDictionaries>
+                                        <ResourceDictionary x:Key="Default">
+                                            <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlForeground" Color="#FFF5F5F7" />
+                                            <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFF5F5F7" />
+                                            <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFF5F5F7" />
+                                            <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8E8E93" />
+                                            <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8E8E93" />
+                                            <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF8E8E93" />
+                                            <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
+                                            <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+                                        </ResourceDictionary>
+                                        <ResourceDictionary x:Key="Dark">
+                                            <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlForeground" Color="#FFF5F5F7" />
+                                            <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFF5F5F7" />
+                                            <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFF5F5F7" />
+                                            <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8E8E93" />
+                                            <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8E8E93" />
+                                            <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF8E8E93" />
+                                            <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
+                                            <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+                                        </ResourceDictionary>
+                                        <ResourceDictionary x:Key="Light">
+                                            <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+                                            <SolidColorBrush x:Key="TextControlForeground" Color="#FF1C1C1E" />
+                                            <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FF1C1C1E" />
+                                            <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FF1C1C1E" />
+                                            <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF6C6C70" />
+                                            <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF6C6C70" />
+                                            <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF6C6C70" />
+                                            <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
+                                            <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+                                        </ResourceDictionary>
+                                    </ResourceDictionary.ThemeDictionaries>
+                                </ResourceDictionary>
+                            </TextBox.Resources>
+                        </TextBox>
                     </Border>
 
                     <Button
@@ -170,6 +225,7 @@
 
                 <!-- Inline Settings Card -->
                 <Border
+                    x:Name="SettingsCardBorder"
                     Grid.Row="2"
                     Margin="16,8,16,8"
                     Padding="16"
@@ -178,12 +234,17 @@
                     BorderBrush="{ThemeResource ControlBorderBrush}"
                     BorderThickness="1"
                     Visibility="{x:Bind ViewModel.SettingsVisibility, Mode=OneWay}">
+                    <Border.RenderTransform>
+                        <TranslateTransform x:Name="SettingsTranslate" />
+                    </Border.RenderTransform>
                     <StackPanel Spacing="12">
                         <TextBlock
                             Text="Settings"
                             FontSize="12"
                             FontWeight="SemiBold"
                             Foreground="{ThemeResource TextSecondaryBrush}" />
+
+                        <!-- Dark Mode Toggle -->
                         <Grid>
                             <TextBlock
                                 Text="Dark mode"
@@ -217,6 +278,76 @@
                                 </Border>
                             </Button>
                         </Grid>
+
+                        <!-- Fluid Typing Animation Toggle -->
+                        <Grid>
+                            <TextBlock
+                                Text="Fluid typing"
+                                FontSize="14"
+                                FontWeight="SemiBold"
+                                Foreground="{ThemeResource TextPrimaryBrush}"
+                                VerticalAlignment="Center" />
+                            <Button
+                                HorizontalAlignment="Right"
+                                Padding="0"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Command="{x:Bind ViewModel.ToggleFluidAnimationCommand}"
+                                ToolTipService.ToolTip="Toggle fluid typing animation">
+                                <Border
+                                    Width="48"
+                                    Height="26"
+                                    CornerRadius="13"
+                                    Background="{ThemeResource ToggleTrackBrush}"
+                                    BorderBrush="{ThemeResource GlassBorderBrush}"
+                                    BorderThickness="1"
+                                    Padding="3,0">
+                                    <Ellipse
+                                        Width="18"
+                                        Height="18"
+                                        Fill="{ThemeResource ToggleThumbBrush}"
+                                        Stroke="{ThemeResource GlassBorderBrush}"
+                                        StrokeThickness="1"
+                                        VerticalAlignment="Center"
+                                        HorizontalAlignment="{x:Bind ViewModel.FluidToggleThumbAlignment, Mode=OneWay}" />
+                                </Border>
+                            </Button>
+                        </Grid>
+
+                        <!-- Tree Shortcut Toggle -->
+                        <Grid>
+                            <TextBlock
+                                Text="Tree shortcut (Shift+Enter)"
+                                FontSize="13"
+                                FontWeight="SemiBold"
+                                Foreground="{ThemeResource TextPrimaryBrush}"
+                                VerticalAlignment="Center" />
+                            <Button
+                                HorizontalAlignment="Right"
+                                Padding="0"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Command="{x:Bind ViewModel.ToggleTreeShortcutCommand}"
+                                ToolTipService.ToolTip="Insert connected tree branches with Shift+Enter">
+                                <Border
+                                    Width="48"
+                                    Height="26"
+                                    CornerRadius="13"
+                                    Background="{ThemeResource ToggleTrackBrush}"
+                                    BorderBrush="{ThemeResource GlassBorderBrush}"
+                                    BorderThickness="1"
+                                    Padding="3,0">
+                                    <Ellipse
+                                        Width="18"
+                                        Height="18"
+                                        Fill="{ThemeResource ToggleThumbBrush}"
+                                        Stroke="{ThemeResource GlassBorderBrush}"
+                                        StrokeThickness="1"
+                                        VerticalAlignment="Center"
+                                        HorizontalAlignment="{x:Bind ViewModel.TreeToggleThumbAlignment, Mode=OneWay}" />
+                                </Border>
+                            </Button>
+                        </Grid>
                     </StackPanel>
                 </Border>
 
@@ -245,10 +376,12 @@
             <Grid Grid.Column="1">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="2" />
                     <RowDefinition Height="48" />
                 </Grid.RowDefinitions>
 
                 <TextBox
+                    x:Name="EditorTextBox"
                     Grid.Row="0"
                     AcceptsReturn="True"
                     TextWrapping="Wrap"
@@ -261,15 +394,91 @@
                     Background="Transparent"
                     BorderThickness="0"
                     Padding="48,32,48,16"
-                    ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                    ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <TextBox.RenderTransform>
+                        <TranslateTransform x:Name="EditorTranslate" />
+                    </TextBox.RenderTransform>
+                    <TextBox.Resources>
+                        <ResourceDictionary>
+                            <ResourceDictionary.ThemeDictionaries>
+                                <ResourceDictionary x:Key="Default">
+                                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlForeground" Color="#FFF5F5F7" />
+                                    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFF5F5F7" />
+                                    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFF5F5F7" />
+                                    <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8E8E93" />
+                                    <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8E8E93" />
+                                    <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF8E8E93" />
+                                    <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
+                                    <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+                                </ResourceDictionary>
+                                <ResourceDictionary x:Key="Dark">
+                                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlForeground" Color="#FFF5F5F7" />
+                                    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFF5F5F7" />
+                                    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFF5F5F7" />
+                                    <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8E8E93" />
+                                    <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8E8E93" />
+                                    <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF8E8E93" />
+                                    <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
+                                    <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+                                </ResourceDictionary>
+                                <ResourceDictionary x:Key="Light">
+                                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+                                    <SolidColorBrush x:Key="TextControlForeground" Color="#FF1C1C1E" />
+                                    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FF1C1C1E" />
+                                    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FF1C1C1E" />
+                                    <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF6C6C70" />
+                                    <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF6C6C70" />
+                                    <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF6C6C70" />
+                                    <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
+                                    <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+                                </ResourceDictionary>
+                            </ResourceDictionary.ThemeDictionaries>
+                        </ResourceDictionary>
+                    </TextBox.Resources>
+                </TextBox>
+
+                <!-- Fluid Typing Glow Bar -->
+                <Border
+                    x:Name="FluidTypingBar"
+                    Grid.Row="1"
+                    Margin="48,0"
+                    CornerRadius="1"
+                    Opacity="0"
+                    Background="{ThemeResource GlassBorderBrush}">
+                    <Border.RenderTransform>
+                        <ScaleTransform x:Name="FluidBarScale" ScaleX="0.2" />
+                    </Border.RenderTransform>
+                </Border>
 
                 <!-- Status Bar -->
-                <Grid Grid.Row="1" Padding="48,0">
+                <Grid Grid.Row="2" Padding="48,0">
                     <TextBlock
+                        x:Name="WordCountLabel"
                         Text="{x:Bind ViewModel.WordCountText, Mode=OneWay}"
                         FontSize="12"
                         Foreground="{ThemeResource TextSecondaryBrush}"
-                        VerticalAlignment="Center" />
+                        VerticalAlignment="Center">
+                        <TextBlock.RenderTransform>
+                            <TranslateTransform x:Name="WordCountTranslate" />
+                        </TextBlock.RenderTransform>
+                    </TextBlock>
                     <TextBlock
                         Text="{x:Bind ViewModel.SaveStatusText, Mode=OneWay}"
                         FontSize="12"
