@@ -3847,7 +3847,7 @@ public sealed partial class MainWindow : Window
                 var targetBlock = (sender as TextBox)?.Tag as LiveDocBlock ?? _activeLiveBlock;
                 foreach (var item in items)
                 {
-                    if (item is StorageFile file && IsSupportedImageFile(file.Path))
+                    if (item is StorageFile file && IsSupportedNoteImageExtension(Path.GetExtension(file.Path)))
                     {
                         e.Handled = true;
                         await InsertImageFileIntoCurrentNoteAsync(file.Path, targetBlock);
