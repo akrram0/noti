@@ -79,15 +79,12 @@ public sealed partial class MainWindow : Window
 
             if (currentLine.StartsWith(BranchEnd, StringComparison.Ordinal))
             {
-                var updated = string.Concat(
-                    text.AsSpan(0, lineStart),
-                    BranchMid,
-                    text.AsSpan(lineStart + BranchEnd.Length, caret - (lineStart + BranchEnd.Length)),
-                    "\r",
-                    BranchPipe,
-                    "\r",
-                    BranchEnd,
-                    text.AsSpan(caret));
+                var updated =
+                    text[..lineStart] +
+                    BranchMid +
+                    text[(lineStart + BranchEnd.Length)..caret] +
+                    $"\r{BranchPipe}\r{BranchEnd}" +
+                    text[caret..];
 
                 var newCaret = caret - BranchEnd.Length + BranchMid.Length + 1 + BranchPipe.Length + 1 + BranchEnd.Length;
                 ApplyEditorText(updated, newCaret);
@@ -110,7 +107,7 @@ public sealed partial class MainWindow : Window
             e.Handled = true;
             var removeStart = lineStart;
             var pipePrefix = $"{BranchPipe}\r";
-            if (lineStart >= pipePrefix.Length && text.AsSpan(lineStart - pipePrefix.Length, pipePrefix.Length).SequenceEqual(pipePrefix))
+            if (lineStart >= pipePrefix.Length && text[(lineStart - pipePrefix.Length)..lineStart] == pipePrefix)
                 removeStart -= pipePrefix.Length;
 
             var updated = text.Remove(removeStart, lineEnd - removeStart);
