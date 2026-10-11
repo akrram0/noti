@@ -252,6 +252,7 @@
                                 x:Name="PillBorder"
                                 Height="{TemplateBinding Height}"
                                 Padding="{TemplateBinding Padding}"
+                                HorizontalAlignment="{TemplateBinding HorizontalAlignment}"
                                 CornerRadius="10"
                                 Background="{TemplateBinding Background}"
                                 BorderThickness="0"
@@ -274,7 +275,7 @@
                                 </VisualStateManager.VisualStateGroups>
                                 <ContentPresenter
                                     x:Name="Presenter"
-                                    HorizontalAlignment="Center"
+                                    HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                     VerticalAlignment="Center"
                                     Foreground="{TemplateBinding Foreground}" />
                             </Border>
@@ -324,10 +325,30 @@
                 </Setter>
             </Style>
 
-            <!-- Crisp Sidebar List Item Style (no ScaleTransform so note titles & snippets use native DirectWrite hinting) -->
+            <!-- Crisp Sidebar List Item Style (hover surface is placed inside the indented DataTemplate so nested items never double-box) -->
             <Style x:Key="MinimalListViewItemStyle" TargetType="ListViewItem">
                 <Setter Property="Padding" Value="0" />
                 <Setter Property="Margin" Value="0" />
+                <Setter Property="MinHeight" Value="0" />
+                <Setter Property="UseLayoutRounding" Value="True" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="VerticalContentAlignment" Value="Stretch" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ListViewItem">
+                            <ContentPresenter
+                                UseLayoutRounding="True"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Stretch" />
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Borderless Raycast-Style Command Palette Row Style (Selected + PointerOver states) -->
+            <Style x:Key="CommandPaletteItemStyle" TargetType="ListViewItem">
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Margin" Value="0,1" />
                 <Setter Property="MinHeight" Value="0" />
                 <Setter Property="UseLayoutRounding" Value="True" />
                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -341,22 +362,43 @@
                                         <VisualState x:Name="Normal" />
                                         <VisualState x:Name="PointerOver">
                                             <VisualState.Setters>
-                                                <Setter Target="HoverSurface.Opacity" Value="1" />
+                                                <Setter Target="ItemSurface.Background" Value="{ThemeResource SurfaceHoverBrush}" />
+                                                <Setter Target="ItemSurface.Opacity" Value="1" />
                                             </VisualState.Setters>
                                         </VisualState>
                                         <VisualState x:Name="Pressed">
                                             <VisualState.Setters>
-                                                <Setter Target="HoverSurface.Opacity" Value="0.6" />
+                                                <Setter Target="ItemSurface.Background" Value="{ThemeResource SurfaceActiveBrush}" />
+                                                <Setter Target="ItemSurface.Opacity" Value="1" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Selected">
+                                            <VisualState.Setters>
+                                                <Setter Target="ItemSurface.Background" Value="{ThemeResource SurfaceActiveBrush}" />
+                                                <Setter Target="ItemSurface.Opacity" Value="1" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="PointerOverSelected">
+                                            <VisualState.Setters>
+                                                <Setter Target="ItemSurface.Background" Value="{ThemeResource SurfaceActiveBrush}" />
+                                                <Setter Target="ItemSurface.Opacity" Value="1" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="PressedSelected">
+                                            <VisualState.Setters>
+                                                <Setter Target="ItemSurface.Background" Value="{ThemeResource SurfaceActiveBrush}" />
+                                                <Setter Target="ItemSurface.Opacity" Value="1" />
                                             </VisualState.Setters>
                                         </VisualState>
                                     </VisualStateGroup>
                                 </VisualStateManager.VisualStateGroups>
                                 <Border
-                                    x:Name="HoverSurface"
+                                    x:Name="ItemSurface"
                                     CornerRadius="12"
                                     Background="{ThemeResource SurfaceHoverBrush}"
                                     Opacity="0" />
                                 <ContentPresenter
+                                    UseLayoutRounding="True"
                                     HorizontalAlignment="Stretch"
                                     VerticalAlignment="Stretch" />
                             </Grid>

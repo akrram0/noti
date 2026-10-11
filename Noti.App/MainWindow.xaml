@@ -12,15 +12,23 @@
         DragOver="OnRootGridDragOver"
         Drop="OnRootGridDrop"
         PointerWheelChanged="OnRootPointerWheelChanged"
-        Background="{ThemeResource CanvasBackgroundBrush}"
+        Background="Transparent"
         RequestedTheme="{x:Bind ViewModel.CurrentElementTheme, Mode=OneWay}">
         <Grid.RowDefinitions>
             <RowDefinition Height="48" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
+        <!-- Dynamic Surface Tint Layer over Native Windows 11 Mica Alt Backdrop -->
+        <Border
+            x:Name="CanvasTintLayer"
+            Grid.RowSpan="2"
+            IsHitTestVisible="False"
+            Background="{ThemeResource CanvasBackgroundBrush}"
+            Opacity="{x:Bind ViewModel.SurfaceOpacity, Mode=OneWay}" />
+
         <!-- Borderless Top Title Bar -->
-        <Grid Grid.Row="0" Background="{ThemeResource CanvasBackgroundBrush}">
+        <Grid Grid.Row="0" Background="Transparent">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -171,13 +179,21 @@
                 <Grid
                     Margin="8,0,0,8"
                     CornerRadius="16"
-                    Background="{ThemeResource SidebarBackgroundBrush}">
+                    Background="Transparent">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="56" />
                     </Grid.RowDefinitions>
+
+                    <!-- Dynamic Sidebar Tint Layer (allows Mica Alt to shine through while keeping text 100% crisp) -->
+                    <Border
+                        Grid.RowSpan="4"
+                        CornerRadius="16"
+                        IsHitTestVisible="False"
+                        Background="{ThemeResource SidebarBackgroundBrush}"
+                        Opacity="{x:Bind ViewModel.SidebarSurfaceOpacity, Mode=OneWay}" />
 
                 <!-- Search, New Note & New Folder -->
                 <Grid Grid.Row="0" Padding="14,12,14,8">
@@ -194,7 +210,7 @@
                         Background="{ThemeResource InputBackgroundBrush}"
                         BorderThickness="0">
                         <TextBox
-                            PlaceholderText="Search"
+                            PlaceholderText="Search (Ctrl+K)"
                             Text="{x:Bind ViewModel.SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                             FontSize="13"
                             MinHeight="0"
@@ -344,12 +360,20 @@
                     </ListView.ItemContainerTransitions>
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="vm:NoteItemViewModel">
-                            <Grid Margin="{x:Bind IndentMargin, Mode=OneWay}">
+                            <Grid
+                                Margin="{x:Bind IndentMargin, Mode=OneWay}"
+                                Background="Transparent"
+                                PointerEntered="OnSidebarRowPointerEntered"
+                                PointerExited="OnSidebarRowPointerExited">
+                                <Border
+                                    Background="{ThemeResource SurfaceHoverBrush}"
+                                    CornerRadius="12"
+                                    Opacity="0" />
                                 <!-- Folder Row with Open/Closed Icon + Add Note + Delete Folder -->
                                 <Border
                                     Visibility="{x:Bind FolderVisibility, Mode=OneWay}"
                                     Padding="10,7"
-                                    CornerRadius="10"
+                                    CornerRadius="12"
                                     Background="Transparent">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -491,11 +515,13 @@
 
                     <Button
                         Grid.Column="0"
-                        Padding="6,4"
+                        Height="42"
+                        Padding="8,4"
+                        Margin="0,0,6,0"
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Left"
                         Background="Transparent"
-                        BorderThickness="0"
+                        Style="{StaticResource GlassPillButtonStyle}"
                         Command="{x:Bind ViewModel.ToggleSettingsCommand}"
                         ToolTipService.ToolTip="Profile &amp; Settings">
                         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
@@ -703,13 +729,13 @@
                     </Grid>
                 </Grid>
 
-                <!-- 2. Full-Window In-App Settings View (Borderless, Crisp Opacity Transition) -->
+                <!-- 2. Full-Window In-App Settings View (Borderless, Crisp Opacity Transition over Mica Alt) -->
                 <Grid
                     x:Name="SettingsOverlayGrid"
                     UseLayoutRounding="True"
                     Visibility="Collapsed"
                     Opacity="0"
-                    Background="{ThemeResource CanvasBackgroundBrush}">
+                    Background="Transparent">
 
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,20,32,36">
                         <StackPanel MaxWidth="660" HorizontalAlignment="Stretch" Spacing="20">
@@ -831,7 +857,7 @@
                                 </Grid>
                             </Border>
 
-                            <!-- Section 2: Smart Theme, Zoom & Typing Animations -->
+                            <!-- Section 2: Smart Theme, Mica Alt Opacity, Zoom & Typing Animations -->
                             <Border
                                 Padding="20"
                                 CornerRadius="16"
@@ -896,6 +922,53 @@
                                                 </StackPanel>
                                             </Grid>
                                         </Border>
+                                    </Grid>
+
+                                    <!-- Background Opacity / Mica Alt Tint Slider (30% - 100%) -->
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center" Margin="0,0,16,0">
+                                            <TextBlock
+                                                Text="Background Opacity / Tint"
+                                                FontSize="14"
+                                                FontWeight="SemiBold"
+                                                Foreground="{ThemeResource TextPrimaryBrush}" />
+                                            <TextBlock
+                                                Text="Blend native Windows 11 Mica Alt glass (30%) to solid surface (100%)"
+                                                FontSize="12"
+                                                Foreground="{ThemeResource TextSecondaryBrush}" />
+                                        </StackPanel>
+                                        <StackPanel
+                                            Grid.Column="1"
+                                            Orientation="Horizontal"
+                                            Spacing="10"
+                                            VerticalAlignment="Center">
+                                            <Slider
+                                                Width="148"
+                                                Minimum="30"
+                                                Maximum="100"
+                                                StepFrequency="1"
+                                                IsThumbToolTipEnabled="False"
+                                                Value="{x:Bind ViewModel.SurfaceOpacityPercent, Mode=TwoWay}"
+                                                ValueChanged="OnOpacitySliderValueChanged"
+                                                VerticalAlignment="Center" />
+                                            <Border
+                                                Width="52"
+                                                Padding="8,4"
+                                                CornerRadius="8"
+                                                Background="{ThemeResource SurfaceActiveBrush}"
+                                                VerticalAlignment="Center">
+                                                <TextBlock
+                                                    Text="{x:Bind ViewModel.SurfaceOpacityText, Mode=OneWay}"
+                                                    FontSize="12"
+                                                    FontWeight="SemiBold"
+                                                    TextAlignment="Center"
+                                                    Foreground="{ThemeResource TextPrimaryBrush}" />
+                                            </Border>
+                                        </StackPanel>
                                     </Grid>
 
                                     <!-- Zoom & Font Scale (Ctrl++ / Ctrl+-) -->
@@ -1032,24 +1105,44 @@
                                         FontSize="12"
                                         Foreground="{ThemeResource TextPrimaryBrush}"
                                         TextWrapping="Wrap" />
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Grid ColumnSpacing="8" RowSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
                                         <Button
+                                            Grid.Row="0"
+                                            Grid.Column="0"
+                                            HorizontalAlignment="Stretch"
                                             Content="Import .md (Ctrl+O)"
                                             Style="{StaticResource GlassPillButtonStyle}"
                                             Click="OnImportMarkdownClick" />
                                         <Button
+                                            Grid.Row="0"
+                                            Grid.Column="1"
+                                            HorizontalAlignment="Stretch"
                                             Content="Export .md (Ctrl+Shift+S)"
                                             Style="{StaticResource GlassPillButtonStyle}"
                                             Click="OnExportMarkdownClick" />
                                         <Button
+                                            Grid.Row="1"
+                                            Grid.Column="0"
+                                            HorizontalAlignment="Stretch"
                                             Content="Change Vault Folder..."
                                             Style="{StaticResource GlassPillButtonStyle}"
                                             Click="OnChangeVaultFolderClick" />
                                         <Button
+                                            Grid.Row="1"
+                                            Grid.Column="1"
+                                            HorizontalAlignment="Stretch"
                                             Content="Open in Explorer"
                                             Style="{StaticResource GlassPillButtonStyle}"
                                             Command="{x:Bind ViewModel.OpenVaultFolderCommand}" />
-                                    </StackPanel>
+                                    </Grid>
                                 </StackPanel>
                             </Border>
 
@@ -1094,13 +1187,14 @@
                                         Foreground="{ThemeResource TextSecondaryBrush}"
                                         Margin="0,0,0,4" />
 
+                                    <Grid><TextBlock Text="Command Palette (Search &amp; Actions)" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Ctrl + K / Ctrl + P" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid><TextBlock Text="Zoom In / Zoom Out / Reset Zoom" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Ctrl + Plus / Ctrl + Minus / Ctrl + 0" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid><TextBlock Text="Insert / continue connected tree branch" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Shift + Enter" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid><TextBlock Text="Indent / outdent tree branch" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Tab / Shift + Tab" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid><TextBlock Text="Cycle Write / Split / View mode" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Ctrl + E" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid><TextBlock Text="New note / New folder" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Ctrl + N / Ctrl + Shift + N" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid><TextBlock Text="Import .md / Export .md" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Ctrl + O / Ctrl + Shift + S" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
-                                    <Grid><TextBlock Text="Bold / Italic / Checklist (- [ ])" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Ctrl + B / Ctrl + I / Ctrl + K" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
+                                    <Grid><TextBlock Text="Bold / Italic / Checklist (- [ ])" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Ctrl + B / Ctrl + I / Ctrl + L" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid><TextBlock Text="Heading 1 / 2 / 3" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Ctrl + 1 / 2 / 3" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid><TextBlock Text="Delete selected note" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Ctrl + Delete" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid><TextBlock Text="Toggle Sidebar / Full-Window Settings" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Ctrl + \ / Ctrl + ," FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
@@ -1108,6 +1202,163 @@
                             </Border>
                         </StackPanel>
                     </ScrollViewer>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <!-- Raycast-Style Command Palette Floating Modal (Ctrl+K / Ctrl+P) -->
+        <Grid
+            x:Name="CommandPaletteOverlay"
+            Grid.RowSpan="2"
+            UseLayoutRounding="True"
+            Visibility="Collapsed"
+            Opacity="0"
+            Background="{ThemeResource ModalBackdropBrush}"
+            PointerPressed="OnCommandPaletteBackdropPressed">
+            <Grid
+                Width="520"
+                MaxHeight="420"
+                Margin="0,72,0,0"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                PointerPressed="OnCommandPaletteCardPointerPressed">
+                <!-- Background-Only Surface with ScaleTransform so DirectWrite Text Remains 100% Crisp -->
+                <Border
+                    x:Name="CommandPaletteSurfaceBorder"
+                    CornerRadius="16"
+                    Background="{ThemeResource SidebarBackgroundBrush}"
+                    BorderThickness="0"
+                    RenderTransformOrigin="0.5,0.5">
+                    <Border.RenderTransform>
+                        <ScaleTransform x:Name="CommandPaletteScale" ScaleX="1" ScaleY="1" />
+                    </Border.RenderTransform>
+                </Border>
+
+                <Grid Padding="14">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Command / Note Search Input Bar -->
+                    <Border
+                        Grid.Row="0"
+                        Margin="0,0,0,10"
+                        Padding="12,4"
+                        CornerRadius="12"
+                        Background="{ThemeResource InputBackgroundBrush}"
+                        BorderThickness="0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon
+                                Grid.Column="0"
+                                Glyph="&#xE721;"
+                                FontSize="14"
+                                Foreground="{ThemeResource TextSecondaryBrush}"
+                                VerticalAlignment="Center" />
+                            <TextBox
+                                x:Name="CommandPaletteSearchBox"
+                                Grid.Column="1"
+                                PlaceholderText="Search notes or run a command..."
+                                Text="{x:Bind ViewModel.CommandSearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                PreviewKeyDown="OnCommandPaletteSearchKeyDown"
+                                IsSpellCheckEnabled="False"
+                                FontSize="14"
+                                MinHeight="0"
+                                Height="34"
+                                Padding="10,6"
+                                Foreground="{ThemeResource TextPrimaryBrush}"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                VerticalAlignment="Center" />
+                            <Border
+                                Grid.Column="2"
+                                Padding="6,2"
+                                CornerRadius="6"
+                                Background="{ThemeResource SurfaceActiveBrush}"
+                                VerticalAlignment="Center">
+                                <TextBlock
+                                    Text="ESC"
+                                    FontSize="10"
+                                    FontWeight="SemiBold"
+                                    Foreground="{ThemeResource TextSecondaryBrush}" />
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <!-- Keyboard-Navigable Results List (Notes + Actions) -->
+                    <ListView
+                        x:Name="CommandPaletteListView"
+                        Grid.Row="1"
+                        MaxHeight="316"
+                        SelectionMode="Single"
+                        IsItemClickEnabled="True"
+                        ItemClick="OnCommandPaletteItemClick"
+                        ItemsSource="{x:Bind ViewModel.CommandPaletteItems, Mode=OneWay}"
+                        SelectedIndex="{x:Bind ViewModel.SelectedCommandIndex, Mode=TwoWay}"
+                        ItemContainerStyle="{StaticResource CommandPaletteItemStyle}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:CommandPaletteItem">
+                                <Grid Padding="12,9">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border
+                                        Grid.Column="0"
+                                        Width="28"
+                                        Height="28"
+                                        Margin="0,0,12,0"
+                                        CornerRadius="8"
+                                        Background="{ThemeResource InputBackgroundBrush}"
+                                        VerticalAlignment="Center">
+                                        <FontIcon
+                                            Glyph="{x:Bind IconGlyph}"
+                                            FontSize="12"
+                                            Foreground="{ThemeResource TextPrimaryBrush}"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center" />
+                                    </Border>
+
+                                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock
+                                            Text="{x:Bind Title}"
+                                            FontSize="13"
+                                            FontWeight="SemiBold"
+                                            Foreground="{ThemeResource TextPrimaryBrush}"
+                                            MaxLines="1"
+                                            TextTrimming="CharacterEllipsis" />
+                                        <TextBlock
+                                            Text="{x:Bind Subtitle}"
+                                            FontSize="11"
+                                            Foreground="{ThemeResource TextSecondaryBrush}"
+                                            MaxLines="1"
+                                            TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+
+                                    <Border
+                                        Grid.Column="2"
+                                        Margin="8,0,0,0"
+                                        Padding="8,3"
+                                        CornerRadius="6"
+                                        Background="{ThemeResource InputBackgroundBrush}"
+                                        VerticalAlignment="Center">
+                                        <TextBlock
+                                            Text="{x:Bind Badge}"
+                                            FontSize="11"
+                                            FontWeight="SemiBold"
+                                            Foreground="{ThemeResource TextSecondaryBrush}" />
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
                 </Grid>
             </Grid>
         </Grid>

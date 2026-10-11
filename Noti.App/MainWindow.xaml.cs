@@ -1,10 +1,13 @@
 using System.ComponentModel;
 using Microsoft.UI;
+using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Noti.App.ViewModels;
 using Windows.ApplicationModel.DataTransfer;
@@ -26,11 +29,13 @@ public sealed partial class MainWindow : Window
 
     private Storyboard? _typingWordStoryboard;
     private string? _pendingDeleteFolderPath;
+    private bool _isCommandPaletteOpen;
 
     public MainWindow(MainViewModel viewModel)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ViewModel = viewModel;
+        ViewModel.RequestExportMarkdown = () => _ = PickAndExportMarkdownAsync();
 
         InitializeComponent();
         ConfigureWindowChrome();
@@ -69,6 +74,9 @@ public sealed partial class MainWindow : Window
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Noti.ico");
         if (File.Exists(iconPath))
             AppWindow.SetIcon(iconPath);
+
+        if (MicaController.IsSupported())
+            SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
 
         if (AppWindowTitleBar.IsCustomizationSupported())
         {
@@ -118,6 +126,12 @@ public sealed partial class MainWindow : Window
     {
         if (e.Key == VirtualKey.Escape)
         {
+            if (_isCommandPaletteOpen)
+            {
+                ShowCommandPalette(open: false);
+                e.Handled = true;
+                return;
+            }
             if (DeleteFolderConfirmOverlay.Visibility == Visibility.Visible)
             {
                 ShowDeleteFolderOverlay(open: false);
@@ -145,6 +159,12 @@ public sealed partial class MainWindow : Window
 
         switch (e.Key)
         {
+            case VirtualKey.K:
+            case VirtualKey.P:
+                e.Handled = true;
+                ToggleCommandPalette();
+                break;
+
             case (VirtualKey)187: // Ctrl + Plus / Equals
             case VirtualKey.Add:
                 e.Handled = true;
@@ -228,7 +248,7 @@ public sealed partial class MainWindow : Window
                     e.Handled = true;
                     WrapEditorSelection("*", "*");
                     return;
-                case VirtualKey.K:
+                case VirtualKey.L:
                     e.Handled = true;
                     ToggleLinePrefix("- [ ] ");
                     return;
@@ -746,7 +766,12 @@ public sealed partial class MainWindow : Window
         if (open)
         {
             ThemeIndicatorTranslate.X = ViewModel.ThemeIndicatorOffsetX;
+            MainWorkspaceGrid.Visibility = Visibility.Collapsed;
             SettingsOverlayGrid.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            MainWorkspaceGrid.Visibility = Visibility.Visible;
         }
 
         var gearSpin = new DoubleAnimation
@@ -787,6 +812,160 @@ public sealed partial class MainWindow : Window
         }
 
         sb.Begin();
+    }
+
+    private void OnOpacitySliderValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (e.NewValue >= 30.0)
+            ViewModel.SurfaceOpacityPercent = e.NewValue;
+    }
+
+    private void ToggleCommandPalette() =>
+        ShowCommandPalette(!_isCommandPaletteOpen);
+
+    private void ShowCommandPalette(bool open)
+    {
+        _isCommandPaletteOpen = open;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var sb = new Storyboard();
+
+        if (open)
+        {
+            if (DeleteFolderConfirmOverlay.Visibility == Visibility.Visible)
+                ShowDeleteFolderOverlay(open: false);
+
+            ViewModel.CommandSearchQuery = string.Empty;
+            ViewModel.RefreshCommandPaletteItems();
+            CommandPaletteOverlay.Visibility = Visibility.Visible;
+
+            var fadeIn = new DoubleAnimation
+            {
+                From = 0.0,
+                To = 1.0,
+                Duration = new Duration(TimeSpan.FromMilliseconds(160)),
+                EasingFunction = ease,
+                FillBehavior = FillBehavior.Stop
+            };
+            Storyboard.SetTarget(fadeIn, CommandPaletteOverlay);
+            Storyboard.SetTargetProperty(fadeIn, "Opacity");
+
+            var scaleX = new DoubleAnimation
+            {
+                From = 0.95,
+                To = 1.0,
+                Duration = new Duration(TimeSpan.FromMilliseconds(180)),
+                EasingFunction = ease,
+                FillBehavior = FillBehavior.Stop
+            };
+            Storyboard.SetTarget(scaleX, CommandPaletteScale);
+            Storyboard.SetTargetProperty(scaleX, "ScaleX");
+
+            var scaleY = new DoubleAnimation
+            {
+                From = 0.95,
+                To = 1.0,
+                Duration = new Duration(TimeSpan.FromMilliseconds(180)),
+                EasingFunction = ease,
+                FillBehavior = FillBehavior.Stop
+            };
+            Storyboard.SetTarget(scaleY, CommandPaletteScale);
+            Storyboard.SetTargetProperty(scaleY, "ScaleY");
+
+            CommandPaletteOverlay.Opacity = 1.0;
+            CommandPaletteScale.ScaleX = 1.0;
+            CommandPaletteScale.ScaleY = 1.0;
+
+            sb.Children.Add(fadeIn);
+            sb.Children.Add(scaleX);
+            sb.Children.Add(scaleY);
+            sb.Begin();
+
+            CommandPaletteSearchBox.Focus(FocusState.Programmatic);
+        }
+        else
+        {
+            var fadeOut = new DoubleAnimation
+            {
+                From = CommandPaletteOverlay.Opacity,
+                To = 0.0,
+                Duration = new Duration(TimeSpan.FromMilliseconds(120)),
+                EasingFunction = ease,
+                FillBehavior = FillBehavior.Stop
+            };
+            Storyboard.SetTarget(fadeOut, CommandPaletteOverlay);
+            Storyboard.SetTargetProperty(fadeOut, "Opacity");
+
+            CommandPaletteOverlay.Opacity = 0.0;
+            sb.Children.Add(fadeOut);
+            sb.Completed += (_, _) =>
+            {
+                if (!_isCommandPaletteOpen)
+                {
+                    CommandPaletteOverlay.Visibility = Visibility.Collapsed;
+                    if (!ViewModel.IsSettingsOpen)
+                        EditorTextBox.Focus(FocusState.Programmatic);
+                }
+            };
+            sb.Begin();
+        }
+    }
+
+    private void OnCommandPaletteBackdropPressed(object sender, PointerRoutedEventArgs e) =>
+        ShowCommandPalette(open: false);
+
+    private void OnCommandPaletteCardPointerPressed(object sender, PointerRoutedEventArgs e) =>
+        e.Handled = true;
+
+    private void OnCommandPaletteSearchKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case VirtualKey.Down:
+                e.Handled = true;
+                ViewModel.MoveCommandSelection(1);
+                if (CommandPaletteListView.SelectedItem is not null)
+                    CommandPaletteListView.ScrollIntoView(CommandPaletteListView.SelectedItem);
+                break;
+
+            case VirtualKey.Up:
+                e.Handled = true;
+                ViewModel.MoveCommandSelection(-1);
+                if (CommandPaletteListView.SelectedItem is not null)
+                    CommandPaletteListView.ScrollIntoView(CommandPaletteListView.SelectedItem);
+                break;
+
+            case VirtualKey.Enter:
+                e.Handled = true;
+                if (CommandPaletteListView.SelectedItem is CommandPaletteItem selected)
+                    ExecuteCommandPaletteItem(selected);
+                else if (ViewModel.CommandPaletteItems.Count > 0)
+                    ExecuteCommandPaletteItem(ViewModel.CommandPaletteItems[0]);
+                break;
+
+            case VirtualKey.Escape:
+                e.Handled = true;
+                ShowCommandPalette(open: false);
+                break;
+        }
+    }
+
+    private void OnCommandPaletteItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is CommandPaletteItem item)
+            ExecuteCommandPaletteItem(item);
+    }
+
+    private void ExecuteCommandPaletteItem(CommandPaletteItem item)
+    {
+        ShowCommandPalette(open: false);
+        if (item.TargetNote is not null)
+        {
+            ViewModel.SelectedNote = item.TargetNote;
+            ViewModel.IsSettingsOpen = false;
+            EditorTextBox.Focus(FocusState.Programmatic);
+            return;
+        }
+        item.ExecuteAction?.Invoke();
     }
 
     private static void PlayFluidTransition(UIElement element)
@@ -833,6 +1012,21 @@ public sealed partial class MainWindow : Window
             ViewModel.ToggleFolderExpansion(item.FolderPath);
         else
             ViewModel.SelectedNote = item;
+    }
+
+    private void OnSidebarRowPointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is Grid { Children.Count: > 0 } grid && grid.Children[0] is Border hoverBorder)
+        {
+            var isAlreadySelected = grid.DataContext is NoteItemViewModel { IsFolder: false, IsSelected: true };
+            hoverBorder.Opacity = isAlreadySelected ? 0.0 : 1.0;
+        }
+    }
+
+    private void OnSidebarRowPointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is Grid { Children.Count: > 0 } grid && grid.Children[0] is Border hoverBorder)
+            hoverBorder.Opacity = 0.0;
     }
 
     private void OnCreateNoteInFolderClick(object sender, RoutedEventArgs e)

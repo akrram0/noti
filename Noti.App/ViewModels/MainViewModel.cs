@@ -25,6 +25,30 @@ public enum ThemeMode
     Light = 2
 }
 
+public sealed class CommandPaletteItem : ObservableObject
+{
+    private bool _isSelected;
+
+    public required string Title { get; init; }
+    public required string Subtitle { get; init; }
+    public required string IconGlyph { get; init; }
+    public required string ShortcutHint { get; init; }
+    public NoteItemViewModel? TargetNote { get; init; }
+    public Action? ExecuteAction { get; init; }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (SetProperty(ref _isSelected, value))
+                OnPropertyChanged(nameof(SelectionOpacity));
+        }
+    }
+
+    public double SelectionOpacity => _isSelected ? 1.0 : 0.0;
+}
+
 public sealed class MainViewModel : ObservableObject
 {
     private readonly NoteService _noteService;
@@ -42,6 +66,8 @@ public sealed class MainViewModel : ObservableObject
     private NoteItemViewModel? _selectedNote;
     private string _activeFolderPath = string.Empty;
     private string _searchQuery = string.Empty;
+    private string _commandSearchQuery = string.Empty;
+    private int _selectedCommandIndex;
     private string _editorText = string.Empty;
     private string _saveStatusText = "Saved";
     private bool _isSidebarOpen = true;
@@ -53,6 +79,7 @@ public sealed class MainViewModel : ObservableObject
     private bool _isFluidAnimationEnabled = true;
     private bool _isTreeShortcutEnabled = true;
     private double _editorFontSize = 16.0;
+    private double _surfaceOpacityPercent = 85.0;
     private EditorViewMode _currentViewMode = EditorViewMode.Write;
     private string _userName = "Writer";
     private string _userAvatarPath = string.Empty;
@@ -74,6 +101,7 @@ public sealed class MainViewModel : ObservableObject
         _isFluidAnimationEnabled = _settings.IsFluidAnimationEnabled;
         _isTreeShortcutEnabled = _settings.IsTreeShortcutEnabled;
         _editorFontSize = Math.Clamp(_settings.EditorFontSize, 11.0, 28.0);
+        _surfaceOpacityPercent = Math.Clamp(_settings.SurfaceOpacityPercent <= 0 ? 85.0 : _settings.SurfaceOpacityPercent, 30.0, 100.0);
         _userName = string.IsNullOrWhiteSpace(_settings.UserName) ? "Writer" : _settings.UserName;
         _userAvatarPath = _settings.UserAvatarPath ?? string.Empty;
         LoadAvatarBitmap();
@@ -144,6 +172,8 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public ObservableCollection<NoteItemViewModel> FilteredNotes { get; } = new();
+    public ObservableCollection<CommandPaletteItem> CommandPaletteItems { get; } = new();
+    public Action? RequestExportMarkdown { get; set; }
 
     public IAsyncRelayCommand CreateNoteCommand { get; }
     public IRelayCommand StartNewFolderCommand { get; }
@@ -438,6 +468,137 @@ public sealed class MainViewModel : ObservableObject
 
     public string EditorFontSizeText => $"{_editorFontSize:0} px";
     public string ZoomPercentText => $"{Math.Round(_editorFontSize / 16.0 * 100.0):0}%";
+
+    public double SurfaceOpacityPercent
+    {
+        get => _surfaceOpacityPercent;
+        set
+        {
+            var clamped = Math.Clamp(Math.Round(value), 30.0, 100.0);
+            if (SetProperty(ref _surfaceOpacityPercent, clamped))
+            {
+                _settings.SurfaceOpacityPercent = clamped;
+                _settings.Save();
+                OnPropertyChanged(nameof(SurfaceOpacity));
+                OnPropertyChanged(nameof(SidebarSurfaceOpacity));
+                OnPropertyChanged(nameof(SurfaceOpacityText));
+            }
+        }
+    }
+
+    public double SurfaceOpacity => _surfaceOpacityPercent / 100.0;
+    public double SidebarSurfaceOpacity => Math.Clamp((_surfaceOpacityPercent + 4.0) / 100.0, 0.34, 1.0);
+    public string SurfaceOpacityText => $"{_surfaceOpacityPercent:0}%";
+
+    public string CommandSearchQuery
+    {
+        get => _commandSearchQuery;
+        set
+        {
+            if (SetProperty(ref _commandSearchQuery, value ?? string.Empty))
+                RefreshCommandPaletteItems();
+        }
+    }
+
+    public int SelectedCommandIndex
+    {
+        get => _selectedCommandIndex;
+        set
+        {
+            var count = CommandPaletteItems.Count;
+            var next = count == 0 ? -1 : Math.Clamp(value, 0, count - 1);
+            _selectedCommandIndex = next;
+            for (var i = 0; i < count; i++)
+                CommandPaletteItems[i].IsSelected = i == next;
+            OnPropertyChanged();
+        }
+    }
+
+    public void MoveCommandSelection(int delta)
+    {
+        var count = CommandPaletteItems.Count;
+        if (count == 0)
+            return;
+
+        var next = (_selectedCommandIndex + delta + count) % count;
+        SelectedCommandIndex = next;
+    }
+
+    public void RefreshCommandPaletteItems()
+    {
+        var q = (_commandSearchQuery ?? string.Empty).Trim();
+        CommandPaletteItems.Clear();
+
+        var actions = new List<CommandPaletteItem>
+        {
+            new()
+            {
+                Title = "Create new note",
+                Subtitle = "Create a blank Markdown note in the current folder",
+                IconGlyph = "\uE710",
+                ShortcutHint = "Ctrl+N",
+                ExecuteAction = () => _ = CreateNoteInFolderAsync(_activeFolderPath)
+            },
+            new()
+            {
+                Title = "Toggle Theme",
+                Subtitle = "Switch between Dark and Light appearance",
+                IconGlyph = "\uE793",
+                ShortcutHint = "Theme",
+                ExecuteAction = () => ToggleThemeCommand.Execute(null)
+            },
+            new()
+            {
+                Title = "Open Settings",
+                Subtitle = "Personalize profile, smart theme, opacity & vault",
+                IconGlyph = "\uE713",
+                ShortcutHint = "Ctrl+,",
+                ExecuteAction = () => IsSettingsOpen = true
+            },
+            new()
+            {
+                Title = "Export .md",
+                Subtitle = "Export the current note as a .md file",
+                IconGlyph = "\uEDE1",
+                ShortcutHint = "Ctrl+Shift+S",
+                ExecuteAction = () => RequestExportMarkdown?.Invoke()
+            }
+        };
+
+        var matchingNotes = _allNotes
+            .Where(n => !n.IsFolder &&
+                        (string.IsNullOrEmpty(q) ||
+                         n.Title.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                         n.FolderPath.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                         n.Snippet.Contains(q, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(n => n.IsPinned)
+            .ThenByDescending(n => n.Model?.UpdatedAt ?? DateTimeOffset.MinValue)
+            .Take(8);
+
+        foreach (var noteVm in matchingNotes)
+        {
+            CommandPaletteItems.Add(new CommandPaletteItem
+            {
+                Title = noteVm.Title,
+                Subtitle = string.IsNullOrEmpty(noteVm.FolderPath) ? noteVm.Snippet : $"{noteVm.FolderPath} · {noteVm.Snippet}",
+                IconGlyph = "\uE7C3",
+                ShortcutHint = "Open Note",
+                TargetNote = noteVm
+            });
+        }
+
+        foreach (var action in actions)
+        {
+            if (string.IsNullOrEmpty(q) ||
+                action.Title.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                action.Subtitle.Contains(q, StringComparison.OrdinalIgnoreCase))
+            {
+                CommandPaletteItems.Add(action);
+            }
+        }
+
+        SelectedCommandIndex = CommandPaletteItems.Count > 0 ? 0 : -1;
+    }
 
     public EditorViewMode CurrentViewMode
     {
