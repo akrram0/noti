@@ -107,9 +107,10 @@ public sealed class NoteServiceTests
             Assert.Equal("Project Plan", loaded[0].Title);
             Assert.Equal("Ship unpackaged WinUI build.", loaded[0].Snippet);
 
-            await service.DeleteNoteAsync(created.Id);
-            var afterDelete = await store.LoadAllAsync();
-            Assert.Empty(afterDelete);
+            await service.DeleteFolderAsync("Work");
+            var afterFolderDelete = await store.LoadAllAsync();
+            Assert.Empty(afterFolderDelete);
+            Assert.Empty(await service.GetFoldersAsync());
         }
         finally
         {

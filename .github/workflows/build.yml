@@ -32,6 +32,7 @@ jobs:
           --runtime win-x64
           --self-contained true
           -p:Platform=x64
+          -p:Version=1.0.${{ github.run_number }}
           -p:WindowsPackageType=None
           -p:WindowsAppSDKSelfContained=true
           -p:DebugType=none
@@ -46,7 +47,12 @@ jobs:
           if (!(Test-Path $iscc)) {
             choco install innosetup -y --no-progress
           }
-          & $iscc "/DPublishDir=${{ runner.temp }}\noti-publish" "/DOutputDir=${{ github.workspace }}" "installer\noti.iss"
+          & $iscc "/DAppVersion=1.0.${{ github.run_number }}" "/DPublishDir=${{ runner.temp }}\noti-publish" "/DOutputDir=${{ github.workspace }}" "installer\noti.iss"
+          @{
+            version = "1.0.${{ github.run_number }}"
+            downloadUrl = "https://github.com/akrram0/noti/releases/latest/download/Noti-Setup-win-x64.exe"
+            publishedAt = (Get-Date).ToUniversalTime().ToString("o")
+          } | ConvertTo-Json | Set-Content -Path "${{ github.workspace }}/version.json" -Encoding UTF8
 
       - name: Upload Setup Installer Artifact
         uses: actions/upload-artifact@v4
@@ -62,9 +68,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = "latest"
+          $ver = "1.0.${{ github.run_number }}"
           $exists = gh release view $tag 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag "${{ github.workspace }}/Noti-Setup-win-x64.exe" --title "Noti Latest Setup (win-x64)" --notes "Automated Windows Setup installer for Noti."
+            gh release create $tag "${{ github.workspace }}/Noti-Setup-win-x64.exe" "${{ github.workspace }}/version.json" --title "Noti v$ver Setup (win-x64)" --notes "Automated Windows Setup installer for Noti v$ver."
           } else {
-            gh release upload $tag "${{ github.workspace }}/Noti-Setup-win-x64.exe" --clobber
+            gh release edit $tag --title "Noti v$ver Setup (win-x64)" --notes "Automated Windows Setup installer for Noti v$ver."
+            gh release upload $tag "${{ github.workspace }}/Noti-Setup-win-x64.exe" "${{ github.workspace }}/version.json" --clobber
           }

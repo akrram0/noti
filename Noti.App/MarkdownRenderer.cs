@@ -23,8 +23,8 @@ public static class MarkdownRenderer
 
         var primaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 245, 245, 247) : ColorHelper.FromArgb(255, 28, 28, 30));
         var secondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 108, 108, 112));
-        var surfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 22, 22, 24) : ColorHelper.FromArgb(255, 242, 242, 247));
-        var borderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 38, 38, 38) : ColorHelper.FromArgb(255, 209, 209, 214));
+        var surfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 18, 18, 21) : ColorHelper.FromArgb(255, 244, 244, 248));
+        var borderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 34, 34, 38) : ColorHelper.FromArgb(255, 232, 232, 238));
         var monoFont = new FontFamily("Cascadia Mono, Consolas, Courier New");
 
         if (string.IsNullOrWhiteSpace(markdown))
@@ -51,8 +51,7 @@ public static class MarkdownRenderer
             var card = new Border
             {
                 Background = surfaceBrush,
-                BorderBrush = borderBrush,
-                BorderThickness = new Thickness(1),
+                BorderThickness = new Thickness(0),
                 CornerRadius = new CornerRadius(12),
                 Padding = new Thickness(16, 12, 16, 12),
                 Margin = new Thickness(0, 4, 0, 8),
@@ -85,8 +84,7 @@ public static class MarkdownRenderer
                     var codeCard = new Border
                     {
                         Background = surfaceBrush,
-                        BorderBrush = borderBrush,
-                        BorderThickness = new Thickness(1),
+                        BorderThickness = new Thickness(0),
                         CornerRadius = new CornerRadius(12),
                         Padding = new Thickness(16, 12, 16, 12),
                         Margin = new Thickness(0, 4, 0, 8),

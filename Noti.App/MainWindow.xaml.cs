@@ -36,12 +36,20 @@ public sealed partial class MainWindow : Window
 
         RootGrid.Loaded += (_, _) =>
         {
+            ApplyResponsiveLayout();
+            ThemeIndicatorTranslate.X = ViewModel.ThemeIndicatorOffsetX;
             UpdateTitleBarPassthrough();
             RefreshMarkdownPreview();
         };
-        RootGrid.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
+        RootGrid.SizeChanged += (_, _) =>
+        {
+            ApplyResponsiveLayout();
+            UpdateTitleBarPassthrough();
+        };
         SidebarToggleButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
         ViewSwitcherBorder.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
+        UpdateTopBarButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
+        ZoomBadgeButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
 
         RootGrid.PreviewKeyDown += OnRootPreviewKeyDown;
         EditorTextBox.PreviewKeyDown += OnEditorPreviewKeyDown;
@@ -51,9 +59,11 @@ public sealed partial class MainWindow : Window
 
     public MainViewModel ViewModel { get; }
 
+    private double TargetSidebarWidth => RootGrid.ActualWidth is > 0 and < 860 ? 216.0 : 264.0;
+
     private void ConfigureWindowChrome()
     {
-        AppWindow.Resize(new SizeInt32(1100, 680));
+        AppWindow.Resize(new SizeInt32(1080, 680));
 
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Noti.ico");
         if (File.Exists(iconPath))
@@ -68,6 +78,39 @@ public sealed partial class MainWindow : Window
             titleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
             titleBar.ButtonForegroundColor = Colors.Gray;
         }
+    }
+
+    private void ApplyResponsiveLayout()
+    {
+        var width = RootGrid.ActualWidth;
+        if (width <= 0)
+            return;
+
+        var isCompact = width < 860;
+        var horizPad = isCompact ? 20.0 : 44.0;
+        var vertPad = isCompact ? 18.0 : 28.0;
+
+        EditorTextBox.Padding = new Thickness(horizPad, vertPad, horizPad, 16);
+        MarkdownPreviewPanel.Padding = new Thickness(horizPad, vertPad, horizPad, 20);
+        StatusBarGrid.Padding = new Thickness(horizPad, 0, horizPad, 0);
+
+        if (ViewModel.IsSidebarOpen)
+            SidebarContainer.Width = TargetSidebarWidth;
+    }
+
+    private void OnRootPointerWheelChanged(object sender, PointerRoutedEventArgs e)
+    {
+        var ctrlDown = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(CoreVirtualKeyStates.Down);
+        if (!ctrlDown)
+            return;
+
+        var delta = e.GetCurrentPoint(RootGrid).Properties.MouseWheelDelta;
+        if (delta > 0)
+            ViewModel.IncreaseFontSizeCommand.Execute(null);
+        else if (delta < 0)
+            ViewModel.DecreaseFontSizeCommand.Execute(null);
+
+        e.Handled = true;
     }
 
     private void OnRootPreviewKeyDown(object sender, KeyRoutedEventArgs e)
@@ -95,6 +138,24 @@ public sealed partial class MainWindow : Window
 
         switch (e.Key)
         {
+            case (VirtualKey)187: // Ctrl + Plus / Equals
+            case VirtualKey.Add:
+                e.Handled = true;
+                ViewModel.IncreaseFontSizeCommand.Execute(null);
+                break;
+
+            case (VirtualKey)189: // Ctrl + Minus
+            case VirtualKey.Subtract:
+                e.Handled = true;
+                ViewModel.DecreaseFontSizeCommand.Execute(null);
+                break;
+
+            case VirtualKey.Number0:
+            case VirtualKey.NumberPad0:
+                e.Handled = true;
+                ViewModel.ResetZoomCommand.Execute(null);
+                break;
+
             case VirtualKey.N when shiftDown:
                 e.Handled = true;
                 ViewModel.StartNewFolderCommand.Execute(null);
@@ -183,7 +244,6 @@ public sealed partial class MainWindow : Window
         if (!ViewModel.IsTreeShortcutEnabled)
             return;
 
-        // Tab / Shift+Tab tree branch indentation
         if (e.Key == VirtualKey.Tab)
         {
             var text = EditorTextBox.Text ?? string.Empty;
@@ -217,7 +277,7 @@ public sealed partial class MainWindow : Window
 
         var fullText = EditorTextBox.Text ?? string.Empty;
         var caretPos = Math.Clamp(EditorTextBox.SelectionStart, 0, fullText.Length);
-        if ( HandleTreeEnterKey(fullText, caretPos, shiftDown, out var newText, out var newCaret))
+        if (HandleTreeEnterKey(fullText, caretPos, shiftDown, out var newText, out var newCaret))
         {
             e.Handled = true;
             ApplyEditorText(newText, newCaret);
@@ -238,7 +298,6 @@ public sealed partial class MainWindow : Window
         {
             if (isTreeLine)
             {
-                // Pressing Shift+Enter on an empty branch closes the tree cleanly instead of stacking blank branches
                 if (string.IsNullOrWhiteSpace(body))
                 {
                     ExitEmptyTreeBranch(text, lineStart, lineEnd, indent, out updatedText, out newCaret);
@@ -267,14 +326,12 @@ public sealed partial class MainWindow : Window
                 }
             }
 
-            // Starting a new tree from a plain sentence
             var firstBranch = $"\r{BranchEnd}";
             updatedText = text.Insert(caret, firstBranch);
             newCaret = caret + firstBranch.Length;
             return true;
         }
 
-        // Plain Enter on an empty tree branch exits tree mode cleanly
         if (isTreeLine && string.IsNullOrWhiteSpace(body))
         {
             ExitEmptyTreeBranch(text, lineStart, lineEnd, indent, out updatedText, out newCaret);
@@ -295,7 +352,6 @@ public sealed partial class MainWindow : Window
         var working = text.Remove(lineStart, lineEnd - lineStart);
         newCaret = lineStart;
 
-        // If the previous line was a sibling "├─ ", convert it back to "└── " so the tree has a closed bottom corner
         if (lineStart > 0)
         {
             var prevLineEnd = lineStart - 1;
@@ -459,102 +515,47 @@ public sealed partial class MainWindow : Window
 
     private void TriggerWordTypingAnimation(string activeWord)
     {
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-
-        // Subtle vertical micro-spring on the editor text and word count
-        var microSb = new Storyboard();
-        var editorSpring = new DoubleAnimation
-        {
-            From = 1.2,
-            To = 0.0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(110)),
-            EasingFunction = ease
-        };
-        Storyboard.SetTarget(editorSpring, EditorTranslate);
-        Storyboard.SetTargetProperty(editorSpring, "Y");
-
-        var countSpring = new DoubleAnimation
-        {
-            From = 2.0,
-            To = 0.0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(140)),
-            EasingFunction = ease
-        };
-        Storyboard.SetTarget(countSpring, WordCountTranslate);
-        Storyboard.SetTargetProperty(countSpring, "Y");
-
-        microSb.Children.Add(editorSpring);
-        microSb.Children.Add(countSpring);
-        microSb.Begin();
-
         if (string.IsNullOrWhiteSpace(activeWord))
             return;
+
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
 
         TypingWordText.Text = activeWord;
         _typingWordStoryboard?.Stop();
 
         var wordSb = new Storyboard();
 
-        var scaleX = new DoubleAnimation
+        var fade = new DoubleAnimationUsingKeyFrames
         {
-            From = 0.86,
-            To = 1.0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(130)),
-            EasingFunction = ease
+            FillBehavior = FillBehavior.Stop
         };
-        Storyboard.SetTarget(scaleX, TypingWordScale);
-        Storyboard.SetTargetProperty(scaleX, "ScaleX");
-
-        var scaleY = new DoubleAnimation
-        {
-            From = 0.86,
-            To = 1.0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(130)),
-            EasingFunction = ease
-        };
-        Storyboard.SetTarget(scaleY, TypingWordScale);
-        Storyboard.SetTargetProperty(scaleY, "ScaleY");
-
-        var slideY = new DoubleAnimation
-        {
-            From = 5.0,
-            To = 0.0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(130)),
-            EasingFunction = ease
-        };
-        Storyboard.SetTarget(slideY, TypingWordTranslate);
-        Storyboard.SetTargetProperty(slideY, "Y");
-
-        var fade = new DoubleAnimationUsingKeyFrames();
         fade.KeyFrames.Add(new EasingDoubleKeyFrame
         {
             KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(0)),
-            Value = 0.35
+            Value = 0.4
         });
         fade.KeyFrames.Add(new EasingDoubleKeyFrame
         {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(90)),
-            Value = 0.95,
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(80)),
+            Value = 0.96,
             EasingFunction = ease
         });
         fade.KeyFrames.Add(new EasingDoubleKeyFrame
         {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(380)),
-            Value = 0.95
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(360)),
+            Value = 0.96
         });
         fade.KeyFrames.Add(new EasingDoubleKeyFrame
         {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(650)),
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(620)),
             Value = 0.0,
             EasingFunction = ease
         });
         Storyboard.SetTarget(fade, TypingWordPopupBorder);
         Storyboard.SetTargetProperty(fade, "Opacity");
 
-        wordSb.Children.Add(scaleX);
-        wordSb.Children.Add(scaleY);
-        wordSb.Children.Add(slideY);
         wordSb.Children.Add(fade);
+        wordSb.Completed += (_, _) => TypingWordPopupBorder.Opacity = 0.0;
 
         _typingWordStoryboard = wordSb;
         wordSb.Begin();
@@ -568,8 +569,8 @@ public sealed partial class MainWindow : Window
                 RefreshMarkdownPreview();
                 if (ViewModel.IsFluidAnimationEnabled)
                 {
-                    PlayFluidTransition(EditorTextBox, EditorTranslate, 6);
-                    PlayFluidTransition(MarkdownPreviewPanel, PreviewTranslate, 6);
+                    PlayFluidTransition(EditorTextBox);
+                    PlayFluidTransition(MarkdownPreviewPanel);
                 }
                 break;
 
@@ -584,6 +585,10 @@ public sealed partial class MainWindow : Window
 
             case nameof(MainViewModel.IsSettingsOpen):
                 AnimateSettingsModal(ViewModel.IsSettingsOpen);
+                break;
+
+            case nameof(MainViewModel.CurrentThemeMode):
+                AnimateThemeModePill();
                 break;
 
             case nameof(MainViewModel.IsDarkMode):
@@ -628,41 +633,50 @@ public sealed partial class MainWindow : Window
     {
         var sb = new Storyboard();
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var targetWidth = open ? TargetSidebarWidth : 0.0;
+        var targetOpacity = open ? 1.0 : 0.0;
+        var targetIconX = open ? 0.0 : -2.0;
 
         var widthAnim = new DoubleAnimation
         {
             From = SidebarContainer.ActualWidth,
-            To = open ? 280.0 : 0.0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(220)),
+            To = targetWidth,
+            Duration = new Duration(TimeSpan.FromMilliseconds(200)),
             EasingFunction = ease,
-            EnableDependentAnimation = true
+            EnableDependentAnimation = true,
+            FillBehavior = FillBehavior.Stop
         };
         Storyboard.SetTarget(widthAnim, SidebarContainer);
         Storyboard.SetTargetProperty(widthAnim, "Width");
 
-        var slideAnim = new DoubleAnimation
-        {
-            From = open ? -32.0 : 0.0,
-            To = open ? 0.0 : -32.0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(220)),
-            EasingFunction = ease
-        };
-        Storyboard.SetTarget(slideAnim, SidebarTranslate);
-        Storyboard.SetTargetProperty(slideAnim, "X");
-
         var fadeAnim = new DoubleAnimation
         {
             From = open ? 0.0 : 1.0,
-            To = open ? 1.0 : 0.0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(180)),
-            EasingFunction = ease
+            To = targetOpacity,
+            Duration = new Duration(TimeSpan.FromMilliseconds(170)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
         };
         Storyboard.SetTarget(fadeAnim, SidebarContainer);
         Storyboard.SetTargetProperty(fadeAnim, "Opacity");
 
+        var iconAnim = new DoubleAnimation
+        {
+            To = targetIconX,
+            Duration = new Duration(TimeSpan.FromMilliseconds(180)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(iconAnim, SidebarIconTranslate);
+        Storyboard.SetTargetProperty(iconAnim, "X");
+
+        SidebarContainer.Width = targetWidth;
+        SidebarContainer.Opacity = targetOpacity;
+        SidebarIconTranslate.X = targetIconX;
+
         sb.Children.Add(widthAnim);
-        sb.Children.Add(slideAnim);
         sb.Children.Add(fadeAnim);
+        sb.Children.Add(iconAnim);
         sb.Begin();
     }
 
@@ -670,76 +684,91 @@ public sealed partial class MainWindow : Window
     {
         var sb = new Storyboard();
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var targetX = ViewModel.ModeIndicatorOffsetX;
 
         var pillSlide = new DoubleAnimation
         {
-            To = ViewModel.ModeIndicatorOffsetX,
-            Duration = new Duration(TimeSpan.FromMilliseconds(200)),
-            EasingFunction = ease
+            From = ModeIndicatorTranslate.X,
+            To = targetX,
+            Duration = new Duration(TimeSpan.FromMilliseconds(190)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
         };
         Storyboard.SetTarget(pillSlide, ModeIndicatorTranslate);
         Storyboard.SetTargetProperty(pillSlide, "X");
+        ModeIndicatorTranslate.X = targetX;
+
         sb.Children.Add(pillSlide);
         sb.Begin();
 
         if (ViewModel.EditorPaneVisibility == Visibility.Visible)
-            PlayFluidTransition(EditorTextBox, EditorTranslate, 6);
+            PlayFluidTransition(EditorTextBox);
         if (ViewModel.PreviewPaneVisibility == Visibility.Visible)
-            PlayFluidTransition(MarkdownPreviewPanel, PreviewTranslate, 6);
+            PlayFluidTransition(MarkdownPreviewPanel);
+    }
+
+    private void AnimateThemeModePill()
+    {
+        var sb = new Storyboard();
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var targetX = ViewModel.ThemeIndicatorOffsetX;
+
+        var pillSlide = new DoubleAnimation
+        {
+            From = ThemeIndicatorTranslate.X,
+            To = targetX,
+            Duration = new Duration(TimeSpan.FromMilliseconds(190)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(pillSlide, ThemeIndicatorTranslate);
+        Storyboard.SetTargetProperty(pillSlide, "X");
+        ThemeIndicatorTranslate.X = targetX;
+
+        sb.Children.Add(pillSlide);
+        sb.Begin();
     }
 
     private void AnimateSettingsModal(bool open)
     {
         var sb = new Storyboard();
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var targetOpacity = open ? 1.0 : 0.0;
+        var targetAngle = open ? 180.0 : 0.0;
 
         if (open)
+        {
+            ThemeIndicatorTranslate.X = ViewModel.ThemeIndicatorOffsetX;
             SettingsOverlayGrid.Visibility = Visibility.Visible;
+        }
+
+        var gearSpin = new DoubleAnimation
+        {
+            From = SettingsGearRotate.Angle,
+            To = targetAngle,
+            Duration = new Duration(TimeSpan.FromMilliseconds(240)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(gearSpin, SettingsGearRotate);
+        Storyboard.SetTargetProperty(gearSpin, "Angle");
 
         var backdropFade = new DoubleAnimation
         {
             From = open ? 0.0 : 1.0,
-            To = open ? 1.0 : 0.0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(open ? 200 : 150)),
-            EasingFunction = ease
+            To = targetOpacity,
+            Duration = new Duration(TimeSpan.FromMilliseconds(open ? 180 : 140)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
         };
         Storyboard.SetTarget(backdropFade, SettingsOverlayGrid);
         Storyboard.SetTargetProperty(backdropFade, "Opacity");
 
-        var scaleX = new DoubleAnimation
-        {
-            From = open ? 0.92 : 1.0,
-            To = open ? 1.0 : 0.94,
-            Duration = new Duration(TimeSpan.FromMilliseconds(open ? 220 : 150)),
-            EasingFunction = ease
-        };
-        Storyboard.SetTarget(scaleX, SettingsModalScale);
-        Storyboard.SetTargetProperty(scaleX, "ScaleX");
+        SettingsGearRotate.Angle = targetAngle;
+        SettingsOverlayGrid.Opacity = targetOpacity;
 
-        var scaleY = new DoubleAnimation
-        {
-            From = open ? 0.92 : 1.0,
-            To = open ? 1.0 : 0.94,
-            Duration = new Duration(TimeSpan.FromMilliseconds(open ? 220 : 150)),
-            EasingFunction = ease
-        };
-        Storyboard.SetTarget(scaleY, SettingsModalScale);
-        Storyboard.SetTargetProperty(scaleY, "ScaleY");
-
-        var slideY = new DoubleAnimation
-        {
-            From = open ? 16.0 : 0.0,
-            To = open ? 0.0 : 12.0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(open ? 220 : 150)),
-            EasingFunction = ease
-        };
-        Storyboard.SetTarget(slideY, SettingsModalTranslate);
-        Storyboard.SetTargetProperty(slideY, "Y");
-
+        sb.Children.Add(gearSpin);
         sb.Children.Add(backdropFade);
-        sb.Children.Add(scaleX);
-        sb.Children.Add(scaleY);
-        sb.Children.Add(slideY);
 
         if (!open)
         {
@@ -753,33 +782,24 @@ public sealed partial class MainWindow : Window
         sb.Begin();
     }
 
-    private static void PlayFluidTransition(UIElement element, Microsoft.UI.Xaml.Media.TranslateTransform translate, double offsetY)
+    private static void PlayFluidTransition(UIElement element)
     {
         var sb = new Storyboard();
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
 
         var fade = new DoubleAnimation
         {
-            From = 0.3,
+            From = 0.35,
             To = 1.0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(180)),
-            EasingFunction = ease
+            Duration = new Duration(TimeSpan.FromMilliseconds(160)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
         };
         Storyboard.SetTarget(fade, element);
         Storyboard.SetTargetProperty(fade, "Opacity");
-
-        var slide = new DoubleAnimation
-        {
-            From = offsetY,
-            To = 0.0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(180)),
-            EasingFunction = ease
-        };
-        Storyboard.SetTarget(slide, translate);
-        Storyboard.SetTargetProperty(slide, "Y");
+        element.Opacity = 1.0;
 
         sb.Children.Add(fade);
-        sb.Children.Add(slide);
         sb.Begin();
     }
 
@@ -803,6 +823,33 @@ public sealed partial class MainWindow : Window
             _ = ViewModel.CreateNoteInFolderAsync(folderPath);
     }
 
+    private async void OnDeleteFolderClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string folderPath } || string.IsNullOrWhiteSpace(folderPath) || RootGrid.XamlRoot is null)
+            return;
+
+        try
+        {
+            var dialog = new ContentDialog
+            {
+                Title = $"Delete \"{folderPath}\"?",
+                Content = "Are you sure you want to delete this folder and all notes inside it?",
+                PrimaryButtonText = "Delete",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = RootGrid.XamlRoot,
+                RequestedTheme = ViewModel.CurrentElementTheme
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+                await ViewModel.DeleteFolderAsync(folderPath);
+        }
+        catch
+        {
+        }
+    }
+
     private void OnTogglePinNoteClick(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: NoteItemViewModel item })
@@ -815,15 +862,8 @@ public sealed partial class MainWindow : Window
             _ = ViewModel.DeleteNoteAsync(item);
     }
 
-    private void OnSettingsBackdropPressed(object sender, PointerRoutedEventArgs e)
-    {
-        ViewModel.IsSettingsOpen = false;
-    }
-
-    private void OnSettingsCardPointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        e.Handled = true;
-    }
+    private void OnPickUserAvatarClick(object sender, RoutedEventArgs e) =>
+        _ = PickUserAvatarAsync();
 
     private void OnImportMarkdownClick(object sender, RoutedEventArgs e) =>
         _ = PickAndImportMarkdownAsync();
@@ -833,6 +873,27 @@ public sealed partial class MainWindow : Window
 
     private void OnChangeVaultFolderClick(object sender, RoutedEventArgs e) =>
         _ = PickVaultFolderAsync();
+
+    private async Task PickUserAvatarAsync()
+    {
+        try
+        {
+            var picker = new FileOpenPicker();
+            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+            picker.FileTypeFilter.Add(".png");
+            picker.FileTypeFilter.Add(".jpg");
+            picker.FileTypeFilter.Add(".jpeg");
+            picker.FileTypeFilter.Add(".webp");
+            picker.FileTypeFilter.Add(".bmp");
+
+            var file = await picker.PickSingleFileAsync();
+            if (file is not null)
+                await ViewModel.SetUserAvatarAsync(file.Path);
+        }
+        catch
+        {
+        }
+    }
 
     private async Task PickAndImportMarkdownAsync()
     {
@@ -966,8 +1027,8 @@ public sealed partial class MainWindow : Window
 
             AddElementRect(SidebarToggleButton);
             AddElementRect(ViewSwitcherBorder);
-            AddElementRect(ImportButton);
-            AddElementRect(ExportButton);
+            AddElementRect(UpdateTopBarButton);
+            AddElementRect(ZoomBadgeButton);
 
             nonClientSource.SetRegionRects(NonClientRegionKind.Passthrough, regions.ToArray());
         }

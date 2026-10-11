@@ -6,15 +6,18 @@ public sealed class AppSettings
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
+    public string ThemePreference { get; set; } = "System";
     public bool IsDarkMode { get; set; } = true;
     public bool IsFluidAnimationEnabled { get; set; } = true;
     public bool IsTreeShortcutEnabled { get; set; } = true;
     public double EditorFontSize { get; set; } = 16.0;
     public string VaultDirectoryPath { get; set; } = string.Empty;
+    public string UserName { get; set; } = string.IsNullOrWhiteSpace(Environment.UserName) ? "Writer" : Environment.UserName;
+    public string UserAvatarPath { get; set; } = string.Empty;
     public List<string> PinnedNoteIds { get; set; } = new();
     public List<string> CollapsedFolders { get; set; } = new();
 
-    public static string SettingsFilePath
+    public static string AppDataDirectory
     {
         get
         {
@@ -22,9 +25,11 @@ public sealed class AppSettings
             if (string.IsNullOrWhiteSpace(localAppData))
                 localAppData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "AppData", "Local");
 
-            return Path.Combine(localAppData, "Noti", "settings.json");
+            return Path.Combine(localAppData, "Noti");
         }
     }
+
+    public static string SettingsFilePath => Path.Combine(AppDataDirectory, "settings.json");
 
     public static AppSettings Load()
     {

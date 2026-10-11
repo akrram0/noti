@@ -52,6 +52,12 @@ public sealed class NoteService
         return _store.CreateFolderAsync(relativeFolderPath, cancellationToken);
     }
 
+    public Task DeleteFolderAsync(string relativeFolderPath, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativeFolderPath);
+        return _store.DeleteFolderAsync(relativeFolderPath, cancellationToken);
+    }
+
     public Note CreateNote(string initialContent = "", string? folderPath = null)
     {
         var baseId = $"note-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid().ToString("N")[..6]}";

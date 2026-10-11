@@ -11,4 +11,7 @@ public interface INoteStore
 
     Task CreateFolderAsync(string relativeFolderPath, CancellationToken cancellationToken = default) =>
         Task.CompletedTask;
+
+    Task DeleteFolderAsync(string relativeFolderPath, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
 }

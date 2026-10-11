@@ -4,8 +4,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Noti.Core;
 using Noti.Storage;
+using Windows.UI.ViewManagement;
 
 namespace Noti.App.ViewModels;
 
@@ -16,11 +18,19 @@ public enum EditorViewMode
     View = 2
 }
 
+public enum ThemeMode
+{
+    System = 0,
+    Dark = 1,
+    Light = 2
+}
+
 public sealed class MainViewModel : ObservableObject
 {
     private readonly NoteService _noteService;
     private readonly AppSettings _settings;
     private readonly DispatcherQueue? _dispatcherQueue;
+    private readonly UISettings _uiSettings = new();
     private readonly List<NoteItemViewModel> _allNotes = new();
     private readonly HashSet<string> _knownFolders = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _collapsedFolders = new(StringComparer.OrdinalIgnoreCase);
@@ -37,11 +47,21 @@ public sealed class MainViewModel : ObservableObject
     private bool _isSettingsOpen;
     private bool _isCreatingFolder;
     private string _newFolderName = string.Empty;
+    private ThemeMode _currentThemeMode = ThemeMode.System;
     private bool _isDarkMode = true;
     private bool _isFluidAnimationEnabled = true;
     private bool _isTreeShortcutEnabled = true;
     private double _editorFontSize = 16.0;
     private EditorViewMode _currentViewMode = EditorViewMode.Write;
+    private string _userName = "Writer";
+    private string _userAvatarPath = string.Empty;
+    private BitmapImage? _userAvatarSource;
+
+    private bool _isUpdateAvailable;
+    private string _latestUpdateUrl = string.Empty;
+    private string _updateStatusText = $"Up to date ({AppUpdater.CurrentVersionText})";
+    private string _updateButtonText = "Check for Updates";
+    private string _updateTopBarText = "Update Ready";
 
     public MainViewModel(NoteService noteService, AppSettings? settings = null)
     {
@@ -50,10 +70,23 @@ public sealed class MainViewModel : ObservableObject
         _settings = settings ?? AppSettings.Load();
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
 
-        _isDarkMode = _settings.IsDarkMode;
         _isFluidAnimationEnabled = _settings.IsFluidAnimationEnabled;
         _isTreeShortcutEnabled = _settings.IsTreeShortcutEnabled;
-        _editorFontSize = Math.Clamp(_settings.EditorFontSize, 12.0, 24.0);
+        _editorFontSize = Math.Clamp(_settings.EditorFontSize, 11.0, 28.0);
+        _userName = string.IsNullOrWhiteSpace(_settings.UserName) ? "Writer" : _settings.UserName;
+        _userAvatarPath = _settings.UserAvatarPath ?? string.Empty;
+        LoadAvatarBitmap();
+
+        _currentThemeMode = Enum.TryParse<ThemeMode>(_settings.ThemePreference, ignoreCase: true, out var parsedTheme)
+            ? parsedTheme
+            : ThemeMode.System;
+        ApplyThemeMode();
+
+        _uiSettings.ColorValuesChanged += (_, _) =>
+        {
+            if (_currentThemeMode == ThemeMode.System)
+                EnqueueUi(ApplyThemeMode);
+        };
 
         foreach (var id in _settings.PinnedNoteIds)
             _pinnedNoteIds.Add(id);
@@ -74,7 +107,15 @@ public sealed class MainViewModel : ObservableObject
         ToggleSidebarCommand = new RelayCommand(() => IsSidebarOpen = !IsSidebarOpen);
         ToggleSettingsCommand = new RelayCommand(() => IsSettingsOpen = !IsSettingsOpen);
         CloseSettingsCommand = new RelayCommand(() => IsSettingsOpen = false);
-        ToggleThemeCommand = new RelayCommand(() => IsDarkMode = !IsDarkMode);
+
+        SetSystemThemeCommand = new RelayCommand(() => CurrentThemeMode = ThemeMode.System);
+        SetDarkThemeCommand = new RelayCommand(() => CurrentThemeMode = ThemeMode.Dark);
+        SetLightThemeCommand = new RelayCommand(() => CurrentThemeMode = ThemeMode.Light);
+        ToggleThemeCommand = new RelayCommand(() =>
+        {
+            CurrentThemeMode = IsDarkMode ? ThemeMode.Light : ThemeMode.Dark;
+        });
+
         ToggleFluidAnimationCommand = new RelayCommand(() => IsFluidAnimationEnabled = !IsFluidAnimationEnabled);
         ToggleTreeShortcutCommand = new RelayCommand(() => IsTreeShortcutEnabled = !IsTreeShortcutEnabled);
         SetWriteModeCommand = new RelayCommand(() => CurrentViewMode = EditorViewMode.Write);
@@ -89,10 +130,16 @@ public sealed class MainViewModel : ObservableObject
                 _ => EditorViewMode.Write
             };
         });
-        DecreaseFontSizeCommand = new RelayCommand(() => EditorFontSize = Math.Max(13.0, EditorFontSize - 1.0));
-        IncreaseFontSizeCommand = new RelayCommand(() => EditorFontSize = Math.Min(22.0, EditorFontSize + 1.0));
+
+        DecreaseFontSizeCommand = new RelayCommand(() => EditorFontSize = Math.Max(11.0, EditorFontSize - 1.0));
+        IncreaseFontSizeCommand = new RelayCommand(() => EditorFontSize = Math.Min(28.0, EditorFontSize + 1.0));
+        ResetZoomCommand = new RelayCommand(() => EditorFontSize = 16.0);
+
         OpenVaultFolderCommand = new RelayCommand(OpenVaultFolderInExplorer);
         DeleteSelectedNoteCommand = new AsyncRelayCommand(() => DeleteNoteAsync(_selectedNote));
+        ClearUserAvatarCommand = new RelayCommand(ClearUserAvatar);
+        CheckOrInstallUpdateCommand = new AsyncRelayCommand(CheckOrInstallUpdateAsync);
+        InstallUpdateCommand = new AsyncRelayCommand(InstallUpdateAsync);
     }
 
     public ObservableCollection<NoteItemViewModel> FilteredNotes { get; } = new();
@@ -104,6 +151,9 @@ public sealed class MainViewModel : ObservableObject
     public IRelayCommand ToggleSidebarCommand { get; }
     public IRelayCommand ToggleSettingsCommand { get; }
     public IRelayCommand CloseSettingsCommand { get; }
+    public IRelayCommand SetSystemThemeCommand { get; }
+    public IRelayCommand SetDarkThemeCommand { get; }
+    public IRelayCommand SetLightThemeCommand { get; }
     public IRelayCommand ToggleThemeCommand { get; }
     public IRelayCommand ToggleFluidAnimationCommand { get; }
     public IRelayCommand ToggleTreeShortcutCommand { get; }
@@ -113,8 +163,12 @@ public sealed class MainViewModel : ObservableObject
     public IRelayCommand CycleViewModeCommand { get; }
     public IRelayCommand DecreaseFontSizeCommand { get; }
     public IRelayCommand IncreaseFontSizeCommand { get; }
+    public IRelayCommand ResetZoomCommand { get; }
     public IRelayCommand OpenVaultFolderCommand { get; }
     public IAsyncRelayCommand DeleteSelectedNoteCommand { get; }
+    public IRelayCommand ClearUserAvatarCommand { get; }
+    public IAsyncRelayCommand CheckOrInstallUpdateCommand { get; }
+    public IAsyncRelayCommand InstallUpdateCommand { get; }
 
     public NoteItemViewModel? SelectedNote
     {
@@ -156,7 +210,57 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public string ActiveFolderBadgeText =>
-        string.IsNullOrEmpty(_activeFolderPath) ? "Root Vault" : _activeFolderPath;
+        string.IsNullOrEmpty(_activeFolderPath) ? "Vault" : _activeFolderPath;
+
+    public string UserName
+    {
+        get => _userName;
+        set
+        {
+            var next = string.IsNullOrWhiteSpace(value) ? "Writer" : value.Trim();
+            if (SetProperty(ref _userName, next))
+            {
+                _settings.UserName = next;
+                _settings.Save();
+                OnPropertyChanged(nameof(UserInitials));
+            }
+        }
+    }
+
+    public string UserInitials
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_userName))
+                return "W";
+
+            var parts = _userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2)
+                return $"{char.ToUpperInvariant(parts[0][0])}{char.ToUpperInvariant(parts[1][0])}";
+
+            return _userName.Length >= 2
+                ? _userName[..2].ToUpperInvariant()
+                : _userName.ToUpperInvariant();
+        }
+    }
+
+    public BitmapImage? UserAvatarSource
+    {
+        get => _userAvatarSource;
+        private set
+        {
+            if (SetProperty(ref _userAvatarSource, value))
+            {
+                OnPropertyChanged(nameof(UserAvatarVisibility));
+                OnPropertyChanged(nameof(UserInitialsVisibility));
+                OnPropertyChanged(nameof(RemoveAvatarVisibility));
+            }
+        }
+    }
+
+    public Visibility UserAvatarVisibility => _userAvatarSource is not null ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility UserInitialsVisibility => _userAvatarSource is null ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility RemoveAvatarVisibility => _userAvatarSource is not null ? Visibility.Visible : Visibility.Collapsed;
 
     public bool IsCreatingFolder
     {
@@ -247,15 +351,31 @@ public sealed class MainViewModel : ObservableObject
         set => SetProperty(ref _isSettingsOpen, value);
     }
 
+    public ThemeMode CurrentThemeMode
+    {
+        get => _currentThemeMode;
+        set
+        {
+            if (SetProperty(ref _currentThemeMode, value))
+            {
+                _settings.ThemePreference = value.ToString();
+                _settings.Save();
+                ApplyThemeMode();
+                OnPropertyChanged(nameof(ThemeIndicatorOffsetX));
+            }
+        }
+    }
+
+    public double ThemeIndicatorOffsetX => (int)_currentThemeMode * 60.0;
+
     public bool IsDarkMode
     {
         get => _isDarkMode;
-        set
+        private set
         {
             if (SetProperty(ref _isDarkMode, value))
             {
                 _settings.IsDarkMode = value;
-                _settings.Save();
                 OnPropertyChanged(nameof(CurrentElementTheme));
                 OnPropertyChanged(nameof(ToggleThumbAlignment));
             }
@@ -302,16 +422,19 @@ public sealed class MainViewModel : ObservableObject
         get => _editorFontSize;
         set
         {
-            if (SetProperty(ref _editorFontSize, value))
+            var clamped = Math.Clamp(value, 11.0, 28.0);
+            if (SetProperty(ref _editorFontSize, clamped))
             {
-                _settings.EditorFontSize = value;
+                _settings.EditorFontSize = clamped;
                 _settings.Save();
                 OnPropertyChanged(nameof(EditorFontSizeText));
+                OnPropertyChanged(nameof(ZoomPercentText));
             }
         }
     }
 
     public string EditorFontSizeText => $"{_editorFontSize:0} px";
+    public string ZoomPercentText => $"{Math.Round(_editorFontSize / 16.0 * 100.0):0}%";
 
     public EditorViewMode CurrentViewMode
     {
@@ -320,6 +443,9 @@ public sealed class MainViewModel : ObservableObject
         {
             if (SetProperty(ref _currentViewMode, value))
             {
+                if (_isSettingsOpen)
+                    IsSettingsOpen = false;
+
                 OnPropertyChanged(nameof(EditorColumnWidth));
                 OnPropertyChanged(nameof(PreviewColumnWidth));
                 OnPropertyChanged(nameof(EditorPaneVisibility));
@@ -335,10 +461,42 @@ public sealed class MainViewModel : ObservableObject
     public Visibility EditorPaneVisibility => _currentViewMode == EditorViewMode.View ? Visibility.Collapsed : Visibility.Visible;
     public Visibility PreviewPaneVisibility => _currentViewMode == EditorViewMode.Write ? Visibility.Collapsed : Visibility.Visible;
     public Visibility SplitDividerVisibility => _currentViewMode == EditorViewMode.Split ? Visibility.Visible : Visibility.Collapsed;
-    public double ModeIndicatorOffsetX => (int)_currentViewMode * 64.0;
+    public double ModeIndicatorOffsetX => (int)_currentViewMode * 60.0;
 
     public string VaultDirectoryPath =>
         (_noteService.Store as MarkdownNoteStore)?.DirectoryPath ?? _settings.VaultDirectoryPath;
+
+    public string CurrentVersionText => AppUpdater.CurrentVersionText;
+
+    public bool IsUpdateAvailable
+    {
+        get => _isUpdateAvailable;
+        private set
+        {
+            if (SetProperty(ref _isUpdateAvailable, value))
+                OnPropertyChanged(nameof(UpdatePillVisibility));
+        }
+    }
+
+    public Visibility UpdatePillVisibility => _isUpdateAvailable ? Visibility.Visible : Visibility.Collapsed;
+
+    public string UpdateStatusText
+    {
+        get => _updateStatusText;
+        private set => SetProperty(ref _updateStatusText, value);
+    }
+
+    public string UpdateButtonText
+    {
+        get => _updateButtonText;
+        private set => SetProperty(ref _updateButtonText, value);
+    }
+
+    public string UpdateTopBarText
+    {
+        get => _updateTopBarText;
+        private set => SetProperty(ref _updateTopBarText, value);
+    }
 
     public async Task InitializeAsync()
     {
@@ -362,6 +520,163 @@ public sealed class MainViewModel : ObservableObject
         SelectedNote = FilteredNotes.FirstOrDefault(n => !n.IsFolder);
         OnPropertyChanged(nameof(NoteCountText));
         OnPropertyChanged(nameof(VaultDirectoryPath));
+
+        _ = CheckForUpdatesAsync(silent: true);
+    }
+
+    public async Task SetUserAvatarAsync(string sourceImagePath)
+    {
+        if (string.IsNullOrWhiteSpace(sourceImagePath) || !File.Exists(sourceImagePath))
+            return;
+
+        try
+        {
+            var appDataDir = AppSettings.AppDataDirectory;
+            Directory.CreateDirectory(appDataDir);
+
+            var ext = Path.GetExtension(sourceImagePath);
+            if (string.IsNullOrWhiteSpace(ext))
+                ext = ".png";
+
+            var destPath = Path.Combine(appDataDir, $"avatar-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}{ext}");
+            await Task.Run(() => File.Copy(sourceImagePath, destPath, overwrite: true));
+
+            if (!string.IsNullOrWhiteSpace(_userAvatarPath) && File.Exists(_userAvatarPath) && _userAvatarPath.StartsWith(appDataDir, StringComparison.OrdinalIgnoreCase))
+            {
+                try { File.Delete(_userAvatarPath); } catch { }
+            }
+
+            _userAvatarPath = destPath;
+            _settings.UserAvatarPath = destPath;
+            _settings.Save();
+            LoadAvatarBitmap();
+        }
+        catch
+        {
+        }
+    }
+
+    private void ClearUserAvatar()
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(_userAvatarPath) && File.Exists(_userAvatarPath))
+                File.Delete(_userAvatarPath);
+        }
+        catch
+        {
+        }
+
+        _userAvatarPath = string.Empty;
+        _settings.UserAvatarPath = string.Empty;
+        _settings.Save();
+        UserAvatarSource = null;
+    }
+
+    private void LoadAvatarBitmap()
+    {
+        if (string.IsNullOrWhiteSpace(_userAvatarPath) || !File.Exists(_userAvatarPath))
+        {
+            UserAvatarSource = null;
+            return;
+        }
+
+        try
+        {
+            UserAvatarSource = new BitmapImage(new Uri(_userAvatarPath));
+        }
+        catch
+        {
+            UserAvatarSource = null;
+        }
+    }
+
+    private void ApplyThemeMode()
+    {
+        if (_currentThemeMode == ThemeMode.Dark)
+        {
+            IsDarkMode = true;
+            return;
+        }
+
+        if (_currentThemeMode == ThemeMode.Light)
+        {
+            IsDarkMode = false;
+            return;
+        }
+
+        try
+        {
+            var bg = _uiSettings.GetColorValue(UIColorType.Background);
+            // Luminance < 128 means the Windows machine is in Dark Mode
+            var isMachineDark = (bg.R + bg.G + bg.B) < 384;
+            IsDarkMode = isMachineDark;
+        }
+        catch
+        {
+            IsDarkMode = true;
+        }
+    }
+
+    private async Task CheckOrInstallUpdateAsync()
+    {
+        if (_isUpdateAvailable && !string.IsNullOrWhiteSpace(_latestUpdateUrl))
+        {
+            await InstallUpdateAsync();
+            return;
+        }
+
+        await CheckForUpdatesAsync(silent: false);
+    }
+
+    private async Task CheckForUpdatesAsync(bool silent)
+    {
+        if (!silent)
+            SetUpdateStatus("Checking GitHub Releases...");
+
+        var (available, latestVer, url) = await AppUpdater.CheckForUpdateAsync();
+        _latestUpdateUrl = url;
+
+        EnqueueUi(() =>
+        {
+            IsUpdateAvailable = available;
+            if (available)
+            {
+                UpdateStatusText = $"New update available: {latestVer} (current {AppUpdater.CurrentVersionText})";
+                UpdateButtonText = $"Install {latestVer}";
+                UpdateTopBarText = $"Update {latestVer}";
+            }
+            else
+            {
+                UpdateStatusText = $"Up to date ({AppUpdater.CurrentVersionText})";
+                UpdateButtonText = "Check for Updates";
+            }
+        });
+    }
+
+    private async Task InstallUpdateAsync()
+    {
+        var url = string.IsNullOrWhiteSpace(_latestUpdateUrl)
+            ? "https://github.com/akrram0/noti/releases/latest/download/Noti-Setup-win-x64.exe"
+            : _latestUpdateUrl;
+
+        await ForceSaveAsync();
+        await AppUpdater.DownloadAndInstallAsync(url, progress =>
+        {
+            SetUpdateStatus(progress);
+            EnqueueUi(() => UpdateTopBarText = progress);
+        });
+    }
+
+    private void SetUpdateStatus(string status) =>
+        EnqueueUi(() => UpdateStatusText = status);
+
+    private void EnqueueUi(Action action)
+    {
+        if (_dispatcherQueue is null || _dispatcherQueue.HasThreadAccess)
+            action();
+        else
+            _dispatcherQueue.TryEnqueue(() => action());
     }
 
     public void ToggleFolderExpansion(string folderPath)
@@ -376,6 +691,58 @@ public sealed class MainViewModel : ObservableObject
         _settings.CollapsedFolders = _collapsedFolders.ToList();
         _settings.Save();
         RefreshFilteredNotes();
+    }
+
+    public async Task DeleteFolderAsync(string folderPath)
+    {
+        var normalized = NoteService.NormalizeFolderPath(folderPath);
+        if (string.IsNullOrWhiteSpace(normalized))
+            return;
+
+        await _noteService.DeleteFolderAsync(normalized);
+
+        var prefix = $"{normalized}/";
+        _knownFolders.RemoveWhere(f =>
+            string.Equals(f, normalized, StringComparison.OrdinalIgnoreCase) ||
+            f.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+
+        _collapsedFolders.RemoveWhere(f =>
+            string.Equals(f, normalized, StringComparison.OrdinalIgnoreCase) ||
+            f.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+
+        var notesToRemove = _allNotes
+            .Where(n => !n.IsFolder &&
+                        (string.Equals(n.FolderPath, normalized, StringComparison.OrdinalIgnoreCase) ||
+                         n.FolderPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        foreach (var noteVm in notesToRemove)
+        {
+            _allNotes.Remove(noteVm);
+            _pinnedNoteIds.Remove(noteVm.Id);
+        }
+
+        if (string.Equals(_activeFolderPath, normalized, StringComparison.OrdinalIgnoreCase) ||
+            _activeFolderPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            ActiveFolderPath = string.Empty;
+        }
+
+        _settings.CollapsedFolders = _collapsedFolders.ToList();
+        _settings.PinnedNoteIds = _pinnedNoteIds.ToList();
+        _settings.Save();
+
+        if (_allNotes.Count == 0)
+        {
+            var blank = _noteService.CreateNote(string.Empty);
+            await _noteService.SaveNoteAsync(blank);
+            _allNotes.Add(new NoteItemViewModel(blank));
+        }
+
+        RefreshFilteredNotes();
+        SelectedNote = FilteredNotes.FirstOrDefault(n => !n.IsFolder);
+        SetSaveStatus("Saved");
+        OnPropertyChanged(nameof(NoteCountText));
     }
 
     public async Task CreateNoteInFolderAsync(string? folderPath = null)
@@ -401,6 +768,8 @@ public sealed class MainViewModel : ObservableObject
 
         RefreshFilteredNotes();
         SelectedNote = vm;
+        if (_isSettingsOpen)
+            IsSettingsOpen = false;
         SetSaveStatus("Saved");
         OnPropertyChanged(nameof(NoteCountText));
     }
@@ -465,6 +834,8 @@ public sealed class MainViewModel : ObservableObject
         _allNotes.Insert(0, vm);
         RefreshFilteredNotes();
         SelectedNote = vm;
+        if (_isSettingsOpen)
+            IsSettingsOpen = false;
         SetSaveStatus("Imported");
         OnPropertyChanged(nameof(NoteCountText));
     }
@@ -567,7 +938,6 @@ public sealed class MainViewModel : ObservableObject
         FilteredNotes.Clear();
         var isSearching = !string.IsNullOrWhiteSpace(_searchQuery);
 
-        // Emit hierarchical folder tree
         var topFolders = _knownFolders
             .Where(f => !f.Contains('/'))
             .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
@@ -576,7 +946,6 @@ public sealed class MainViewModel : ObservableObject
         foreach (var folder in topFolders)
             AppendFolderBranch(folder, 0, matchingNotes, isSearching);
 
-        // Emit root notes (not inside any folder)
         foreach (var rootNote in matchingNotes.Where(n => string.IsNullOrEmpty(n.FolderPath)))
         {
             rootNote.Depth = 0;

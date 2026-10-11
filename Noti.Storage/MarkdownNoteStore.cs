@@ -77,6 +77,20 @@ public sealed class MarkdownNoteStore : INoteStore
         return Task.CompletedTask;
     }
 
+    public Task DeleteFolderAsync(string relativeFolderPath, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var normalized = NoteService.NormalizeFolderPath(relativeFolderPath);
+        if (string.IsNullOrWhiteSpace(normalized))
+            return Task.CompletedTask;
+
+        var fullFolder = GetSafeFolderPath(normalized);
+        if (Directory.Exists(fullFolder))
+            Directory.Delete(fullFolder, recursive: true);
+
+        return Task.CompletedTask;
+    }
+
     public async Task SaveAsync(Note note, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(note);

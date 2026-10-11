@@ -61,11 +61,15 @@ public sealed class NoteItemViewModel : ObservableObject
         set
         {
             if (SetProperty(ref _isExpanded, value))
-                OnPropertyChanged(nameof(ChevronRotation));
+            {
+                OnPropertyChanged(nameof(ChevronGlyph));
+                OnPropertyChanged(nameof(FolderIconGlyph));
+            }
         }
     }
 
-    public double ChevronRotation => _isExpanded ? 90.0 : 0.0;
+    public string ChevronGlyph => _isExpanded ? "\uE70D" : "\uE76C";
+    public string FolderIconGlyph => _isExpanded ? "\uE838" : "\uE8B7";
 
     public int FolderNoteCount
     {
@@ -91,11 +95,13 @@ public sealed class NoteItemViewModel : ObservableObject
             OnPropertyChanged();
             OnPropertyChanged(nameof(PinBadgeVisibility));
             OnPropertyChanged(nameof(PinOpacity));
+            OnPropertyChanged(nameof(PinIconGlyph));
         }
     }
 
     public Visibility PinBadgeVisibility => (!IsFolder && IsPinned) ? Visibility.Visible : Visibility.Collapsed;
-    public double PinOpacity => IsPinned ? 1.0 : 0.45;
+    public double PinOpacity => IsPinned ? 1.0 : 0.35;
+    public string PinIconGlyph => IsPinned ? "\uE840" : "\uE718";
 
     public string Content
     {
