@@ -194,7 +194,7 @@ public static class MarkdownRenderer
                     new Thickness(0));
                 label.VerticalAlignment = VerticalAlignment.Center;
                 if (isChecked)
-                    label.TextDecorations = Windows.UI.Text.TextDecorations.Strikethrough;
+                    label.Opacity = 0.65;
 
                 row.Children.Add(checkBox);
                 row.Children.Add(label);
