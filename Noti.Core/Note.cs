@@ -73,6 +73,16 @@ public sealed class Note
             return string.Empty;
 
         var s = line.Trim();
+        if (s.StartsWith("```", StringComparison.Ordinal))
+            return string.Empty;
+
+        if (s.StartsWith('|') && s.Contains('|'))
+        {
+            var strippedPipes = s.Replace("|", " ", StringComparison.Ordinal).Trim();
+            if (strippedPipes.All(ch => ch is '-' or ':' or ' ' or '\t'))
+                return string.Empty;
+            s = strippedPipes;
+        }
 
         // Strip tree connectors and markdown prefixes
         while (s.Length > 0)
@@ -109,6 +119,7 @@ public sealed class Note
 
         return s.Replace("**", string.Empty, StringComparison.Ordinal)
                 .Replace("__", string.Empty, StringComparison.Ordinal)
+                .Replace("~~", string.Empty, StringComparison.Ordinal)
                 .Replace("`", string.Empty, StringComparison.Ordinal)
                 .Trim();
     }

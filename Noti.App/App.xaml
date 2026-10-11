@@ -43,6 +43,8 @@
                     <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8E8E93" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8E8E93" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF8E8E93" />
+                    <SolidColorBrush x:Key="TextControlElevationBorderBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlElevationBorderFocusedBrush" Color="Transparent" />
                     <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
                     <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
                 </ResourceDictionary>
@@ -81,6 +83,8 @@
                     <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8E8E93" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8E8E93" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF8E8E93" />
+                    <SolidColorBrush x:Key="TextControlElevationBorderBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlElevationBorderFocusedBrush" Color="Transparent" />
                     <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
                     <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
                 </ResourceDictionary>
@@ -119,10 +123,67 @@
                     <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF6C6C70" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF6C6C70" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF6C6C70" />
+                    <SolidColorBrush x:Key="TextControlElevationBorderBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlElevationBorderFocusedBrush" Color="Transparent" />
                     <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
                     <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
+
+            <!-- Clean Borderless TextBox Style (eliminates WinUI Fluent bottom underline / elevation border artifact) -->
+            <Style x:Key="BorderlessTextBoxStyle" TargetType="TextBox">
+                <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="SelectionHighlightColor" Value="#FF0A84FF" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="UseSystemFocusVisuals" Value="False" />
+                <Setter Property="FocusVisualPrimaryThickness" Value="0" />
+                <Setter Property="FocusVisualSecondaryThickness" Value="0" />
+                <Setter Property="ScrollViewer.HorizontalScrollMode" Value="Auto" />
+                <Setter Property="ScrollViewer.VerticalScrollMode" Value="Auto" />
+                <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Hidden" />
+                <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Hidden" />
+                <Setter Property="ScrollViewer.IsDeferredScrollingEnabled" Value="False" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="TextBox">
+                            <Grid Background="{TemplateBinding Background}">
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver" />
+                                        <VisualState x:Name="Pressed" />
+                                        <VisualState x:Name="Disabled" />
+                                        <VisualState x:Name="Focused" />
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                                <TextBlock
+                                    x:Name="PlaceholderTextContentPresenter"
+                                    Margin="{TemplateBinding Padding}"
+                                    Foreground="{ThemeResource TextControlPlaceholderForeground}"
+                                    Text="{TemplateBinding PlaceholderText}"
+                                    TextAlignment="{TemplateBinding TextAlignment}"
+                                    TextWrapping="{TemplateBinding TextWrapping}"
+                                    IsHitTestVisible="False" />
+                                <ScrollViewer
+                                    x:Name="ContentElement"
+                                    Padding="{TemplateBinding Padding}"
+                                    HorizontalScrollMode="{TemplateBinding ScrollViewer.HorizontalScrollMode}"
+                                    VerticalScrollMode="{TemplateBinding ScrollViewer.VerticalScrollMode}"
+                                    HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                                    VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}"
+                                    IsDeferredScrollingEnabled="{TemplateBinding ScrollViewer.IsDeferredScrollingEnabled}"
+                                    IsTabStop="False"
+                                    ZoomMode="Disabled"
+                                    AutomationProperties.AccessibilityView="Raw" />
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <Style TargetType="TextBox" BasedOn="{StaticResource BorderlessTextBoxStyle}" />
 
             <!-- Borderless Circular 34x34 Liquid Glass Icon Button (scales background surface only, keeping glyphs crisp) -->
             <Style x:Key="GlassIconButtonStyle" TargetType="Button">

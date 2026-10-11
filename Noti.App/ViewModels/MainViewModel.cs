@@ -13,9 +13,8 @@ namespace Noti.App.ViewModels;
 
 public enum EditorViewMode
 {
-    Write = 0,
-    Split = 1,
-    View = 2
+    Live = 0,
+    Source = 1
 }
 
 public enum ThemeMode
@@ -97,7 +96,7 @@ public sealed class MainViewModel : ObservableObject
     private bool _isTreeShortcutEnabled = true;
     private double _editorFontSize = 16.0;
     private double _surfaceOpacityPercent = 75.0;
-    private EditorViewMode _currentViewMode = EditorViewMode.Write;
+    private EditorViewMode _currentViewMode = EditorViewMode.Live;
     private string _userName = "Writer";
     private string _userAvatarPath = string.Empty;
     private BitmapImage? _userAvatarSource;
@@ -176,17 +175,13 @@ public sealed class MainViewModel : ObservableObject
 
         ToggleFluidAnimationCommand = new RelayCommand(() => IsFluidAnimationEnabled = !IsFluidAnimationEnabled);
         ToggleTreeShortcutCommand = new RelayCommand(() => IsTreeShortcutEnabled = !IsTreeShortcutEnabled);
-        SetWriteModeCommand = new RelayCommand(() => CurrentViewMode = EditorViewMode.Write);
-        SetSplitModeCommand = new RelayCommand(() => CurrentViewMode = EditorViewMode.Split);
-        SetViewModeCommand = new RelayCommand(() => CurrentViewMode = EditorViewMode.View);
+        SetLiveModeCommand = new RelayCommand(() => CurrentViewMode = EditorViewMode.Live);
+        SetSourceModeCommand = new RelayCommand(() => CurrentViewMode = EditorViewMode.Source);
         CycleViewModeCommand = new RelayCommand(() =>
         {
-            CurrentViewMode = CurrentViewMode switch
-            {
-                EditorViewMode.Write => EditorViewMode.Split,
-                EditorViewMode.Split => EditorViewMode.View,
-                _ => EditorViewMode.Write
-            };
+            CurrentViewMode = CurrentViewMode == EditorViewMode.Live
+                ? EditorViewMode.Source
+                : EditorViewMode.Live;
         });
 
         DecreaseFontSizeCommand = new RelayCommand(() => EditorFontSize = Math.Max(11.0, EditorFontSize - 1.0));
@@ -222,9 +217,8 @@ public sealed class MainViewModel : ObservableObject
     public IRelayCommand SetMicaBackdropCommand { get; }
     public IRelayCommand ToggleFluidAnimationCommand { get; }
     public IRelayCommand ToggleTreeShortcutCommand { get; }
-    public IRelayCommand SetWriteModeCommand { get; }
-    public IRelayCommand SetSplitModeCommand { get; }
-    public IRelayCommand SetViewModeCommand { get; }
+    public IRelayCommand SetLiveModeCommand { get; }
+    public IRelayCommand SetSourceModeCommand { get; }
     public IRelayCommand CycleViewModeCommand { get; }
     public IRelayCommand DecreaseFontSizeCommand { get; }
     public IRelayCommand IncreaseFontSizeCommand { get; }
@@ -744,21 +738,15 @@ public sealed class MainViewModel : ObservableObject
                 if (_isSettingsOpen)
                     IsSettingsOpen = false;
 
-                OnPropertyChanged(nameof(EditorColumnWidth));
-                OnPropertyChanged(nameof(PreviewColumnWidth));
-                OnPropertyChanged(nameof(EditorPaneVisibility));
-                OnPropertyChanged(nameof(PreviewPaneVisibility));
-                OnPropertyChanged(nameof(SplitDividerVisibility));
+                OnPropertyChanged(nameof(LivePaneVisibility));
+                OnPropertyChanged(nameof(SourcePaneVisibility));
                 OnPropertyChanged(nameof(ModeIndicatorOffsetX));
             }
         }
     }
 
-    public GridLength EditorColumnWidth => _currentViewMode == EditorViewMode.View ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
-    public GridLength PreviewColumnWidth => _currentViewMode == EditorViewMode.Write ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
-    public Visibility EditorPaneVisibility => _currentViewMode == EditorViewMode.View ? Visibility.Collapsed : Visibility.Visible;
-    public Visibility PreviewPaneVisibility => _currentViewMode == EditorViewMode.Write ? Visibility.Collapsed : Visibility.Visible;
-    public Visibility SplitDividerVisibility => _currentViewMode == EditorViewMode.Split ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility LivePaneVisibility => _currentViewMode == EditorViewMode.Live ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility SourcePaneVisibility => _currentViewMode == EditorViewMode.Source ? Visibility.Visible : Visibility.Collapsed;
     public double ModeIndicatorOffsetX => (int)_currentViewMode * 60.0;
 
     public string VaultDirectoryPath =>

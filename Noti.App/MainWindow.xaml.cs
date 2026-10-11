@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Input;
+using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -32,8 +33,13 @@ public sealed partial class MainWindow : Window
     private bool _isCommandPaletteOpen;
     private int _activeMentionAtIndex = -1;
     private int _activeSlashIndex = -1;
-    private bool _isSyncingVisualTable;
-    private int _activeInlineTableStartLine = -1;
+    private List<LiveDocBlock> _liveBlocks = [];
+    private LiveDocBlock? _activeLiveBlock;
+    private bool _isSyncingLiveEditor;
+    private readonly DispatcherTimer _caretBlinkTimer;
+    private TextBox? _focusedTextBox;
+    private ScrollViewer? _focusedScrollViewer;
+    private bool _isCaretBlinkOn = true;
 
     private static readonly (string Name, string Hex)[] PaletteColors =
     [
@@ -55,24 +61,43 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         ConfigureWindowChrome();
 
+        _caretBlinkTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(530) };
+        _caretBlinkTimer.Tick += (_, _) =>
+        {
+            if (_focusedTextBox is null || _focusedTextBox.FocusState == FocusState.Unfocused || _focusedTextBox.SelectionLength > 0)
+            {
+                EditorCaretBar.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            _isCaretBlinkOn = !_isCaretBlinkOn;
+            EditorCaretBar.Opacity = _isCaretBlinkOn ? 1.0 : 0.0;
+        };
+
         RootGrid.Loaded += (_, _) =>
         {
             ApplyResponsiveLayout();
             ThemeIndicatorTranslate.X = ViewModel.ThemeIndicatorOffsetX;
             BackdropIndicatorTranslate.X = ViewModel.BackdropIndicatorOffsetX;
+            ModeIndicatorTranslate.X = ViewModel.ModeIndicatorOffsetX;
             UpdateTitleBarPassthrough();
-            RefreshMarkdownPreview();
+            RebuildLiveEditor(reparse: true);
+            UpdateActiveCaretVisual(resetBlink: true);
         };
         RootGrid.SizeChanged += (_, _) =>
         {
             ApplyResponsiveLayout();
             UpdateTitleBarPassthrough();
+            UpdateActiveCaretVisual(resetBlink: false);
         };
         SidebarToggleButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
         ViewSwitcherBorder.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
         UpdateTopBarButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
         ZoomBadgeButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
+        LiveEditorScrollViewer.ViewChanged += (_, _) => UpdateActiveCaretVisual(resetBlink: false);
 
+        RootGrid.GotFocus += OnRootGotFocus;
+        RootGrid.LostFocus += OnRootLostFocus;
         RootGrid.PreviewKeyDown += OnRootPreviewKeyDown;
         EditorTextBox.PreviewKeyDown += OnEditorPreviewKeyDown;
         EditorTextBox.TextChanged += OnEditorTextChanged;
@@ -135,7 +160,7 @@ public sealed partial class MainWindow : Window
         var vertPad = isCompact ? 18.0 : 28.0;
 
         EditorTextBox.Padding = new Thickness(horizPad, vertPad, horizPad, 16);
-        MarkdownPreviewPanel.Padding = new Thickness(horizPad, vertPad, horizPad, 20);
+        LiveEditorPanel.Padding = new Thickness(horizPad, vertPad, horizPad, 80);
         StatusBarGrid.Padding = new Thickness(horizPad, 0, horizPad, 0);
 
         if (ViewModel.IsSidebarOpen)
@@ -552,8 +577,1008 @@ public sealed partial class MainWindow : Window
         return false;
     }
 
+    private TextBox GetActiveEditorTextBox()
+    {
+        if (ViewModel.CurrentViewMode == EditorViewMode.Live && _activeLiveBlock?.PrimaryTextBox is { } liveTb)
+            return liveTb;
+
+        return EditorTextBox;
+    }
+
+    private void FocusActiveEditorPane()
+    {
+        if (ViewModel.CurrentViewMode == EditorViewMode.Live)
+        {
+            var target = _activeLiveBlock?.PrimaryTextBox ?? _liveBlocks.FirstOrDefault(b => b.PrimaryTextBox is not null)?.PrimaryTextBox;
+            target?.Focus(FocusState.Programmatic);
+        }
+        else
+        {
+            EditorTextBox.Focus(FocusState.Programmatic);
+        }
+    }
+
+    private void OnLiveCanvasBackgroundPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (!ReferenceEquals(e.OriginalSource, LiveCanvasRootGrid) && !ReferenceEquals(e.OriginalSource, LiveEditorPanel))
+            return;
+
+        if (_liveBlocks.Count == 0)
+        {
+            _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+            SyncLiveBlocksToViewModel();
+            RebuildLiveEditor(reparse: false, focusBlockIndex: 0, focusCaretIndex: 0);
+            return;
+        }
+
+        var lastBlock = _liveBlocks[^1];
+        if (lastBlock.Kind is LiveBlockKind.TableBlock or LiveBlockKind.Divider or LiveBlockKind.CodeBlock)
+        {
+            _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+            SyncLiveBlocksToViewModel();
+            RebuildLiveEditor(reparse: false, focusBlockIndex: _liveBlocks.Count - 1, focusCaretIndex: 0);
+            return;
+        }
+
+        if (lastBlock.PrimaryTextBox is { } tb)
+        {
+            _activeLiveBlock = lastBlock;
+            UpdateBlockInlineRichDisplay(lastBlock, isFocused: true);
+            tb.Focus(FocusState.Programmatic);
+            tb.SelectionStart = (tb.Text ?? string.Empty).Length;
+            tb.SelectionLength = 0;
+        }
+    }
+
+    private void RebuildLiveEditor(bool reparse = true, int? focusBlockIndex = null, int? focusCaretIndex = null)
+    {
+        if (reparse)
+            _liveBlocks = MarkdownRenderer.ParseLiveBlocks(ViewModel.EditorText);
+
+        if (_liveBlocks.Count == 0)
+            _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+
+        LiveEditorPanel.Children.Clear();
+
+        for (var i = 0; i < _liveBlocks.Count; i++)
+        {
+            var block = _liveBlocks[i];
+            var element = CreateLiveBlockElement(block, i);
+            block.RootElement = element;
+            LiveEditorPanel.Children.Add(element);
+        }
+
+        if (focusBlockIndex is int targetIdx && targetIdx >= 0 && targetIdx < _liveBlocks.Count)
+        {
+            var targetBlock = _liveBlocks[targetIdx];
+            _activeLiveBlock = targetBlock;
+            UpdateBlockInlineRichDisplay(targetBlock, isFocused: true);
+
+            if (targetBlock.PrimaryTextBox is { } targetTb)
+            {
+                var caret = focusCaretIndex ?? (targetTb.Text ?? string.Empty).Length;
+                void FocusTarget()
+                {
+                    if (ViewModel.CurrentViewMode != EditorViewMode.Live || ViewModel.IsSettingsOpen)
+                        return;
+
+                    targetTb.Focus(FocusState.Programmatic);
+                    var clamped = Math.Clamp(caret, 0, (targetTb.Text ?? string.Empty).Length);
+                    targetTb.SelectionStart = clamped;
+                    targetTb.SelectionLength = 0;
+                    UpdateActiveCaretVisual(resetBlink: true);
+                }
+
+                if (targetTb.IsLoaded)
+                    DispatcherQueue.TryEnqueue(FocusTarget);
+                else
+                    targetTb.Loaded += (_, _) => DispatcherQueue.TryEnqueue(FocusTarget);
+            }
+        }
+        else if (_activeLiveBlock is null || !_liveBlocks.Contains(_activeLiveBlock))
+        {
+            _activeLiveBlock = _liveBlocks.FirstOrDefault();
+        }
+    }
+
+    private void SyncLiveBlocksToViewModel()
+    {
+        var markdown = MarkdownRenderer.SerializeLiveBlocks(_liveBlocks);
+        _isSyncingLiveEditor = true;
+        try
+        {
+            ViewModel.EditorText = markdown;
+            if (EditorTextBox.Text != markdown)
+                EditorTextBox.Text = markdown;
+        }
+        finally
+        {
+            _isSyncingLiveEditor = false;
+        }
+    }
+
+    private FrameworkElement CreateLiveBlockElement(LiveDocBlock block, int blockIndex)
+    {
+        var isDarkMode = ViewModel.IsDarkMode;
+        var baseFontSize = ViewModel.EditorFontSize;
+
+        var primaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 245, 245, 247) : ColorHelper.FromArgb(255, 28, 28, 30));
+        var secondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 108, 108, 112));
+        var surfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(22, 0, 0, 0));
+        var borderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(38, 255, 255, 255) : ColorHelper.FromArgb(28, 0, 0, 0));
+        var accentBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 10, 132, 255));
+        var monoFont = new FontFamily("Cascadia Mono, Consolas, Courier New");
+        var borderlessStyle = Application.Current?.Resources.TryGetValue("BorderlessTextBoxStyle", out var styleObj) == true
+            ? styleObj as Style
+            : null;
+
+        if (block.Kind == LiveBlockKind.TableBlock)
+        {
+            block.RichDisplayHost = null;
+            return MarkdownRenderer.CreateLiveTableElement(
+                block,
+                isDarkMode,
+                baseFontSize,
+                SyncLiveBlocksToViewModel,
+                onRequestExitBelow: () =>
+                {
+                    var idx = _liveBlocks.IndexOf(block);
+                    if (idx < 0)
+                        return;
+
+                    if (idx + 1 < _liveBlocks.Count && _liveBlocks[idx + 1].PrimaryTextBox is not null)
+                    {
+                        RebuildLiveEditor(reparse: false, focusBlockIndex: idx + 1, focusCaretIndex: 0);
+                    }
+                    else
+                    {
+                        _liveBlocks.Insert(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+                        SyncLiveBlocksToViewModel();
+                        RebuildLiveEditor(reparse: false, focusBlockIndex: idx + 1, focusCaretIndex: 0);
+                    }
+                },
+                onRequestDeleteTable: () =>
+                {
+                    var idx = _liveBlocks.IndexOf(block);
+                    if (idx < 0)
+                        return;
+
+                    _liveBlocks.RemoveAt(idx);
+                    if (_liveBlocks.Count == 0)
+                        _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+
+                    SyncLiveBlocksToViewModel();
+                    RebuildLiveEditor(reparse: false, focusBlockIndex: Math.Clamp(idx - 1, 0, _liveBlocks.Count - 1), focusCaretIndex: 0);
+                });
+        }
+
+        if (block.Kind == LiveBlockKind.Divider)
+        {
+            block.PrimaryTextBox = null;
+            block.RichDisplayHost = null;
+            var dividerContainer = new Grid
+            {
+                Padding = new Thickness(0, 10, 0, 10),
+                Background = new SolidColorBrush(Colors.Transparent)
+            };
+            dividerContainer.Children.Add(new Border
+            {
+                Height = 1,
+                Background = borderBrush,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            dividerContainer.PointerPressed += (_, _) =>
+            {
+                var idx = _liveBlocks.IndexOf(block);
+                if (idx >= 0)
+                {
+                    _liveBlocks.Insert(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+                    SyncLiveBlocksToViewModel();
+                    RebuildLiveEditor(reparse: false, focusBlockIndex: idx + 1, focusCaretIndex: 0);
+                }
+            };
+            return dividerContainer;
+        }
+
+        if (block.Kind == LiveBlockKind.CodeBlock)
+        {
+            block.RichDisplayHost = null;
+            var codeTb = new TextBox
+            {
+                Text = block.Content,
+                PlaceholderText = "Code block...",
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.Wrap,
+                IsSpellCheckEnabled = false,
+                FontFamily = monoFont,
+                FontSize = Math.Max(13, baseFontSize - 2),
+                Foreground = primaryBrush,
+                Background = new SolidColorBrush(Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0),
+                MinHeight = 28
+            };
+            if (borderlessStyle is not null)
+                codeTb.Style = borderlessStyle;
+
+            block.PrimaryTextBox = codeTb;
+            WireLiveBlockTextBoxEvents(block, codeTb);
+
+            return new Border
+            {
+                Background = surfaceBrush,
+                BorderBrush = borderBrush,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(14, 10, 14, 10),
+                Margin = new Thickness(0, 4, 0, 6),
+                Child = codeTb
+            };
+        }
+
+        var fontSize = block.Kind switch
+        {
+            LiveBlockKind.Heading1 => baseFontSize + 10,
+            LiveBlockKind.Heading2 => baseFontSize + 5,
+            LiveBlockKind.Heading3 => baseFontSize + 2,
+            _ => block.IsBlockCode ? Math.Max(13, baseFontSize - 1) : baseFontSize
+        };
+
+        var fontWeight = block.Kind is LiveBlockKind.Heading1 or LiveBlockKind.Heading2 or LiveBlockKind.Heading3
+            ? FontWeights.SemiBold
+            : (block.IsBlockBold ? FontWeights.Bold : FontWeights.Normal);
+
+        var fontStyle = (block.IsBlockItalic || block.Kind == LiveBlockKind.Quote)
+            ? Windows.UI.Text.FontStyle.Italic
+            : Windows.UI.Text.FontStyle.Normal;
+
+        var isTreeLine = block.Content.Contains("├─", StringComparison.Ordinal) ||
+                         block.Content.Contains("└─", StringComparison.Ordinal) ||
+                         block.Content.TrimStart().StartsWith('│');
+
+        var textForeground = (block.Kind == LiveBlockKind.Checklist && block.IsChecked) || block.Kind == LiveBlockKind.Quote
+            ? secondaryBrush
+            : primaryBrush;
+
+        var placeholder = block.Kind switch
+        {
+            LiveBlockKind.Heading1 => "Heading 1",
+            LiveBlockKind.Heading2 => "Heading 2",
+            LiveBlockKind.Heading3 => "Heading 3",
+            LiveBlockKind.Checklist => "To-do",
+            LiveBlockKind.Bullet => "List item",
+            LiveBlockKind.Quote => "Quote...",
+            _ => blockIndex == 0 && _liveBlocks.Count == 1 ? "Type '/' for commands, or start writing..." : string.Empty
+        };
+
+        var tb = new TextBox
+        {
+            Text = block.Content,
+            PlaceholderText = placeholder,
+            AcceptsReturn = false,
+            TextWrapping = isTreeLine ? TextWrapping.NoWrap : TextWrapping.Wrap,
+            IsSpellCheckEnabled = !isTreeLine && !block.IsBlockCode,
+            FontSize = fontSize,
+            FontWeight = fontWeight,
+            FontStyle = fontStyle,
+            Foreground = textForeground,
+            Background = new SolidColorBrush(Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0, 2, 0, 2),
+            MinHeight = Math.Max(26, Math.Round(fontSize * 1.45)),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        if (block.IsBlockCode || isTreeLine)
+            tb.FontFamily = monoFont;
+        if (borderlessStyle is not null)
+            tb.Style = borderlessStyle;
+
+        var richHost = new Border
+        {
+            Background = new SolidColorBrush(Colors.Transparent),
+            Padding = new Thickness(0, 2, 0, 2),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Visibility = Visibility.Collapsed
+        };
+        richHost.PointerPressed += (_, e) =>
+        {
+            e.Handled = true;
+            _activeLiveBlock = block;
+            UpdateBlockInlineRichDisplay(block, isFocused: true);
+            tb.Focus(FocusState.Programmatic);
+            tb.SelectionStart = (tb.Text ?? string.Empty).Length;
+            tb.SelectionLength = 0;
+        };
+
+        block.PrimaryTextBox = tb;
+        block.RichDisplayHost = richHost;
+        WireLiveBlockTextBoxEvents(block, tb);
+        UpdateBlockInlineRichDisplay(block, isFocused: ReferenceEquals(_activeLiveBlock, block) && tb.FocusState != FocusState.Unfocused);
+
+        var cellGrid = new Grid
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        cellGrid.Children.Add(tb);
+        cellGrid.Children.Add(richHost);
+
+        switch (block.Kind)
+        {
+            case LiveBlockKind.Checklist:
+            {
+                var row = new Grid
+                {
+                    Margin = new Thickness(0, 2, 0, 2),
+                    ColumnSpacing = 8
+                };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                var checkBox = new CheckBox
+                {
+                    IsChecked = block.IsChecked,
+                    MinWidth = 0,
+                    Padding = new Thickness(0),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                checkBox.Click += (_, _) =>
+                {
+                    block.IsChecked = checkBox.IsChecked == true;
+                    tb.Foreground = block.IsChecked ? secondaryBrush : primaryBrush;
+                    UpdateBlockInlineRichDisplay(block, isFocused: tb.FocusState != FocusState.Unfocused);
+                    SyncLiveBlocksToViewModel();
+                };
+
+                Grid.SetColumn(checkBox, 0);
+                Grid.SetColumn(cellGrid, 1);
+                row.Children.Add(checkBox);
+                row.Children.Add(cellGrid);
+                return row;
+            }
+
+            case LiveBlockKind.Bullet:
+            {
+                var row = new Grid
+                {
+                    Margin = new Thickness(0, 2, 0, 2),
+                    ColumnSpacing = 10
+                };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                var dot = new TextBlock
+                {
+                    Text = "•",
+                    FontSize = baseFontSize,
+                    Foreground = secondaryBrush,
+                    Margin = new Thickness(4, 2, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Top
+                };
+
+                Grid.SetColumn(dot, 0);
+                Grid.SetColumn(cellGrid, 1);
+                row.Children.Add(dot);
+                row.Children.Add(cellGrid);
+                return row;
+            }
+
+            case LiveBlockKind.Quote:
+            {
+                return new Border
+                {
+                    BorderThickness = new Thickness(3, 0, 0, 0),
+                    BorderBrush = accentBrush,
+                    Background = surfaceBrush,
+                    CornerRadius = new CornerRadius(4),
+                    Padding = new Thickness(12, 6, 12, 6),
+                    Margin = new Thickness(0, 3, 0, 3),
+                    Child = cellGrid
+                };
+            }
+
+            case LiveBlockKind.Heading1:
+                return new Border { Margin = new Thickness(0, 10, 0, 4), Child = cellGrid };
+
+            case LiveBlockKind.Heading2:
+                return new Border { Margin = new Thickness(0, 8, 0, 3), Child = cellGrid };
+
+            case LiveBlockKind.Heading3:
+                return new Border { Margin = new Thickness(0, 6, 0, 2), Child = cellGrid };
+
+            default:
+            {
+                if (block.IsBlockCode)
+                {
+                    return new Border
+                    {
+                        Background = surfaceBrush,
+                        CornerRadius = new CornerRadius(6),
+                        Padding = new Thickness(8, 2, 8, 2),
+                        Margin = new Thickness(0, 2, 0, 2),
+                        Child = cellGrid
+                    };
+                }
+
+                return new Border
+                {
+                    Margin = new Thickness(0, 1, 0, 1),
+                    Child = cellGrid
+                };
+            }
+        }
+    }
+
+    private void UpdateBlockInlineRichDisplay(LiveDocBlock block, bool isFocused)
+    {
+        if (block.PrimaryTextBox is not { } tb || block.RichDisplayHost is not { } richHost)
+            return;
+
+        if (!isFocused &&
+            !string.IsNullOrWhiteSpace(block.Content) &&
+            MarkdownRenderer.HasInlineMarkdownFormatting(block.Content))
+        {
+            var isDarkMode = ViewModel.IsDarkMode;
+            var baseFontSize = ViewModel.EditorFontSize;
+            var primaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 245, 245, 247) : ColorHelper.FromArgb(255, 28, 28, 30));
+            var secondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 108, 108, 112));
+            var accentBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 10, 132, 255));
+            var monoFont = new FontFamily("Cascadia Mono, Consolas, Courier New");
+            var sortedTitles = ViewModel.AllNoteItems
+                .Select(n => n.Title)
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .OrderByDescending(t => t.Length)
+                .ToList();
+
+            var fg = (block.Kind == LiveBlockKind.Checklist && block.IsChecked) || block.Kind == LiveBlockKind.Quote
+                ? secondaryBrush
+                : primaryBrush;
+
+            var formattedTb = MarkdownRenderer.CreateFormattedTextBlock(
+                block.Content,
+                tb.FontSize,
+                tb.FontWeight,
+                fg,
+                accentBrush,
+                monoFont,
+                new Thickness(0),
+                sortedTitles,
+                OnMentionClicked);
+            formattedTb.FontStyle = tb.FontStyle;
+            formattedTb.LineHeight = Math.Max(22, Math.Round(tb.FontSize * 1.45));
+
+            richHost.Child = formattedTb;
+            richHost.Visibility = Visibility.Visible;
+            tb.Opacity = 0.0;
+            tb.IsHitTestVisible = false;
+        }
+        else
+        {
+            richHost.Visibility = Visibility.Collapsed;
+            richHost.Child = null;
+            tb.Opacity = 1.0;
+            tb.IsHitTestVisible = true;
+        }
+    }
+
+    private void WireLiveBlockTextBoxEvents(LiveDocBlock block, TextBox tb)
+    {
+        tb.GotFocus += (_, _) =>
+        {
+            _activeLiveBlock = block;
+            UpdateBlockInlineRichDisplay(block, isFocused: true);
+        };
+
+        tb.LostFocus += (_, _) =>
+        {
+            UpdateBlockInlineRichDisplay(block, isFocused: false);
+        };
+
+        tb.TextChanged += (_, _) =>
+        {
+            if (_isSyncingLiveEditor)
+                return;
+
+            block.Content = tb.Text ?? string.Empty;
+
+            if (TryAutoConvertLiveBlock(block, tb))
+                return;
+
+            SyncLiveBlocksToViewModel();
+            UpdateSelectionToolbar();
+            UpdateSlashMenuAutocomplete();
+            UpdateMentionAutocomplete();
+            UpdateActiveMentionJumpPill();
+            UpdateActiveCaretVisual(resetBlink: true);
+
+            if (ViewModel.IsFluidAnimationEnabled && tb.FocusState != FocusState.Unfocused)
+            {
+                var text = tb.Text ?? string.Empty;
+                var caret = Math.Clamp(tb.SelectionStart, 0, text.Length);
+                var activeWord = ExtractCurrentWord(text, caret);
+                TriggerWordTypingAnimation(activeWord);
+            }
+        };
+
+        tb.SelectionChanged += (_, _) =>
+        {
+            if (_isSyncingLiveEditor)
+                return;
+
+            _activeLiveBlock = block;
+            UpdateSelectionToolbar();
+            UpdateSlashMenuAutocomplete();
+            UpdateMentionAutocomplete();
+            UpdateActiveMentionJumpPill();
+            UpdateActiveCaretVisual(resetBlink: true);
+        };
+
+        tb.PointerReleased += (_, _) =>
+        {
+            var ctrlDown = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(CoreVirtualKeyStates.Down);
+            if (ctrlDown && TryGetMentionedNoteAtCaret(out var targetNote) && targetNote is not null)
+                NavigateToNote(targetNote);
+        };
+
+        tb.PreviewKeyDown += (_, e) => OnLiveBlockPreviewKeyDown(block, tb, e);
+    }
+
+    private bool TryAutoConvertLiveBlock(LiveDocBlock block, TextBox tb)
+    {
+        var idx = _liveBlocks.IndexOf(block);
+        if (idx < 0)
+            return false;
+
+        var text = tb.Text ?? string.Empty;
+
+        if (block.Kind == LiveBlockKind.Paragraph)
+        {
+            if (text.StartsWith("### ", StringComparison.Ordinal))
+            {
+                block.Kind = LiveBlockKind.Heading3;
+                block.Content = text[4..];
+                SyncLiveBlocksToViewModel();
+                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: 0);
+                return true;
+            }
+            if (text.StartsWith("## ", StringComparison.Ordinal))
+            {
+                block.Kind = LiveBlockKind.Heading2;
+                block.Content = text[3..];
+                SyncLiveBlocksToViewModel();
+                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: 0);
+                return true;
+            }
+            if (text.StartsWith("# ", StringComparison.Ordinal))
+            {
+                block.Kind = LiveBlockKind.Heading1;
+                block.Content = text[2..];
+                SyncLiveBlocksToViewModel();
+                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: 0);
+                return true;
+            }
+            if (text.StartsWith("- [ ] ", StringComparison.OrdinalIgnoreCase) ||
+                text.StartsWith("[] ", StringComparison.OrdinalIgnoreCase))
+            {
+                var prefixLen = text.StartsWith("[] ", StringComparison.OrdinalIgnoreCase) ? 3 : 6;
+                block.Kind = LiveBlockKind.Checklist;
+                block.IsChecked = false;
+                block.Content = text[prefixLen..];
+                SyncLiveBlocksToViewModel();
+                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: 0);
+                return true;
+            }
+            if (text.StartsWith("- [x] ", StringComparison.OrdinalIgnoreCase))
+            {
+                block.Kind = LiveBlockKind.Checklist;
+                block.IsChecked = true;
+                block.Content = text[6..];
+                SyncLiveBlocksToViewModel();
+                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: 0);
+                return true;
+            }
+            if (text.StartsWith("- ", StringComparison.Ordinal) ||
+                text.StartsWith("* ", StringComparison.Ordinal))
+            {
+                block.Kind = LiveBlockKind.Bullet;
+                block.Content = text[2..];
+                SyncLiveBlocksToViewModel();
+                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: 0);
+                return true;
+            }
+            if (text.StartsWith("> ", StringComparison.Ordinal))
+            {
+                block.Kind = LiveBlockKind.Quote;
+                block.Content = text[2..];
+                SyncLiveBlocksToViewModel();
+                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: 0);
+                return true;
+            }
+            if (text.StartsWith("```", StringComparison.Ordinal))
+            {
+                block.Kind = LiveBlockKind.CodeBlock;
+                block.Content = text[3..].TrimStart();
+                SyncLiveBlocksToViewModel();
+                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: block.Content.Length);
+                return true;
+            }
+            if (text is "---" or "***")
+            {
+                block.Kind = LiveBlockKind.Divider;
+                block.Content = string.Empty;
+                _liveBlocks.Insert(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+                SyncLiveBlocksToViewModel();
+                RebuildLiveEditor(reparse: false, focusBlockIndex: idx + 1, focusCaretIndex: 0);
+                return true;
+            }
+        }
+
+        if (block.Kind != LiveBlockKind.CodeBlock && block.Kind != LiveBlockKind.TableBlock)
+        {
+            if (text.Length >= 5 &&
+                text.StartsWith("**", StringComparison.Ordinal) &&
+                text.EndsWith("**", StringComparison.Ordinal) &&
+                text.IndexOf("**", 2, StringComparison.Ordinal) == text.Length - 2)
+            {
+                block.IsBlockBold = true;
+                block.Content = text[2..^2];
+                SyncLiveBlocksToViewModel();
+                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: block.Content.Length);
+                return true;
+            }
+
+            if (text.Length >= 3 &&
+                text.StartsWith('`') &&
+                text.EndsWith('`') &&
+                text.IndexOf('`', 1) == text.Length - 1)
+            {
+                block.IsBlockCode = true;
+                block.Content = text[1..^1];
+                SyncLiveBlocksToViewModel();
+                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: block.Content.Length);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void OnLiveBlockPreviewKeyDown(LiveDocBlock block, TextBox tb, KeyRoutedEventArgs e)
+    {
+        var ctrlDown = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(CoreVirtualKeyStates.Down);
+        var shiftDown = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down);
+
+        if (!ctrlDown && SlashMenuPopupBorder.Visibility == Visibility.Visible && ViewModel.SlashMenuSuggestions.Count > 0)
+        {
+            if (e.Key == VirtualKey.Down)
+            {
+                e.Handled = true;
+                var next = (SlashMenuListView.SelectedIndex + 1) % ViewModel.SlashMenuSuggestions.Count;
+                SlashMenuListView.SelectedIndex = next;
+                SlashMenuListView.ScrollIntoView(ViewModel.SlashMenuSuggestions[next]);
+                return;
+            }
+            if (e.Key == VirtualKey.Up)
+            {
+                e.Handled = true;
+                var prev = (SlashMenuListView.SelectedIndex - 1 + ViewModel.SlashMenuSuggestions.Count) % ViewModel.SlashMenuSuggestions.Count;
+                SlashMenuListView.SelectedIndex = prev;
+                SlashMenuListView.ScrollIntoView(ViewModel.SlashMenuSuggestions[prev]);
+                return;
+            }
+            if (e.Key is VirtualKey.Enter or VirtualKey.Tab)
+            {
+                e.Handled = true;
+                var selected = SlashMenuListView.SelectedItem as SlashCommandItem ?? ViewModel.SlashMenuSuggestions[0];
+                ApplySlashCommand(selected);
+                return;
+            }
+        }
+
+        if (!ctrlDown && MentionPopupBorder.Visibility == Visibility.Visible && ViewModel.MentionSuggestions.Count > 0)
+        {
+            if (e.Key == VirtualKey.Down)
+            {
+                e.Handled = true;
+                var next = (MentionListView.SelectedIndex + 1) % ViewModel.MentionSuggestions.Count;
+                MentionListView.SelectedIndex = next;
+                MentionListView.ScrollIntoView(ViewModel.MentionSuggestions[next]);
+                return;
+            }
+            if (e.Key == VirtualKey.Up)
+            {
+                e.Handled = true;
+                var prev = (MentionListView.SelectedIndex - 1 + ViewModel.MentionSuggestions.Count) % ViewModel.MentionSuggestions.Count;
+                MentionListView.SelectedIndex = prev;
+                MentionListView.ScrollIntoView(ViewModel.MentionSuggestions[prev]);
+                return;
+            }
+            if (e.Key is VirtualKey.Enter or VirtualKey.Tab)
+            {
+                e.Handled = true;
+                var selected = MentionListView.SelectedItem as NoteItemViewModel ?? ViewModel.MentionSuggestions[0];
+                InsertMention(selected);
+                return;
+            }
+        }
+
+        var blockIdx = _liveBlocks.IndexOf(block);
+        if (blockIdx < 0)
+            return;
+
+        if (ctrlDown)
+        {
+            switch (e.Key)
+            {
+                case VirtualKey.B:
+                    e.Handled = true;
+                    ApplyLiveInlineFormat(block, tb, "**", "**", toggleBlockBold: true);
+                    return;
+                case VirtualKey.I:
+                    e.Handled = true;
+                    ApplyLiveInlineFormat(block, tb, "*", "*", toggleBlockItalic: true);
+                    return;
+                case VirtualKey.L:
+                    e.Handled = true;
+                    block.Kind = block.Kind == LiveBlockKind.Checklist ? LiveBlockKind.Paragraph : LiveBlockKind.Checklist;
+                    SyncLiveBlocksToViewModel();
+                    RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx, focusCaretIndex: tb.SelectionStart);
+                    return;
+                case VirtualKey.Number1:
+                    e.Handled = true;
+                    block.Kind = block.Kind == LiveBlockKind.Heading1 ? LiveBlockKind.Paragraph : LiveBlockKind.Heading1;
+                    SyncLiveBlocksToViewModel();
+                    RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx, focusCaretIndex: tb.SelectionStart);
+                    return;
+                case VirtualKey.Number2:
+                    e.Handled = true;
+                    block.Kind = block.Kind == LiveBlockKind.Heading2 ? LiveBlockKind.Paragraph : LiveBlockKind.Heading2;
+                    SyncLiveBlocksToViewModel();
+                    RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx, focusCaretIndex: tb.SelectionStart);
+                    return;
+                case VirtualKey.Number3:
+                    e.Handled = true;
+                    block.Kind = block.Kind == LiveBlockKind.Heading3 ? LiveBlockKind.Paragraph : LiveBlockKind.Heading3;
+                    SyncLiveBlocksToViewModel();
+                    RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx, focusCaretIndex: tb.SelectionStart);
+                    return;
+            }
+            return;
+        }
+
+        var text = tb.Text ?? string.Empty;
+        var caret = Math.Clamp(tb.SelectionStart, 0, text.Length);
+
+        if (e.Key == VirtualKey.Tab && ViewModel.IsTreeShortcutEnabled && TryParseTreeLine(text, out var indent, out _, out _))
+        {
+            e.Handled = true;
+            if (shiftDown)
+            {
+                if (indent.Length >= BranchIndent.Length)
+                {
+                    block.Content = text[BranchIndent.Length..];
+                    tb.Text = block.Content;
+                    tb.SelectionStart = Math.Max(0, caret - BranchIndent.Length);
+                    SyncLiveBlocksToViewModel();
+                }
+            }
+            else
+            {
+                block.Content = BranchIndent + text;
+                tb.Text = block.Content;
+                tb.SelectionStart = caret + BranchIndent.Length;
+                SyncLiveBlocksToViewModel();
+            }
+            return;
+        }
+
+        if (e.Key == VirtualKey.Enter && block.Kind != LiveBlockKind.CodeBlock)
+        {
+            e.Handled = true;
+
+            if (shiftDown && ViewModel.IsTreeShortcutEnabled)
+            {
+                if (TryParseTreeLine(text, out var treeIndent, out var isMid, out var treeBody))
+                {
+                    if (string.IsNullOrWhiteSpace(treeBody))
+                    {
+                        block.Content = string.Empty;
+                        SyncLiveBlocksToViewModel();
+                        RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx, focusCaretIndex: 0);
+                        return;
+                    }
+
+                    if (!isMid)
+                    {
+                        var prefixOffset = treeIndent.Length;
+                        block.Content = treeIndent + BranchMid + text[(prefixOffset + BranchEnd.Length)..];
+                    }
+
+                    var nextTreeLine = treeIndent + BranchEnd;
+                    _liveBlocks.Insert(blockIdx + 1, new LiveDocBlock
+                    {
+                        Kind = LiveBlockKind.Paragraph,
+                        Content = nextTreeLine
+                    });
+                    SyncLiveBlocksToViewModel();
+                    RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx + 1, focusCaretIndex: nextTreeLine.Length);
+                    return;
+                }
+
+                _liveBlocks.Insert(blockIdx + 1, new LiveDocBlock
+                {
+                    Kind = LiveBlockKind.Paragraph,
+                    Content = BranchEnd
+                });
+                SyncLiveBlocksToViewModel();
+                RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx + 1, focusCaretIndex: BranchEnd.Length);
+                return;
+            }
+
+            if (block.Kind is LiveBlockKind.Checklist or LiveBlockKind.Bullet or LiveBlockKind.Quote &&
+                string.IsNullOrWhiteSpace(text))
+            {
+                block.Kind = LiveBlockKind.Paragraph;
+                block.IsChecked = false;
+                SyncLiveBlocksToViewModel();
+                RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx, focusCaretIndex: 0);
+                return;
+            }
+
+            var before = text[..caret];
+            var after = text[caret..];
+            block.Content = before;
+
+            var nextKind = block.Kind is LiveBlockKind.Checklist or LiveBlockKind.Bullet
+                ? block.Kind
+                : LiveBlockKind.Paragraph;
+
+            _liveBlocks.Insert(blockIdx + 1, new LiveDocBlock
+            {
+                Kind = nextKind,
+                Content = after
+            });
+            SyncLiveBlocksToViewModel();
+            RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx + 1, focusCaretIndex: 0);
+            return;
+        }
+
+        if (e.Key == VirtualKey.Back && tb.SelectionStart == 0 && tb.SelectionLength == 0)
+        {
+            if (block.Kind != LiveBlockKind.Paragraph || block.IsBlockBold || block.IsBlockItalic || block.IsBlockCode)
+            {
+                e.Handled = true;
+                block.Kind = LiveBlockKind.Paragraph;
+                block.IsChecked = false;
+                block.IsBlockBold = false;
+                block.IsBlockItalic = false;
+                block.IsBlockCode = false;
+                SyncLiveBlocksToViewModel();
+                RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx, focusCaretIndex: 0);
+                return;
+            }
+
+            if (blockIdx > 0)
+            {
+                e.Handled = true;
+                var prevBlock = _liveBlocks[blockIdx - 1];
+                if (prevBlock.Kind == LiveBlockKind.Divider)
+                {
+                    _liveBlocks.RemoveAt(blockIdx - 1);
+                    SyncLiveBlocksToViewModel();
+                    RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx - 1, focusCaretIndex: 0);
+                    return;
+                }
+
+                if (prevBlock.Kind != LiveBlockKind.TableBlock)
+                {
+                    var prevLen = (prevBlock.Content ?? string.Empty).Length;
+                    prevBlock.Content = (prevBlock.Content ?? string.Empty) + text;
+                    _liveBlocks.RemoveAt(blockIdx);
+                    SyncLiveBlocksToViewModel();
+                    RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx - 1, focusCaretIndex: prevLen);
+                }
+                return;
+            }
+        }
+
+        if (e.Key == VirtualKey.Up && block.Kind != LiveBlockKind.CodeBlock)
+        {
+            for (var i = blockIdx - 1; i >= 0; i--)
+            {
+                if (_liveBlocks[i].PrimaryTextBox is { } prevTb)
+                {
+                    e.Handled = true;
+                    _activeLiveBlock = _liveBlocks[i];
+                    UpdateBlockInlineRichDisplay(_liveBlocks[i], isFocused: true);
+                    prevTb.Focus(FocusState.Programmatic);
+                    prevTb.SelectionStart = Math.Clamp(caret, 0, (prevTb.Text ?? string.Empty).Length);
+                    prevTb.SelectionLength = 0;
+                    return;
+                }
+            }
+        }
+
+        if (e.Key == VirtualKey.Down && block.Kind != LiveBlockKind.CodeBlock)
+        {
+            for (var i = blockIdx + 1; i < _liveBlocks.Count; i++)
+            {
+                if (_liveBlocks[i].PrimaryTextBox is { } nextTb)
+                {
+                    e.Handled = true;
+                    _activeLiveBlock = _liveBlocks[i];
+                    UpdateBlockInlineRichDisplay(_liveBlocks[i], isFocused: true);
+                    nextTb.Focus(FocusState.Programmatic);
+                    nextTb.SelectionStart = Math.Clamp(caret, 0, (nextTb.Text ?? string.Empty).Length);
+                    nextTb.SelectionLength = 0;
+                    return;
+                }
+            }
+        }
+    }
+
+    private void ApplyLiveInlineFormat(
+        LiveDocBlock block,
+        TextBox tb,
+        string prefix,
+        string suffix,
+        bool toggleBlockBold = false,
+        bool toggleBlockItalic = false,
+        bool toggleBlockCode = false)
+    {
+        var idx = _liveBlocks.IndexOf(block);
+        if (idx < 0)
+            return;
+
+        var text = tb.Text ?? string.Empty;
+        var start = Math.Clamp(tb.SelectionStart, 0, text.Length);
+        var length = Math.Clamp(tb.SelectionLength, 0, text.Length - start);
+
+        if (length == 0 || length == text.Length)
+        {
+            if (toggleBlockBold)
+                block.IsBlockBold = !block.IsBlockBold;
+            else if (toggleBlockItalic)
+                block.IsBlockItalic = !block.IsBlockItalic;
+            else if (toggleBlockCode)
+                block.IsBlockCode = !block.IsBlockCode;
+            else
+            {
+                var wrapped = $"{prefix}{(length > 0 ? text : "text")}{suffix}";
+                block.Content = wrapped;
+            }
+
+            SyncLiveBlocksToViewModel();
+            RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: (block.Content ?? string.Empty).Length);
+            return;
+        }
+
+        var selected = text.Substring(start, length);
+        var updated = text[..start] + prefix + selected + suffix + text[(start + length)..];
+        block.Content = updated;
+        tb.Text = updated;
+        tb.SelectionStart = start + prefix.Length;
+        tb.SelectionLength = selected.Length;
+        SyncLiveBlocksToViewModel();
+    }
+
     private void WrapEditorSelection(string prefix, string suffix)
     {
+        if (ViewModel.CurrentViewMode == EditorViewMode.Live && _activeLiveBlock is { PrimaryTextBox: { } liveTb } liveBlock)
+        {
+            ApplyLiveInlineFormat(
+                liveBlock,
+                liveTb,
+                prefix,
+                suffix,
+                toggleBlockBold: prefix == "**",
+                toggleBlockItalic: prefix == "*",
+                toggleBlockCode: prefix == "`");
+            return;
+        }
+
         var text = EditorTextBox.Text ?? string.Empty;
         var start = Math.Clamp(EditorTextBox.SelectionStart, 0, text.Length);
         var length = Math.Clamp(EditorTextBox.SelectionLength, 0, text.Length - start);
@@ -620,17 +1645,14 @@ public sealed partial class MainWindow : Window
 
     private void OnEditorTextChanged(object sender, TextChangedEventArgs e)
     {
-        if (_isSyncingVisualTable)
+        if (_isSyncingLiveEditor)
             return;
-
-        if (ViewModel.CurrentViewMode != EditorViewMode.Write)
-            RefreshMarkdownPreview();
 
         UpdateSelectionToolbar();
         UpdateSlashMenuAutocomplete();
         UpdateMentionAutocomplete();
         UpdateActiveMentionJumpPill();
-        UpdateInlineVisualTableEditor(forceRebuild: true);
+        UpdateActiveCaretVisual(resetBlink: true);
 
         if (!ViewModel.IsFluidAnimationEnabled || EditorTextBox.FocusState == FocusState.Unfocused)
             return;
@@ -643,14 +1665,14 @@ public sealed partial class MainWindow : Window
 
     private void OnEditorSelectionChanged(object sender, RoutedEventArgs e)
     {
-        if (_isSyncingVisualTable)
+        if (_isSyncingLiveEditor)
             return;
 
         UpdateSelectionToolbar();
         UpdateSlashMenuAutocomplete();
         UpdateMentionAutocomplete();
         UpdateActiveMentionJumpPill();
-        UpdateInlineVisualTableEditor(forceRebuild: false);
+        UpdateActiveCaretVisual(resetBlink: true);
     }
 
     private void OnEditorPointerReleased(object sender, PointerRoutedEventArgs e)
@@ -664,61 +1686,74 @@ public sealed partial class MainWindow : Window
 
     private void UpdateSelectionToolbar()
     {
-        var hasSelection = EditorTextBox.SelectionLength > 0;
+        var activeTb = GetActiveEditorTextBox();
+        var hasSelection = activeTb.SelectionLength > 0;
         SelectionToolbarBorder.Visibility = hasSelection ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnSelectionBoldClick(object sender, RoutedEventArgs e)
     {
         WrapEditorSelection("**", "**");
-        EditorTextBox.Focus(FocusState.Programmatic);
+        FocusActiveEditorPane();
     }
 
     private void OnSelectionItalicClick(object sender, RoutedEventArgs e)
     {
         WrapEditorSelection("*", "*");
-        EditorTextBox.Focus(FocusState.Programmatic);
+        FocusActiveEditorPane();
     }
 
     private void OnSelectionStrikethroughClick(object sender, RoutedEventArgs e)
     {
         WrapEditorSelection("~~", "~~");
-        EditorTextBox.Focus(FocusState.Programmatic);
+        FocusActiveEditorPane();
     }
 
     private void OnSelectionCodeClick(object sender, RoutedEventArgs e)
     {
         WrapEditorSelection("`", "`");
-        EditorTextBox.Focus(FocusState.Programmatic);
+        FocusActiveEditorPane();
     }
 
     private void OnSelectionLinkClick(object sender, RoutedEventArgs e)
     {
-        var text = EditorTextBox.Text ?? string.Empty;
-        var start = Math.Clamp(EditorTextBox.SelectionStart, 0, text.Length);
-        var length = Math.Clamp(EditorTextBox.SelectionLength, 0, text.Length - start);
+        var activeTb = GetActiveEditorTextBox();
+        var text = activeTb.Text ?? string.Empty;
+        var start = Math.Clamp(activeTb.SelectionStart, 0, text.Length);
+        var length = Math.Clamp(activeTb.SelectionLength, 0, text.Length - start);
         var selected = length > 0 ? text.Substring(start, length) : "link";
         const string defaultUrl = "https://";
         var replacement = $"[{selected}]({defaultUrl})";
 
         var updated = text[..start] + replacement + text[(start + length)..];
-        EditorTextBox.Text = updated;
-        ViewModel.EditorText = updated;
-        EditorTextBox.SelectionStart = start + selected.Length + 3;
-        EditorTextBox.SelectionLength = defaultUrl.Length;
-        EditorTextBox.Focus(FocusState.Programmatic);
+        activeTb.Text = updated;
+
+        if (ViewModel.CurrentViewMode == EditorViewMode.Live && _activeLiveBlock is not null)
+        {
+            _activeLiveBlock.Content = updated;
+            SyncLiveBlocksToViewModel();
+        }
+        else
+        {
+            ViewModel.EditorText = updated;
+        }
+
+        activeTb.SelectionStart = start + selected.Length + 3;
+        activeTb.SelectionLength = defaultUrl.Length;
+        activeTb.Focus(FocusState.Programmatic);
     }
 
     private void UpdateSlashMenuAutocomplete()
     {
-        if (EditorTextBox.FocusState == FocusState.Unfocused || EditorTextBox.SelectionLength > 0)
+        var activeTb = GetActiveEditorTextBox();
+        if (activeTb.FocusState == FocusState.Unfocused || activeTb.SelectionLength > 0)
         {
             HideSlashMenuPopup();
             return;
         }
 
-        var text = EditorTextBox.Text ?? string.Empty;
-        var caret = Math.Clamp(EditorTextBox.SelectionStart, 0, text.Length);
+        var text = activeTb.Text ?? string.Empty;
+        var caret = Math.Clamp(activeTb.SelectionStart, 0, text.Length);
 
         if (TryGetActiveSlashTrigger(text, caret, out var slashIndex, out var query))
         {
@@ -785,6 +1820,12 @@ public sealed partial class MainWindow : Window
 
     private void ApplySlashCommand(SlashCommandItem item)
     {
+        if (ViewModel.CurrentViewMode == EditorViewMode.Live && _activeLiveBlock is { PrimaryTextBox: { } liveTb } liveBlock)
+        {
+            ApplyLiveSlashCommand(liveBlock, liveTb, item);
+            return;
+        }
+
         var text = EditorTextBox.Text ?? string.Empty;
         var caret = Math.Clamp(EditorTextBox.SelectionStart, 0, text.Length);
         var slashIndex = _activeSlashIndex;
@@ -798,7 +1839,6 @@ public sealed partial class MainWindow : Window
             }
         }
 
-        // Remove the `/query` trigger first
         var baseText = text[..slashIndex] + text[caret..];
         var lineStart = FindLineStart(baseText, slashIndex);
         var lineEnd = FindLineEnd(baseText, slashIndex);
@@ -881,8 +1921,113 @@ public sealed partial class MainWindow : Window
 
         HideSlashMenuPopup();
         ApplyEditorText(updated, newCaret);
-        UpdateInlineVisualTableEditor(forceRebuild: true);
         EditorTextBox.Focus(FocusState.Programmatic);
+    }
+
+    private void ApplyLiveSlashCommand(LiveDocBlock block, TextBox tb, SlashCommandItem item)
+    {
+        var idx = _liveBlocks.IndexOf(block);
+        if (idx < 0)
+        {
+            HideSlashMenuPopup();
+            return;
+        }
+
+        var text = tb.Text ?? string.Empty;
+        var caret = Math.Clamp(tb.SelectionStart, 0, text.Length);
+        var slashIndex = _activeSlashIndex;
+
+        if (slashIndex < 0 || slashIndex >= caret || slashIndex >= text.Length || text[slashIndex] != '/')
+        {
+            if (!TryGetActiveSlashTrigger(text, caret, out slashIndex, out _))
+                slashIndex = caret;
+        }
+
+        var cleaned = (text[..slashIndex] + text[caret..]).TrimStart();
+        HideSlashMenuPopup();
+
+        switch (item.Id)
+        {
+            case "h1":
+                block.Kind = LiveBlockKind.Heading1;
+                block.Content = cleaned;
+                break;
+
+            case "h2":
+                block.Kind = LiveBlockKind.Heading2;
+                block.Content = cleaned;
+                break;
+
+            case "h3":
+                block.Kind = LiveBlockKind.Heading3;
+                block.Content = cleaned;
+                break;
+
+            case "paragraph":
+                block.Kind = LiveBlockKind.Paragraph;
+                block.IsBlockBold = false;
+                block.IsBlockItalic = false;
+                block.IsBlockCode = false;
+                block.Content = cleaned;
+                break;
+
+            case "checklist":
+                block.Kind = LiveBlockKind.Checklist;
+                block.IsChecked = false;
+                block.Content = cleaned;
+                break;
+
+            case "quote":
+                block.Kind = LiveBlockKind.Quote;
+                block.Content = cleaned;
+                break;
+
+            case "code":
+                block.Kind = LiveBlockKind.CodeBlock;
+                block.Content = cleaned;
+                break;
+
+            case "table":
+            {
+                var tableMatrix = new List<List<string>>
+                {
+                    new() { "Column 1", "Column 2", "Column 3" },
+                    new() { string.Empty, string.Empty, string.Empty },
+                    new() { string.Empty, string.Empty, string.Empty }
+                };
+
+                if (string.IsNullOrWhiteSpace(cleaned))
+                {
+                    block.Kind = LiveBlockKind.TableBlock;
+                    block.Content = string.Empty;
+                    block.TableMatrix = tableMatrix;
+                    if (idx == _liveBlocks.Count - 1)
+                        _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+                }
+                else
+                {
+                    block.Content = cleaned;
+                    _liveBlocks.Insert(idx + 1, new LiveDocBlock
+                    {
+                        Kind = LiveBlockKind.TableBlock,
+                        TableMatrix = tableMatrix
+                    });
+                    if (idx + 1 == _liveBlocks.Count - 1)
+                        _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+                    idx++;
+                }
+
+                SyncLiveBlocksToViewModel();
+                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: 0);
+                return;
+            }
+
+            default:
+                return;
+        }
+
+        SyncLiveBlocksToViewModel();
+        RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: block.Content.Length);
     }
 
     private static string StripBlockFormattingPrefix(string line)
@@ -904,100 +2049,17 @@ public sealed partial class MainWindow : Window
         return line;
     }
 
-    private void UpdateInlineVisualTableEditor(bool forceRebuild)
-    {
-        var raw = (EditorTextBox.Text ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
-        var lines = raw.Split('\n');
-        var caret = Math.Clamp(EditorTextBox.SelectionStart, 0, (EditorTextBox.Text ?? string.Empty).Length);
-
-        var caretLineIndex = 0;
-        var text = EditorTextBox.Text ?? string.Empty;
-        for (var i = 0; i < caret && i < text.Length; i++)
-        {
-            if (text[i] == '\r')
-            {
-                caretLineIndex++;
-                if (i + 1 < text.Length && text[i + 1] == '\n')
-                    i++;
-            }
-            else if (text[i] == '\n')
-            {
-                caretLineIndex++;
-            }
-        }
-
-        if (MarkdownRenderer.TryFindTableBlockAtLine(lines, caretLineIndex, out var tableStart, out var tableEnd, out var rawTableLines))
-        {
-            if (!forceRebuild &&
-                InlineVisualTableCard.Visibility == Visibility.Visible &&
-                _activeInlineTableStartLine == tableStart &&
-                InlineVisualTableHost.Content is not null)
-            {
-                return;
-            }
-
-            _activeInlineTableStartLine = tableStart;
-            InlineVisualTableHost.Content = MarkdownRenderer.CreateInteractiveTableElement(
-                tableStart,
-                tableEnd,
-                rawTableLines,
-                ViewModel.IsDarkMode,
-                ViewModel.EditorFontSize,
-                OnVisualTableMarkdownChanged);
-            InlineVisualTableCard.Visibility = Visibility.Visible;
-            return;
-        }
-
-        _activeInlineTableStartLine = -1;
-        InlineVisualTableCard.Visibility = Visibility.Collapsed;
-        InlineVisualTableHost.Content = null;
-    }
-
-    private void OnCloseInlineVisualTableClick(object sender, RoutedEventArgs e)
-    {
-        _activeInlineTableStartLine = -1;
-        InlineVisualTableCard.Visibility = Visibility.Collapsed;
-        InlineVisualTableHost.Content = null;
-        EditorTextBox.Focus(FocusState.Programmatic);
-    }
-
-    private void OnVisualTableMarkdownChanged(int startLine, int endLine, IReadOnlyList<string> newTableLines)
-    {
-        var normalized = (ViewModel.EditorText ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
-        var lines = normalized.Split('\n').ToList();
-        if (startLine < 0 || startLine >= lines.Count)
-            return;
-
-        var clampedEnd = Math.Clamp(endLine, startLine, lines.Count - 1);
-        var removeCount = clampedEnd - startLine + 1;
-        lines.RemoveRange(startLine, removeCount);
-        lines.InsertRange(startLine, newTableLines);
-
-        var updated = string.Join("\r", lines);
-        _isSyncingVisualTable = true;
-        try
-        {
-            var prevCaret = EditorTextBox.SelectionStart;
-            EditorTextBox.Text = updated;
-            ViewModel.EditorText = updated;
-            EditorTextBox.SelectionStart = Math.Clamp(prevCaret, 0, updated.Length);
-        }
-        finally
-        {
-            _isSyncingVisualTable = false;
-        }
-    }
-
     private void UpdateMentionAutocomplete()
     {
-        if (EditorTextBox.FocusState == FocusState.Unfocused || SlashMenuPopupBorder.Visibility == Visibility.Visible)
+        var activeTb = GetActiveEditorTextBox();
+        if (activeTb.FocusState == FocusState.Unfocused || SlashMenuPopupBorder.Visibility == Visibility.Visible)
         {
             HideMentionPopup();
             return;
         }
 
-        var text = EditorTextBox.Text ?? string.Empty;
-        var caret = Math.Clamp(EditorTextBox.SelectionStart, 0, text.Length);
+        var text = activeTb.Text ?? string.Empty;
+        var caret = Math.Clamp(activeTb.SelectionStart, 0, text.Length);
 
         if (TryGetActiveMentionTrigger(text, caret, out var atIndex, out var query))
         {
@@ -1058,8 +2120,9 @@ public sealed partial class MainWindow : Window
 
     private void InsertMention(NoteItemViewModel note)
     {
-        var text = EditorTextBox.Text ?? string.Empty;
-        var caret = Math.Clamp(EditorTextBox.SelectionStart, 0, text.Length);
+        var activeTb = GetActiveEditorTextBox();
+        var text = activeTb.Text ?? string.Empty;
+        var caret = Math.Clamp(activeTb.SelectionStart, 0, text.Length);
         var atIndex = _activeMentionAtIndex;
 
         if (atIndex < 0 || atIndex >= caret || atIndex >= text.Length || text[atIndex] != '@')
@@ -1076,8 +2139,21 @@ public sealed partial class MainWindow : Window
         var newCaret = atIndex + mentionText.Length;
 
         HideMentionPopup();
-        ApplyEditorText(updated, newCaret);
-        EditorTextBox.Focus(FocusState.Programmatic);
+
+        if (ViewModel.CurrentViewMode == EditorViewMode.Live && _activeLiveBlock is not null)
+        {
+            _activeLiveBlock.Content = updated;
+            activeTb.Text = updated;
+            activeTb.SelectionStart = Math.Clamp(newCaret, 0, updated.Length);
+            activeTb.SelectionLength = 0;
+            SyncLiveBlocksToViewModel();
+            activeTb.Focus(FocusState.Programmatic);
+        }
+        else
+        {
+            ApplyEditorText(updated, newCaret);
+            EditorTextBox.Focus(FocusState.Programmatic);
+        }
     }
 
     private void OnMentionItemClick(object sender, ItemClickEventArgs e)
@@ -1104,11 +2180,12 @@ public sealed partial class MainWindow : Window
     private bool TryGetMentionedNoteAtCaret(out NoteItemViewModel? matchedNote)
     {
         matchedNote = null;
-        var text = EditorTextBox.Text ?? string.Empty;
+        var activeTb = GetActiveEditorTextBox();
+        var text = activeTb.Text ?? string.Empty;
         if (string.IsNullOrEmpty(text))
             return false;
 
-        var caret = Math.Clamp(EditorTextBox.SelectionStart, 0, text.Length);
+        var caret = Math.Clamp(activeTb.SelectionStart, 0, text.Length);
         var lineStart = FindLineStart(text, caret);
         var lineEnd = FindLineEnd(text, caret);
         var line = text[lineStart..lineEnd];
@@ -1175,7 +2252,7 @@ public sealed partial class MainWindow : Window
         HideSlashMenuPopup();
         ViewModel.SelectedNote = note;
         ViewModel.IsSettingsOpen = false;
-        EditorTextBox.Focus(FocusState.Programmatic);
+        FocusActiveEditorPane();
     }
 
     private static string ExtractCurrentWord(string text, int caret)
@@ -1248,21 +2325,26 @@ public sealed partial class MainWindow : Window
                 HideMentionPopup();
                 HideSlashMenuPopup();
                 SelectionToolbarBorder.Visibility = Visibility.Collapsed;
+                RebuildLiveEditor(reparse: true);
                 UpdateActiveMentionJumpPill();
-                UpdateInlineVisualTableEditor(forceRebuild: true);
-                RefreshMarkdownPreview();
+                UpdateActiveCaretVisual(resetBlink: true);
                 if (ViewModel.IsFluidAnimationEnabled)
                 {
+                    PlayFluidTransition(LiveEditorScrollViewer);
                     PlayFluidTransition(EditorTextBox);
-                    PlayFluidTransition(MarkdownPreviewPanel);
                 }
                 break;
 
             case nameof(MainViewModel.CurrentViewMode):
                 HideMentionPopup();
                 HideSlashMenuPopup();
-                RefreshMarkdownPreview();
+                SelectionToolbarBorder.Visibility = Visibility.Collapsed;
+                if (ViewModel.CurrentViewMode == EditorViewMode.Live)
+                    RebuildLiveEditor(reparse: true, focusBlockIndex: 0);
+                else if (EditorTextBox.Text != ViewModel.EditorText)
+                    EditorTextBox.Text = ViewModel.EditorText;
                 AnimateViewModeChange();
+                UpdateActiveCaretVisual(resetBlink: true);
                 break;
 
             case nameof(MainViewModel.IsSidebarOpen):
@@ -1271,6 +2353,7 @@ public sealed partial class MainWindow : Window
 
             case nameof(MainViewModel.IsSettingsOpen):
                 AnimateSettingsModal(ViewModel.IsSettingsOpen);
+                UpdateActiveCaretVisual(resetBlink: true);
                 break;
 
             case nameof(MainViewModel.CurrentThemeMode):
@@ -1284,48 +2367,9 @@ public sealed partial class MainWindow : Window
 
             case nameof(MainViewModel.IsDarkMode):
             case nameof(MainViewModel.EditorFontSize):
-                UpdateInlineVisualTableEditor(forceRebuild: true);
-                RefreshMarkdownPreview();
+                RebuildLiveEditor(reparse: false);
+                UpdateActiveCaretVisual(resetBlink: true);
                 break;
-        }
-    }
-
-    private void RefreshMarkdownPreview()
-    {
-        if (ViewModel.CurrentViewMode == EditorViewMode.Write)
-            return;
-
-        var noteTitles = ViewModel.AllNoteItems
-            .Select(n => n.Title)
-            .Where(t => !string.IsNullOrWhiteSpace(t))
-            .ToList();
-
-        MarkdownRenderer.Render(
-            MarkdownPreviewPanel,
-            ViewModel.EditorText,
-            ViewModel.IsDarkMode,
-            ViewModel.EditorFontSize,
-            OnPreviewChecklistToggled,
-            noteTitles,
-            OnMentionClicked,
-            OnVisualTableMarkdownChanged);
-    }
-
-    private void OnPreviewChecklistToggled(int lineIndex, bool isChecked)
-    {
-        var lines = (ViewModel.EditorText ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
-        if (lineIndex < 0 || lineIndex >= lines.Length)
-            return;
-
-        var line = lines[lineIndex];
-        var idx = line.IndexOf("- [", StringComparison.OrdinalIgnoreCase);
-        if (idx >= 0 && idx + 5 <= line.Length)
-        {
-            lines[lineIndex] = line[..(idx + 3)] + (isChecked ? "x" : " ") + line[(idx + 4)..];
-            var updated = string.Join("\r", lines);
-            EditorTextBox.Text = updated;
-            ViewModel.EditorText = updated;
-            RefreshMarkdownPreview();
         }
     }
 
@@ -1401,10 +2445,10 @@ public sealed partial class MainWindow : Window
         sb.Children.Add(pillSlide);
         sb.Begin();
 
-        if (ViewModel.EditorPaneVisibility == Visibility.Visible)
+        if (ViewModel.LivePaneVisibility == Visibility.Visible)
+            PlayFluidTransition(LiveEditorScrollViewer);
+        if (ViewModel.SourcePaneVisibility == Visibility.Visible)
             PlayFluidTransition(EditorTextBox);
-        if (ViewModel.PreviewPaneVisibility == Visibility.Visible)
-            PlayFluidTransition(MarkdownPreviewPanel);
     }
 
     private void AnimateThemeModePill()
@@ -1599,7 +2643,7 @@ public sealed partial class MainWindow : Window
                 {
                     CommandPaletteOverlay.Visibility = Visibility.Collapsed;
                     if (!ViewModel.IsSettingsOpen)
-                        EditorTextBox.Focus(FocusState.Programmatic);
+                        FocusActiveEditorPane();
                 }
             };
             sb.Begin();
@@ -1658,7 +2702,7 @@ public sealed partial class MainWindow : Window
         {
             ViewModel.SelectedNote = item.TargetNote;
             ViewModel.IsSettingsOpen = false;
-            EditorTextBox.Focus(FocusState.Programmatic);
+            FocusActiveEditorPane();
             return;
         }
         item.ExecuteAction?.Invoke();
@@ -2074,5 +3118,212 @@ public sealed partial class MainWindow : Window
         {
             // Ignore passthrough registration errors during initial window teardown/creation
         }
+    }
+
+    private void OnRootGotFocus(object sender, RoutedEventArgs e)
+    {
+        if (e.OriginalSource is TextBox tb)
+        {
+            AttachFocusedTextBox(tb);
+            UpdateActiveCaretVisual(resetBlink: true);
+            DispatcherQueue.TryEnqueue(() => UpdateActiveCaretVisual(resetBlink: true));
+        }
+    }
+
+    private void OnRootLostFocus(object sender, RoutedEventArgs e)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_focusedTextBox is null || _focusedTextBox.FocusState == FocusState.Unfocused)
+            {
+                DetachFocusedTextBox();
+                _caretBlinkTimer.Stop();
+                EditorCaretBar.Visibility = Visibility.Collapsed;
+            }
+        });
+    }
+
+    private void AttachFocusedTextBox(TextBox tb)
+    {
+        if (ReferenceEquals(_focusedTextBox, tb))
+            return;
+
+        DetachFocusedTextBox();
+        _focusedTextBox = tb;
+
+        if (!ReferenceEquals(tb, EditorTextBox))
+        {
+            tb.SelectionChanged += OnSecondaryTextBoxSelectionChanged;
+            tb.TextChanged += OnSecondaryTextBoxTextChanged;
+        }
+
+        _focusedScrollViewer = FindDescendant<ScrollViewer>(tb);
+        if (_focusedScrollViewer is not null)
+            _focusedScrollViewer.ViewChanged += OnFocusedTextBoxScrollViewChanged;
+    }
+
+    private void DetachFocusedTextBox()
+    {
+        if (_focusedScrollViewer is not null)
+        {
+            _focusedScrollViewer.ViewChanged -= OnFocusedTextBoxScrollViewChanged;
+            _focusedScrollViewer = null;
+        }
+
+        if (_focusedTextBox is not null)
+        {
+            if (!ReferenceEquals(_focusedTextBox, EditorTextBox))
+            {
+                _focusedTextBox.SelectionChanged -= OnSecondaryTextBoxSelectionChanged;
+                _focusedTextBox.TextChanged -= OnSecondaryTextBoxTextChanged;
+            }
+
+            _focusedTextBox = null;
+        }
+    }
+
+    private void OnSecondaryTextBoxSelectionChanged(object sender, RoutedEventArgs e) =>
+        UpdateActiveCaretVisual(resetBlink: true);
+
+    private void OnSecondaryTextBoxTextChanged(object sender, TextChangedEventArgs e) =>
+        UpdateActiveCaretVisual(resetBlink: true);
+
+    private void OnFocusedTextBoxScrollViewChanged(object? sender, ScrollViewerViewChangedEventArgs e) =>
+        UpdateActiveCaretVisual(resetBlink: false);
+
+    private void UpdateActiveCaretVisual(bool resetBlink = true)
+    {
+        var tb = _focusedTextBox;
+        if (tb is null ||
+            tb.FocusState == FocusState.Unfocused ||
+            tb.Visibility != Visibility.Visible ||
+            tb.ActualWidth <= 0 ||
+            tb.ActualHeight <= 0 ||
+            tb.SelectionLength > 0)
+        {
+            EditorCaretBar.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        if (ReferenceEquals(tb, EditorTextBox) &&
+            (ViewModel.IsSettingsOpen || ViewModel.SourcePaneVisibility != Visibility.Visible))
+        {
+            EditorCaretBar.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        if (_focusedScrollViewer is null)
+        {
+            _focusedScrollViewer = FindDescendant<ScrollViewer>(tb);
+            if (_focusedScrollViewer is not null)
+                _focusedScrollViewer.ViewChanged += OnFocusedTextBoxScrollViewChanged;
+        }
+
+        try
+        {
+            var text = tb.Text ?? string.Empty;
+            var caretIndex = Math.Clamp(tb.SelectionStart, 0, text.Length);
+            var lineHeight = Math.Max(16.0, Math.Round(tb.FontSize * 1.35));
+
+            var localX = 0.0;
+            var localY = 0.0;
+            var caretHeight = lineHeight;
+
+            if (text.Length > 0)
+            {
+                if (caretIndex < text.Length)
+                {
+                    var rect = tb.GetRectFromCharacterIndex(caretIndex, false);
+                    if (!rect.IsEmpty && !double.IsNaN(rect.X) && !double.IsInfinity(rect.X))
+                    {
+                        localX = rect.X;
+                        localY = rect.Y;
+                        if (rect.Height > 4)
+                            caretHeight = rect.Height;
+                    }
+                }
+                else
+                {
+                    var lastChar = text[caretIndex - 1];
+                    if (lastChar is '\r' or '\n')
+                    {
+                        var prevRect = tb.GetRectFromCharacterIndex(caretIndex - 1, false);
+                        var h = prevRect.Height > 4 ? prevRect.Height : lineHeight;
+                        localX = 0.0;
+                        localY = (!prevRect.IsEmpty && !double.IsNaN(prevRect.Y)) ? prevRect.Y + h : 0.0;
+                        caretHeight = h;
+                    }
+                    else
+                    {
+                        var trailingRect = tb.GetRectFromCharacterIndex(caretIndex - 1, true);
+                        if (!trailingRect.IsEmpty && !double.IsNaN(trailingRect.X) && !double.IsInfinity(trailingRect.X))
+                        {
+                            localX = trailingRect.X;
+                            localY = trailingRect.Y;
+                            if (trailingRect.Height > 4)
+                                caretHeight = trailingRect.Height;
+                        }
+                    }
+                }
+            }
+
+            Point canvasPos;
+            var presenter = FindDescendant<ScrollContentPresenter>(tb);
+            if (presenter is not null && presenter.ActualWidth > 0 && presenter.ActualHeight > 0)
+            {
+                canvasPos = presenter.TransformToVisual(CaretOverlayCanvas).TransformPoint(new Point(localX, localY));
+            }
+            else
+            {
+                canvasPos = tb.TransformToVisual(CaretOverlayCanvas).TransformPoint(
+                    new Point(tb.Padding.Left + localX, tb.Padding.Top + localY));
+            }
+
+            var tbBounds = tb.TransformToVisual(CaretOverlayCanvas).TransformBounds(new Rect(0, 0, tb.ActualWidth, tb.ActualHeight));
+            if (canvasPos.Y + 2 < tbBounds.Top || canvasPos.Y + caretHeight - 4 > tbBounds.Bottom ||
+                canvasPos.X + 2 < tbBounds.Left || canvasPos.X - 4 > tbBounds.Right)
+            {
+                EditorCaretBar.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            EditorCaretBar.Height = Math.Round(caretHeight);
+            Canvas.SetLeft(EditorCaretBar, Math.Round(canvasPos.X));
+            Canvas.SetTop(EditorCaretBar, Math.Round(canvasPos.Y));
+            EditorCaretBar.Visibility = Visibility.Visible;
+
+            if (resetBlink)
+            {
+                _isCaretBlinkOn = true;
+                EditorCaretBar.Opacity = 1.0;
+                _caretBlinkTimer.Stop();
+                _caretBlinkTimer.Start();
+            }
+            else if (!_caretBlinkTimer.IsEnabled)
+            {
+                _caretBlinkTimer.Start();
+            }
+        }
+        catch
+        {
+            EditorCaretBar.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+                return match;
+
+            var nested = FindDescendant<T>(child);
+            if (nested is not null)
+                return nested;
+        }
+
+        return null;
     }
 }

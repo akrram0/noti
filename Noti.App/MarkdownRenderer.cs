@@ -14,6 +14,35 @@ using Windows.UI.Core;
 
 namespace Noti.App;
 
+public enum LiveBlockKind
+{
+    Paragraph,
+    Heading1,
+    Heading2,
+    Heading3,
+    Checklist,
+    Bullet,
+    Quote,
+    CodeBlock,
+    TableBlock,
+    Divider
+}
+
+public sealed class LiveDocBlock
+{
+    public LiveBlockKind Kind { get; set; } = LiveBlockKind.Paragraph;
+    public string Content { get; set; } = string.Empty;
+    public bool IsChecked { get; set; }
+    public bool IsBlockBold { get; set; }
+    public bool IsBlockItalic { get; set; }
+    public bool IsBlockCode { get; set; }
+    public List<List<string>> TableMatrix { get; set; } = [];
+    public List<double> ColumnWidths { get; set; } = [];
+    public TextBox? PrimaryTextBox { get; set; }
+    public Border? RichDisplayHost { get; set; }
+    public FrameworkElement? RootElement { get; set; }
+}
+
 public static class MarkdownRenderer
 {
     private static readonly Dictionary<int, List<double>> TableColumnWidths = new();
@@ -679,7 +708,593 @@ public static class MarkdownRenderer
         return lines;
     }
 
-    private static TextBlock CreateFormattedTextBlock(
+    public static bool HasInlineMarkdownFormatting(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return false;
+
+        return text.Contains("**", StringComparison.Ordinal) ||
+               text.Contains("~~", StringComparison.Ordinal) ||
+               text.Contains('`') ||
+               text.Contains("](", StringComparison.Ordinal) ||
+               text.Contains('@') ||
+               (text.IndexOf('*') is var starIdx && starIdx >= 0 && text.IndexOf('*', starIdx + 1) > starIdx);
+    }
+
+    public static List<LiveDocBlock> ParseLiveBlocks(string? markdown)
+    {
+        var blocks = new List<LiveDocBlock>();
+        if (string.IsNullOrEmpty(markdown))
+        {
+            blocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+            return blocks;
+        }
+
+        var lines = markdown.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        var inCodeBlock = false;
+        var codeBuffer = new List<string>();
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var raw = lines[i];
+            var trimmed = raw.Trim();
+
+            if (trimmed.StartsWith("```", StringComparison.Ordinal))
+            {
+                if (inCodeBlock)
+                {
+                    blocks.Add(new LiveDocBlock
+                    {
+                        Kind = LiveBlockKind.CodeBlock,
+                        Content = string.Join("\r", codeBuffer)
+                    });
+                    codeBuffer.Clear();
+                    inCodeBlock = false;
+                }
+                else
+                {
+                    inCodeBlock = true;
+                }
+                continue;
+            }
+
+            if (inCodeBlock)
+            {
+                codeBuffer.Add(raw);
+                continue;
+            }
+
+            if (IsMarkdownTableLine(trimmed))
+            {
+                var tableLines = new List<string> { raw };
+                while (i + 1 < lines.Length && IsMarkdownTableLine(lines[i + 1].Trim()))
+                {
+                    i++;
+                    tableLines.Add(lines[i]);
+                }
+
+                blocks.Add(new LiveDocBlock
+                {
+                    Kind = LiveBlockKind.TableBlock,
+                    TableMatrix = ParseMarkdownTableMatrix(tableLines)
+                });
+                continue;
+            }
+
+            if (trimmed is "---" or "***" or "___")
+            {
+                blocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Divider });
+                continue;
+            }
+
+            if (trimmed.StartsWith("### ", StringComparison.Ordinal))
+            {
+                blocks.Add(CreateTextLiveBlock(LiveBlockKind.Heading3, trimmed[4..]));
+                continue;
+            }
+
+            if (trimmed.StartsWith("## ", StringComparison.Ordinal))
+            {
+                blocks.Add(CreateTextLiveBlock(LiveBlockKind.Heading2, trimmed[3..]));
+                continue;
+            }
+
+            if (trimmed.StartsWith("# ", StringComparison.Ordinal))
+            {
+                blocks.Add(CreateTextLiveBlock(LiveBlockKind.Heading1, trimmed[2..]));
+                continue;
+            }
+
+            if (trimmed.StartsWith("- [ ] ", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("- [x] ", StringComparison.OrdinalIgnoreCase))
+            {
+                var isChecked = trimmed[3] is 'x' or 'X';
+                blocks.Add(CreateTextLiveBlock(LiveBlockKind.Checklist, trimmed[6..], isChecked));
+                continue;
+            }
+
+            if (trimmed.StartsWith("- ", StringComparison.Ordinal) ||
+                trimmed.StartsWith("* ", StringComparison.Ordinal))
+            {
+                blocks.Add(CreateTextLiveBlock(LiveBlockKind.Bullet, trimmed[2..]));
+                continue;
+            }
+
+            if (trimmed.StartsWith("> ", StringComparison.Ordinal) || trimmed == ">")
+            {
+                var quoteText = trimmed.Length > 2 ? trimmed[2..] : string.Empty;
+                blocks.Add(CreateTextLiveBlock(LiveBlockKind.Quote, quoteText));
+                continue;
+            }
+
+            blocks.Add(CreateTextLiveBlock(LiveBlockKind.Paragraph, raw));
+        }
+
+        if (inCodeBlock)
+        {
+            blocks.Add(new LiveDocBlock
+            {
+                Kind = LiveBlockKind.CodeBlock,
+                Content = string.Join("\r", codeBuffer)
+            });
+        }
+
+        if (blocks.Count == 0)
+            blocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+
+        return blocks;
+    }
+
+    private static LiveDocBlock CreateTextLiveBlock(LiveBlockKind kind, string rawContent, bool isChecked = false)
+    {
+        var block = new LiveDocBlock
+        {
+            Kind = kind,
+            IsChecked = isChecked,
+            Content = rawContent
+        };
+
+        var s = rawContent;
+        if (s.Length >= 6 && s.StartsWith("***", StringComparison.Ordinal) && s.EndsWith("***", StringComparison.Ordinal) &&
+            s.IndexOf("***", 3, StringComparison.Ordinal) == s.Length - 3)
+        {
+            block.IsBlockBold = true;
+            block.IsBlockItalic = true;
+            block.Content = s[3..^3];
+        }
+        else if (s.Length >= 4 && s.StartsWith("**", StringComparison.Ordinal) && s.EndsWith("**", StringComparison.Ordinal) &&
+                 s.IndexOf("**", 2, StringComparison.Ordinal) == s.Length - 2)
+        {
+            block.IsBlockBold = true;
+            block.Content = s[2..^2];
+        }
+        else if (s.Length >= 2 && s.StartsWith('*') && !s.StartsWith("**", StringComparison.Ordinal) &&
+                 s.EndsWith('*') && !s.EndsWith("**", StringComparison.Ordinal) &&
+                 s.IndexOf('*', 1) == s.Length - 1)
+        {
+            block.IsBlockItalic = true;
+            block.Content = s[1..^1];
+        }
+        else if (s.Length >= 2 && s.StartsWith('`') && s.EndsWith('`') && s.IndexOf('`', 1) == s.Length - 1)
+        {
+            block.IsBlockCode = true;
+            block.Content = s[1..^1];
+        }
+
+        return block;
+    }
+
+    public static string SerializeLiveBlocks(IReadOnlyList<LiveDocBlock> blocks)
+    {
+        if (blocks.Count == 0)
+            return string.Empty;
+
+        var lines = new List<string>(blocks.Count);
+        foreach (var b in blocks)
+        {
+            switch (b.Kind)
+            {
+                case LiveBlockKind.CodeBlock:
+                {
+                    var normalizedCode = (b.Content ?? string.Empty).Replace("\r\n", "\r").Replace('\n', '\r');
+                    lines.Add("```");
+                    lines.Add(normalizedCode);
+                    lines.Add("```");
+                    break;
+                }
+
+                case LiveBlockKind.TableBlock:
+                {
+                    var tableLines = SerializeMarkdownTable(b.TableMatrix);
+                    lines.AddRange(tableLines);
+                    break;
+                }
+
+                case LiveBlockKind.Divider:
+                    lines.Add("---");
+                    break;
+
+                default:
+                {
+                    var content = FormatBlockInlineContent(b);
+                    var line = b.Kind switch
+                    {
+                        LiveBlockKind.Heading1 => $"# {content}",
+                        LiveBlockKind.Heading2 => $"## {content}",
+                        LiveBlockKind.Heading3 => $"### {content}",
+                        LiveBlockKind.Checklist => $"- [{(b.IsChecked ? "x" : " ")}] {content}",
+                        LiveBlockKind.Bullet => $"- {content}",
+                        LiveBlockKind.Quote => string.IsNullOrEmpty(content) ? "> " : $"> {content}",
+                        _ => content
+                    };
+                    lines.Add(line);
+                    break;
+                }
+            }
+        }
+
+        return string.Join("\r", lines);
+    }
+
+    public static string FormatBlockInlineContent(LiveDocBlock b)
+    {
+        var content = b.Content ?? string.Empty;
+        if (string.IsNullOrEmpty(content))
+            return string.Empty;
+
+        if (b.IsBlockCode)
+            return $"`{content}`";
+        if (b.IsBlockBold && b.IsBlockItalic)
+            return $"***{content}***";
+        if (b.IsBlockBold)
+            return $"**{content}**";
+        if (b.IsBlockItalic)
+            return $"*{content}*";
+
+        return content;
+    }
+
+    public static FrameworkElement CreateLiveTableElement(
+        LiveDocBlock tableBlock,
+        bool isDarkMode,
+        double baseFontSize,
+        Action onTableMutated,
+        Action? onRequestExitBelow = null,
+        Action? onRequestDeleteTable = null)
+    {
+        if (tableBlock.TableMatrix.Count == 0)
+        {
+            tableBlock.TableMatrix =
+            [
+                ["Column 1", "Column 2", "Column 3"],
+                [string.Empty, string.Empty, string.Empty],
+                [string.Empty, string.Empty, string.Empty]
+            ];
+        }
+
+        var primaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 245, 245, 247) : ColorHelper.FromArgb(255, 28, 28, 30));
+        var secondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 161, 161, 170) : ColorHelper.FromArgb(255, 82, 82, 91));
+        var headerBgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(34, 255, 255, 255) : ColorHelper.FromArgb(18, 0, 0, 0));
+        var surfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(20, 255, 255, 255) : ColorHelper.FromArgb(10, 0, 0, 0));
+        var subtleBorderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(26, 0, 0, 0));
+        var accentBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 10, 132, 255));
+        var buttonBgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(32, 255, 255, 255) : ColorHelper.FromArgb(18, 0, 0, 0));
+
+        var matrix = tableBlock.TableMatrix;
+        var colCount = matrix.Count > 0 ? matrix.Max(r => r.Count) : 3;
+        if (colCount < 1)
+            colCount = 3;
+
+        foreach (var row in matrix)
+        {
+            while (row.Count < colCount)
+                row.Add(string.Empty);
+        }
+
+        var colWidths = tableBlock.ColumnWidths;
+        while (colWidths.Count < colCount)
+            colWidths.Add(156.0);
+
+        var wrapperGrid = new Grid
+        {
+            Margin = new Thickness(0, 6, 0, 10),
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        wrapperGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        wrapperGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        wrapperGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        wrapperGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var tableBorder = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            BorderThickness = new Thickness(1),
+            BorderBrush = subtleBorderBrush,
+            Background = surfaceBrush
+        };
+        Grid.SetRow(tableBorder, 0);
+        Grid.SetColumn(tableBorder, 0);
+        wrapperGrid.Children.Add(tableBorder);
+
+        var rightEdgeStack = new StackPanel
+        {
+            Spacing = 4,
+            Margin = new Thickness(6, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Opacity = 0.0
+        };
+
+        var addColumnBtn = new Button
+        {
+            Content = "+",
+            Width = 24,
+            Height = 32,
+            Padding = new Thickness(0),
+            CornerRadius = new CornerRadius(8),
+            Background = buttonBgBrush,
+            Foreground = secondaryBrush,
+            BorderThickness = new Thickness(1),
+            BorderBrush = subtleBorderBrush
+        };
+        ToolTipService.SetToolTip(addColumnBtn, "Add column");
+        rightEdgeStack.Children.Add(addColumnBtn);
+
+        if (onRequestDeleteTable is not null)
+        {
+            var deleteTableBtn = new Button
+            {
+                Content = "×",
+                Width = 24,
+                Height = 24,
+                Padding = new Thickness(0),
+                CornerRadius = new CornerRadius(8),
+                Background = buttonBgBrush,
+                Foreground = secondaryBrush,
+                BorderThickness = new Thickness(1),
+                BorderBrush = subtleBorderBrush
+            };
+            ToolTipService.SetToolTip(deleteTableBtn, "Delete table");
+            deleteTableBtn.Click += (_, _) => onRequestDeleteTable();
+            rightEdgeStack.Children.Add(deleteTableBtn);
+        }
+
+        Grid.SetRow(rightEdgeStack, 0);
+        Grid.SetColumn(rightEdgeStack, 1);
+        wrapperGrid.Children.Add(rightEdgeStack);
+
+        var addRowBtn = new Button
+        {
+            Content = "+ Add row",
+            Height = 24,
+            Margin = new Thickness(0, 6, 0, 0),
+            Padding = new Thickness(10, 0, 10, 0),
+            FontSize = 11,
+            CornerRadius = new CornerRadius(8),
+            Background = buttonBgBrush,
+            Foreground = secondaryBrush,
+            BorderThickness = new Thickness(1),
+            BorderBrush = subtleBorderBrush,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Opacity = 0.0
+        };
+        ToolTipService.SetToolTip(addRowBtn, "Add row");
+        Grid.SetRow(addRowBtn, 1);
+        Grid.SetColumn(addRowBtn, 0);
+        wrapperGrid.Children.Add(addRowBtn);
+
+        wrapperGrid.PointerEntered += (_, _) =>
+        {
+            rightEdgeStack.Opacity = 1.0;
+            addRowBtn.Opacity = 1.0;
+        };
+        wrapperGrid.PointerExited += (_, _) =>
+        {
+            rightEdgeStack.Opacity = 0.0;
+            addRowBtn.Opacity = 0.0;
+        };
+
+        void BuildTableGrid(int? focusRow = null, int? focusCol = null)
+        {
+            var rCount = matrix.Count;
+            var cCount = matrix.Count > 0 ? matrix[0].Count : 3;
+            while (colWidths.Count < cCount)
+                colWidths.Add(156.0);
+
+            var grid = new Grid();
+            var colDefs = new List<ColumnDefinition>(cCount);
+            for (var c = 0; c < cCount; c++)
+            {
+                var cd = new ColumnDefinition
+                {
+                    Width = new GridLength(Math.Clamp(colWidths[c], 76.0, 480.0), GridUnitType.Pixel)
+                };
+                colDefs.Add(cd);
+                grid.ColumnDefinitions.Add(cd);
+            }
+
+            for (var r = 0; r < rCount; r++)
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var cellBoxes = new TextBox[rCount, cCount];
+
+            for (var r = 0; r < rCount; r++)
+            {
+                var isHeader = r == 0;
+                for (var c = 0; c < cCount; c++)
+                {
+                    var capturedRow = r;
+                    var capturedCol = c;
+                    var cellBorder = new Border
+                    {
+                        Background = isHeader ? headerBgBrush : new SolidColorBrush(Colors.Transparent),
+                        BorderBrush = subtleBorderBrush,
+                        BorderThickness = new Thickness(
+                            0,
+                            0,
+                            c < cCount - 1 ? 1 : 0,
+                            r < rCount - 1 ? 1 : 0)
+                    };
+
+                    var tb = new TextBox
+                    {
+                        Text = matrix[r][c],
+                        PlaceholderText = isHeader ? $"Column {c + 1}" : string.Empty,
+                        FontSize = Math.Max(12, baseFontSize - 2),
+                        FontWeight = isHeader ? FontWeights.SemiBold : FontWeights.Normal,
+                        Foreground = primaryBrush,
+                        Background = new SolidColorBrush(Colors.Transparent),
+                        BorderThickness = new Thickness(0),
+                        Padding = new Thickness(10, 7, 10, 7),
+                        MinHeight = 32,
+                        MinWidth = 60,
+                        IsSpellCheckEnabled = false,
+                        TextWrapping = TextWrapping.Wrap,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    if (Application.Current?.Resources.TryGetValue("BorderlessTextBoxStyle", out var styleObj) == true && styleObj is Style s)
+                        tb.Style = s;
+
+                    tb.TextChanged += (_, _) =>
+                    {
+                        matrix[capturedRow][capturedCol] = (tb.Text ?? string.Empty).Replace('|', '/').Replace("\r", " ").Replace("\n", " ");
+                        onTableMutated();
+                    };
+
+                    tb.PreviewKeyDown += (_, e) =>
+                    {
+                        if (e.Key == VirtualKey.Tab)
+                        {
+                            e.Handled = true;
+                            var shiftDown = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down);
+                            if (shiftDown)
+                            {
+                                var prevCol = capturedCol - 1;
+                                var prevRow = capturedRow;
+                                if (prevCol < 0)
+                                {
+                                    prevCol = cCount - 1;
+                                    prevRow = (capturedRow - 1 + rCount) % rCount;
+                                }
+                                cellBoxes[prevRow, prevCol].Focus(FocusState.Programmatic);
+                                cellBoxes[prevRow, prevCol].SelectAll();
+                            }
+                            else
+                            {
+                                var nextCol = capturedCol + 1;
+                                var nextRow = capturedRow;
+                                if (nextCol >= cCount)
+                                {
+                                    nextCol = 0;
+                                    nextRow = capturedRow + 1;
+                                }
+
+                                if (nextRow >= rCount)
+                                {
+                                    matrix.Add(Enumerable.Repeat(string.Empty, cCount).ToList());
+                                    onTableMutated();
+                                    BuildTableGrid(focusRow: matrix.Count - 1, focusCol: 0);
+                                }
+                                else
+                                {
+                                    cellBoxes[nextRow, nextCol].Focus(FocusState.Programmatic);
+                                    cellBoxes[nextRow, nextCol].SelectAll();
+                                }
+                            }
+                        }
+                        else if (e.Key == VirtualKey.Down && capturedRow == rCount - 1)
+                        {
+                            e.Handled = true;
+                            onRequestExitBelow?.Invoke();
+                        }
+                        else if (e.Key == VirtualKey.Down && capturedRow + 1 < rCount)
+                        {
+                            e.Handled = true;
+                            cellBoxes[capturedRow + 1, capturedCol].Focus(FocusState.Programmatic);
+                        }
+                        else if (e.Key == VirtualKey.Up && capturedRow > 0)
+                        {
+                            e.Handled = true;
+                            cellBoxes[capturedRow - 1, capturedCol].Focus(FocusState.Programmatic);
+                        }
+                    };
+
+                    cellBoxes[r, c] = tb;
+                    cellBorder.Child = tb;
+                    Grid.SetRow(cellBorder, r);
+                    Grid.SetColumn(cellBorder, c);
+                    grid.Children.Add(cellBorder);
+                }
+            }
+
+            if (rCount > 0 && cCount > 0)
+                tableBlock.PrimaryTextBox = cellBoxes[0, 0];
+
+            for (var c = 0; c < cCount; c++)
+            {
+                var capturedCol = c;
+                var colDef = colDefs[c];
+                var resizeHandle = new Border
+                {
+                    Width = 6,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Stretch,
+                    Background = new SolidColorBrush(Colors.Transparent),
+                    ManipulationMode = ManipulationModes.TranslateX
+                };
+                ToolTipService.SetToolTip(resizeHandle, "Drag to resize column");
+                resizeHandle.PointerEntered += (_, _) => resizeHandle.Background = accentBrush;
+                resizeHandle.PointerExited += (_, _) => resizeHandle.Background = new SolidColorBrush(Colors.Transparent);
+                resizeHandle.ManipulationDelta += (_, e) =>
+                {
+                    var currentWidth = colDef.Width.Value;
+                    var nextWidth = Math.Clamp(currentWidth + e.Delta.Translation.X, 76.0, 480.0);
+                    colDef.Width = new GridLength(nextWidth, GridUnitType.Pixel);
+                    colWidths[capturedCol] = nextWidth;
+                };
+
+                Grid.SetRow(resizeHandle, 0);
+                Grid.SetRowSpan(resizeHandle, rCount);
+                Grid.SetColumn(resizeHandle, c);
+                grid.Children.Add(resizeHandle);
+            }
+
+            tableBorder.Child = grid;
+
+            if (focusRow is int fr && focusCol is int fc && fr >= 0 && fr < rCount && fc >= 0 && fc < cCount)
+            {
+                var targetTb = cellBoxes[fr, fc];
+                targetTb.Loaded += (_, _) =>
+                {
+                    targetTb.Focus(FocusState.Programmatic);
+                    targetTb.SelectAll();
+                };
+            }
+        }
+
+        addColumnBtn.Click += (_, _) =>
+        {
+            var newColIndex = matrix.Count > 0 ? matrix[0].Count : 0;
+            for (var r = 0; r < matrix.Count; r++)
+                matrix[r].Add(r == 0 ? $"Column {newColIndex + 1}" : string.Empty);
+
+            colWidths.Add(156.0);
+            onTableMutated();
+            BuildTableGrid(focusRow: 0, focusCol: newColIndex);
+        };
+
+        addRowBtn.Click += (_, _) =>
+        {
+            var cCount = matrix.Count > 0 ? matrix[0].Count : 3;
+            matrix.Add(Enumerable.Repeat(string.Empty, cCount).ToList());
+            onTableMutated();
+            BuildTableGrid(focusRow: matrix.Count - 1, focusCol: 0);
+        };
+
+        BuildTableGrid();
+        return wrapperGrid;
+    }
+
+    public static TextBlock CreateFormattedTextBlock(
         string text,
         double fontSize,
         Windows.UI.Text.FontWeight fontWeight,

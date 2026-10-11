@@ -90,11 +90,11 @@
                 </Border>
             </StackPanel>
 
-            <!-- Center: Borderless Write | Split | View Mode Switcher -->
+            <!-- Center: Borderless Live | Source Mode Switcher -->
             <Border
                 x:Name="ViewSwitcherBorder"
                 Grid.Column="1"
-                Width="184"
+                Width="124"
                 Height="30"
                 Padding="2"
                 CornerRadius="15"
@@ -118,20 +118,15 @@
 
                     <StackPanel Orientation="Horizontal" Spacing="0">
                         <Button
-                            Content="Write"
+                            Content="Live"
                             Style="{StaticResource SegmentTabButtonStyle}"
-                            Command="{x:Bind ViewModel.SetWriteModeCommand}"
-                            ToolTipService.ToolTip="Write mode" />
+                            Command="{x:Bind ViewModel.SetLiveModeCommand}"
+                            ToolTipService.ToolTip="Live WYSIWYG Editor (Ctrl+E)" />
                         <Button
-                            Content="Split"
+                            Content="Source"
                             Style="{StaticResource SegmentTabButtonStyle}"
-                            Command="{x:Bind ViewModel.SetSplitModeCommand}"
-                            ToolTipService.ToolTip="Split Editor &amp; Live Markdown View" />
-                        <Button
-                            Content="View"
-                            Style="{StaticResource SegmentTabButtonStyle}"
-                            Command="{x:Bind ViewModel.SetViewModeCommand}"
-                            ToolTipService.ToolTip="Rendered Markdown View (Ctrl+E)" />
+                            Command="{x:Bind ViewModel.SetSourceModeCommand}"
+                            ToolTipService.ToolTip="Raw Markdown Source (Ctrl+E)" />
                     </StackPanel>
                 </Grid>
             </Border>
@@ -210,72 +205,19 @@
                         Background="{ThemeResource InputBackgroundBrush}"
                         BorderThickness="0">
                         <TextBox
+                            x:Name="SidebarSearchBox"
+                            Style="{StaticResource BorderlessTextBoxStyle}"
                             PlaceholderText="Search (Ctrl+K)"
                             Text="{x:Bind ViewModel.SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                             FontSize="13"
                             MinHeight="0"
-                            Height="32"
-                            Padding="14,6,14,6"
+                            Height="34"
+                            Padding="14,8,14,8"
                             IsSpellCheckEnabled="False"
                             Foreground="{ThemeResource TextPrimaryBrush}"
                             Background="Transparent"
                             BorderThickness="0"
-                            VerticalAlignment="Center">
-                            <TextBox.Resources>
-                                <ResourceDictionary>
-                                    <ResourceDictionary.ThemeDictionaries>
-                                        <ResourceDictionary x:Key="Default">
-                                            <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlForeground" Color="#FFF5F5F7" />
-                                            <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFF5F5F7" />
-                                            <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFF5F5F7" />
-                                            <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8E8E93" />
-                                            <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8E8E93" />
-                                            <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF8E8E93" />
-                                            <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
-                                            <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
-                                        </ResourceDictionary>
-                                        <ResourceDictionary x:Key="Dark">
-                                            <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlForeground" Color="#FFF5F5F7" />
-                                            <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFF5F5F7" />
-                                            <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFF5F5F7" />
-                                            <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8E8E93" />
-                                            <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8E8E93" />
-                                            <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF8E8E93" />
-                                            <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
-                                            <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
-                                        </ResourceDictionary>
-                                        <ResourceDictionary x:Key="Light">
-                                            <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
-                                            <SolidColorBrush x:Key="TextControlForeground" Color="#FF1C1C1E" />
-                                            <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FF1C1C1E" />
-                                            <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FF1C1C1E" />
-                                            <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF6C6C70" />
-                                            <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF6C6C70" />
-                                            <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF6C6C70" />
-                                            <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
-                                            <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
-                                        </ResourceDictionary>
-                                    </ResourceDictionary.ThemeDictionaries>
-                                </ResourceDictionary>
-                            </TextBox.Resources>
-                        </TextBox>
+                            VerticalAlignment="Center" />
                     </Border>
 
                     <Button
@@ -329,6 +271,7 @@
                         </Border>
                         <TextBox
                             x:Name="NewFolderTextBox"
+                            Style="{StaticResource BorderlessTextBoxStyle}"
                             Grid.Column="1"
                             PlaceholderText="{x:Bind ViewModel.NewFolderPlaceholderText, Mode=OneWay}"
                             Text="{x:Bind ViewModel.NewFolderName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -667,360 +610,261 @@
                         <RowDefinition Height="40" />
                     </Grid.RowDefinitions>
 
-                    <!-- Editor & Live Markdown Preview Split Grid -->
-                    <Grid Grid.Row="0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="{x:Bind ViewModel.EditorColumnWidth, Mode=OneWay}" />
-                            <ColumnDefinition Width="{x:Bind ViewModel.PreviewColumnWidth, Mode=OneWay}" />
-                        </Grid.ColumnDefinitions>
+                    <!-- Unified In-Place Live WYSIWYG Canvas + Optional Raw Source Editor -->
+                    <Grid x:Name="EditorPaneGrid" Grid.Row="0">
 
-                        <!-- Left / Primary: Plain Markdown Editor + Visual Slash Menu + Selection Pill Toolbar + Smart @ Mention Popup -->
-                        <Grid
-                            x:Name="EditorPaneGrid"
-                            Grid.Column="0"
-                            Visibility="{x:Bind ViewModel.EditorPaneVisibility, Mode=OneWay}">
-                            <TextBox
-                                x:Name="EditorTextBox"
-                                UseLayoutRounding="True"
-                                AcceptsReturn="True"
-                                TextWrapping="Wrap"
-                                IsSpellCheckEnabled="False"
-                                MinHeight="0"
-                                PlaceholderText="Start writing... (Type / for blocks &amp; tables, @ to link a note, Shift+Enter for tree)"
-                                Text="{x:Bind ViewModel.EditorText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                SelectionChanged="OnEditorSelectionChanged"
-                                PointerReleased="OnEditorPointerReleased"
-                                FontSize="{x:Bind ViewModel.EditorFontSize, Mode=OneWay}"
-                                Foreground="{ThemeResource TextPrimaryBrush}"
+                        <!-- 1. Primary Default: In-Place Live WYSIWYG Document Canvas -->
+                        <ScrollViewer
+                            x:Name="LiveEditorScrollViewer"
+                            Visibility="{x:Bind ViewModel.LivePaneVisibility, Mode=OneWay}"
+                            VerticalScrollBarVisibility="Auto">
+                            <Grid
+                                x:Name="LiveCanvasRootGrid"
                                 Background="Transparent"
-                                BorderThickness="0"
-                                Padding="40,28,40,16"
-                                ScrollViewer.VerticalScrollBarVisibility="Auto">
-                                <TextBox.Resources>
-                                    <ResourceDictionary>
-                                        <ResourceDictionary.ThemeDictionaries>
-                                            <ResourceDictionary x:Key="Default">
-                                                <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlForeground" Color="#FFF5F5F7" />
-                                                <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFF5F5F7" />
-                                                <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFF5F5F7" />
-                                                <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8E8E93" />
-                                                <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8E8E93" />
-                                                <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF8E8E93" />
-                                                <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
-                                                <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
-                                            </ResourceDictionary>
-                                            <ResourceDictionary x:Key="Dark">
-                                                <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlForeground" Color="#FFF5F5F7" />
-                                                <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFF5F5F7" />
-                                                <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFF5F5F7" />
-                                                <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8E8E93" />
-                                                <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8E8E93" />
-                                                <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF8E8E93" />
-                                                <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
-                                                <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
-                                            </ResourceDictionary>
-                                            <ResourceDictionary x:Key="Light">
-                                                <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
-                                                <SolidColorBrush x:Key="TextControlForeground" Color="#FF1C1C1E" />
-                                                <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FF1C1C1E" />
-                                                <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FF1C1C1E" />
-                                                <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF6C6C70" />
-                                                <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF6C6C70" />
-                                                <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF6C6C70" />
-                                                <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
-                                                <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
-                                            </ResourceDictionary>
-                                        </ResourceDictionary.ThemeDictionaries>
-                                    </ResourceDictionary>
-                                </TextBox.Resources>
-                            </TextBox>
+                                PointerPressed="OnLiveCanvasBackgroundPointerPressed">
+                                <StackPanel
+                                    x:Name="LiveEditorPanel"
+                                    UseLayoutRounding="True"
+                                    Padding="40,28,40,80"
+                                    Spacing="6" />
+                            </Grid>
+                        </ScrollViewer>
 
-                            <!-- Floating Selection Formatting Toolbar Pill (Bold, Italic, Strikethrough, Code, Link) -->
-                            <Border
-                                x:Name="SelectionToolbarBorder"
-                                UseLayoutRounding="True"
-                                Visibility="Collapsed"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Top"
-                                Margin="0,12,0,0"
-                                Padding="6,4"
-                                CornerRadius="14"
-                                Background="{ThemeResource SidebarBackgroundBrush}"
-                                BorderThickness="1"
-                                BorderBrush="{ThemeResource SubtleDividerBrush}">
-                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <Button
-                                        Content="B"
-                                        FontWeight="SemiBold"
-                                        Height="28"
-                                        Padding="10,0"
-                                        Style="{StaticResource GlassPillButtonStyle}"
-                                        Click="OnSelectionBoldClick"
-                                        ToolTipService.ToolTip="Bold (Ctrl+B)" />
-                                    <Button
-                                        Content="I"
-                                        FontStyle="Italic"
-                                        FontWeight="SemiBold"
-                                        Height="28"
-                                        Padding="10,0"
-                                        Style="{StaticResource GlassPillButtonStyle}"
-                                        Click="OnSelectionItalicClick"
-                                        ToolTipService.ToolTip="Italic (Ctrl+I)" />
-                                    <Button
-                                        Content="S̶"
-                                        FontWeight="SemiBold"
-                                        Height="28"
-                                        Padding="10,0"
-                                        Style="{StaticResource GlassPillButtonStyle}"
-                                        Click="OnSelectionStrikethroughClick"
-                                        ToolTipService.ToolTip="Strikethrough (~~text~~)" />
-                                    <Button
-                                        Content="&lt;/&gt;"
-                                        FontSize="11"
-                                        FontWeight="SemiBold"
-                                        Height="28"
-                                        Padding="10,0"
-                                        Style="{StaticResource GlassPillButtonStyle}"
-                                        Click="OnSelectionCodeClick"
-                                        ToolTipService.ToolTip="Inline Code (`code`)" />
-                                    <Button
-                                        Content="Link"
-                                        FontSize="12"
-                                        FontWeight="SemiBold"
-                                        Height="28"
-                                        Padding="10,0"
-                                        Style="{StaticResource GlassPillButtonStyle}"
-                                        Click="OnSelectionLinkClick"
-                                        ToolTipService.ToolTip="Insert Link ([text](url))" />
-                                </StackPanel>
-                            </Border>
+                        <!-- 2. Secondary: Raw Markdown Source Editor -->
+                        <TextBox
+                            x:Name="EditorTextBox"
+                            Visibility="{x:Bind ViewModel.SourcePaneVisibility, Mode=OneWay}"
+                            Style="{StaticResource BorderlessTextBoxStyle}"
+                            UseLayoutRounding="True"
+                            AcceptsReturn="True"
+                            TextWrapping="Wrap"
+                            IsSpellCheckEnabled="False"
+                            MinHeight="0"
+                            PlaceholderText="Start writing... (Type / for blocks &amp; tables, @ to link a note, Shift+Enter for tree)"
+                            Text="{x:Bind ViewModel.EditorText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                            SelectionChanged="OnEditorSelectionChanged"
+                            PointerReleased="OnEditorPointerReleased"
+                            FontSize="{x:Bind ViewModel.EditorFontSize, Mode=OneWay}"
+                            Foreground="{ThemeResource TextPrimaryBrush}"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="40,28,40,16"
+                            ScrollViewer.VerticalScrollBarVisibility="Auto" />
 
-                            <!-- Floating '/' Slash Command Menu Popup -->
-                            <Border
-                                x:Name="SlashMenuPopupBorder"
-                                UseLayoutRounding="True"
-                                Visibility="Collapsed"
-                                Width="288"
-                                MaxHeight="310"
-                                HorizontalAlignment="Left"
-                                VerticalAlignment="Top"
-                                Margin="40,68,0,0"
-                                Padding="8"
-                                CornerRadius="12"
-                                Background="{ThemeResource SidebarBackgroundBrush}"
-                                BorderThickness="1"
-                                BorderBrush="{ThemeResource SubtleDividerBrush}">
-                                <StackPanel Spacing="4">
-                                    <TextBlock
-                                        Text="INSERT BLOCK (/)"
-                                        Margin="8,2,8,2"
-                                        FontSize="10"
-                                        FontWeight="SemiBold"
-                                        Foreground="{ThemeResource TextSecondaryBrush}" />
-                                    <ListView
-                                        x:Name="SlashMenuListView"
-                                        MaxHeight="264"
-                                        SelectionMode="Single"
-                                        IsItemClickEnabled="True"
-                                        ItemClick="OnSlashMenuItemClick"
-                                        ItemsSource="{x:Bind ViewModel.SlashMenuSuggestions, Mode=OneWay}"
-                                        ItemContainerStyle="{StaticResource CommandPaletteItemStyle}">
-                                        <ListView.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:SlashCommandItem">
-                                                <Grid Padding="8,6">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="*" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <Border
-                                                        Grid.Column="0"
-                                                        Width="28"
-                                                        Height="26"
-                                                        Margin="0,0,10,0"
-                                                        CornerRadius="6"
-                                                        Background="{ThemeResource InputBackgroundBrush}"
-                                                        VerticalAlignment="Center">
-                                                        <TextBlock
-                                                            Text="{x:Bind BadgeText}"
-                                                            FontSize="11"
-                                                            FontWeight="SemiBold"
-                                                            Foreground="{ThemeResource TextPrimaryBrush}"
-                                                            HorizontalAlignment="Center"
-                                                            VerticalAlignment="Center" />
-                                                    </Border>
-                                                    <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
-                                                        <TextBlock
-                                                            Text="{x:Bind Title}"
-                                                            FontSize="12"
-                                                            FontWeight="SemiBold"
-                                                            Foreground="{ThemeResource TextPrimaryBrush}"
-                                                            MaxLines="1"
-                                                            TextTrimming="CharacterEllipsis" />
-                                                        <TextBlock
-                                                            Text="{x:Bind Subtitle}"
-                                                            FontSize="11"
-                                                            Foreground="{ThemeResource TextSecondaryBrush}"
-                                                            MaxLines="1"
-                                                            TextTrimming="CharacterEllipsis" />
-                                                    </StackPanel>
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ListView.ItemTemplate>
-                                    </ListView>
-                                </StackPanel>
-                            </Border>
+                        <!-- Floating Selection Formatting Toolbar Pill (Bold, Italic, Strikethrough, Code, Link) -->
+                        <Border
+                            x:Name="SelectionToolbarBorder"
+                            UseLayoutRounding="True"
+                            Visibility="Collapsed"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            Margin="40,12,0,0"
+                            Padding="6,4"
+                            CornerRadius="14"
+                            Background="{ThemeResource SidebarBackgroundBrush}"
+                            BorderThickness="1"
+                            BorderBrush="{ThemeResource SubtleDividerBrush}">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Button
+                                    Content="B"
+                                    FontWeight="SemiBold"
+                                    Height="28"
+                                    Padding="10,0"
+                                    Style="{StaticResource GlassPillButtonStyle}"
+                                    Click="OnSelectionBoldClick"
+                                    ToolTipService.ToolTip="Bold (Ctrl+B)" />
+                                <Button
+                                    Content="I"
+                                    FontStyle="Italic"
+                                    FontWeight="SemiBold"
+                                    Height="28"
+                                    Padding="10,0"
+                                    Style="{StaticResource GlassPillButtonStyle}"
+                                    Click="OnSelectionItalicClick"
+                                    ToolTipService.ToolTip="Italic (Ctrl+I)" />
+                                <Button
+                                    Content="S̶"
+                                    FontWeight="SemiBold"
+                                    Height="28"
+                                    Padding="10,0"
+                                    Style="{StaticResource GlassPillButtonStyle}"
+                                    Click="OnSelectionStrikethroughClick"
+                                    ToolTipService.ToolTip="Strikethrough (~~text~~)" />
+                                <Button
+                                    Content="&lt;/&gt;"
+                                    FontSize="11"
+                                    FontWeight="SemiBold"
+                                    Height="28"
+                                    Padding="10,0"
+                                    Style="{StaticResource GlassPillButtonStyle}"
+                                    Click="OnSelectionCodeClick"
+                                    ToolTipService.ToolTip="Inline Code (`code`)" />
+                                <Button
+                                    Content="Link"
+                                    FontSize="12"
+                                    FontWeight="SemiBold"
+                                    Height="28"
+                                    Padding="10,0"
+                                    Style="{StaticResource GlassPillButtonStyle}"
+                                    Click="OnSelectionLinkClick"
+                                    ToolTipService.ToolTip="Insert Link ([text](url))" />
+                            </StackPanel>
+                        </Border>
 
-                            <!-- Floating @ Mention Autocomplete Popup -->
-                            <Border
-                                x:Name="MentionPopupBorder"
-                                UseLayoutRounding="True"
-                                Visibility="Collapsed"
-                                Width="268"
-                                MaxHeight="224"
-                                HorizontalAlignment="Left"
-                                VerticalAlignment="Top"
-                                Margin="40,68,0,0"
-                                Padding="8"
-                                CornerRadius="12"
-                                Background="{ThemeResource SidebarBackgroundBrush}"
-                                BorderThickness="1"
-                                BorderBrush="{ThemeResource SubtleDividerBrush}">
-                                <StackPanel Spacing="4">
-                                    <TextBlock
-                                        Text="LINK NOTE (@)"
-                                        Margin="8,2,8,2"
-                                        FontSize="10"
-                                        FontWeight="SemiBold"
-                                        Foreground="{ThemeResource TextSecondaryBrush}" />
-                                    <ListView
-                                        x:Name="MentionListView"
-                                        MaxHeight="180"
-                                        SelectionMode="Single"
-                                        IsItemClickEnabled="True"
-                                        ItemClick="OnMentionItemClick"
-                                        ItemsSource="{x:Bind ViewModel.MentionSuggestions, Mode=OneWay}"
-                                        ItemContainerStyle="{StaticResource CommandPaletteItemStyle}">
-                                        <ListView.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:NoteItemViewModel">
-                                                <Grid Padding="10,6">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="*" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <FontIcon
-                                                        Grid.Column="0"
-                                                        Glyph="&#xE70B;"
-                                                        FontSize="11"
-                                                        Margin="0,0,8,0"
-                                                        Foreground="{ThemeResource TextSecondaryBrush}"
-                                                        VerticalAlignment="Center" />
+                        <!-- Floating '/' Slash Command Menu Popup -->
+                        <Border
+                            x:Name="SlashMenuPopupBorder"
+                            UseLayoutRounding="True"
+                            Visibility="Collapsed"
+                            Width="288"
+                            MaxHeight="310"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            Margin="40,68,0,0"
+                            Padding="8"
+                            CornerRadius="12"
+                            Background="{ThemeResource SidebarBackgroundBrush}"
+                            BorderThickness="1"
+                            BorderBrush="{ThemeResource SubtleDividerBrush}">
+                            <StackPanel Spacing="4">
+                                <TextBlock
+                                    Text="INSERT BLOCK (/)"
+                                    Margin="8,2,8,2"
+                                    FontSize="10"
+                                    FontWeight="SemiBold"
+                                    Foreground="{ThemeResource TextSecondaryBrush}" />
+                                <ListView
+                                    x:Name="SlashMenuListView"
+                                    MaxHeight="264"
+                                    SelectionMode="Single"
+                                    IsItemClickEnabled="True"
+                                    ItemClick="OnSlashMenuItemClick"
+                                    ItemsSource="{x:Bind ViewModel.SlashMenuSuggestions, Mode=OneWay}"
+                                    ItemContainerStyle="{StaticResource CommandPaletteItemStyle}">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:SlashCommandItem">
+                                            <Grid Padding="8,6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border
+                                                    Grid.Column="0"
+                                                    Width="28"
+                                                    Height="26"
+                                                    Margin="0,0,10,0"
+                                                    CornerRadius="6"
+                                                    Background="{ThemeResource InputBackgroundBrush}"
+                                                    VerticalAlignment="Center">
                                                     <TextBlock
-                                                        Grid.Column="1"
-                                                        Text="{x:Bind Title, Mode=OneWay}"
+                                                        Text="{x:Bind BadgeText}"
+                                                        FontSize="11"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="{ThemeResource TextPrimaryBrush}"
+                                                        HorizontalAlignment="Center"
+                                                        VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                                    <TextBlock
+                                                        Text="{x:Bind Title}"
                                                         FontSize="12"
                                                         FontWeight="SemiBold"
                                                         Foreground="{ThemeResource TextPrimaryBrush}"
                                                         MaxLines="1"
                                                         TextTrimming="CharacterEllipsis" />
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ListView.ItemTemplate>
-                                    </ListView>
-                                </StackPanel>
-                            </Border>
+                                                    <TextBlock
+                                                        Text="{x:Bind Subtitle}"
+                                                        FontSize="11"
+                                                        Foreground="{ThemeResource TextSecondaryBrush}"
+                                                        MaxLines="1"
+                                                        TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </StackPanel>
+                        </Border>
 
-                            <!-- Interactive Visual Table Card in Write Mode (Syncs Live with .md Table at Caret) -->
-                            <Border
-                                x:Name="InlineVisualTableCard"
-                                UseLayoutRounding="True"
-                                Visibility="Collapsed"
-                                HorizontalAlignment="Stretch"
-                                VerticalAlignment="Bottom"
-                                Margin="36,0,36,12"
-                                Padding="14,10"
-                                CornerRadius="12"
-                                Background="{ThemeResource SidebarBackgroundBrush}"
-                                BorderThickness="1"
-                                BorderBrush="{ThemeResource SubtleDividerBrush}">
-                                <StackPanel Spacing="6">
-                                    <Grid>
-                                        <TextBlock
-                                            Text="VISUAL TABLE EDITOR (TAB TO MOVE, DRAG COLUMN EDGES TO RESIZE)"
-                                            FontSize="10"
-                                            FontWeight="SemiBold"
-                                            Foreground="{ThemeResource TextSecondaryBrush}"
-                                            VerticalAlignment="Center" />
-                                        <Button
-                                            Content="Hide"
-                                            FontSize="11"
-                                            Height="22"
-                                            Padding="8,0"
-                                            HorizontalAlignment="Right"
-                                            Style="{StaticResource GlassPillButtonStyle}"
-                                            Click="OnCloseInlineVisualTableClick" />
-                                    </Grid>
-                                    <ScrollViewer
-                                        HorizontalScrollBarVisibility="Auto"
-                                        VerticalScrollBarVisibility="Auto"
-                                        MaxHeight="220">
-                                        <ContentControl
-                                            x:Name="InlineVisualTableHost"
-                                            HorizontalContentAlignment="Left" />
-                                    </ScrollViewer>
-                                </StackPanel>
-                            </Border>
-
-                            <!-- Floating Word-Pop Animation Pill (Borderless, Crisp Opacity Fade) -->
-                            <Border
-                                x:Name="TypingWordPopupBorder"
-                                UseLayoutRounding="True"
-                                IsHitTestVisible="False"
-                                Opacity="0"
-                                HorizontalAlignment="Right"
-                                VerticalAlignment="Top"
-                                Margin="0,16,28,0"
-                                Padding="12,5"
-                                CornerRadius="12"
-                                Background="{ThemeResource SurfaceActiveBrush}"
-                                BorderThickness="0">
+                        <!-- Floating @ Mention Autocomplete Popup -->
+                        <Border
+                            x:Name="MentionPopupBorder"
+                            UseLayoutRounding="True"
+                            Visibility="Collapsed"
+                            Width="268"
+                            MaxHeight="224"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            Margin="40,68,0,0"
+                            Padding="8"
+                            CornerRadius="12"
+                            Background="{ThemeResource SidebarBackgroundBrush}"
+                            BorderThickness="1"
+                            BorderBrush="{ThemeResource SubtleDividerBrush}">
+                            <StackPanel Spacing="4">
                                 <TextBlock
-                                    x:Name="TypingWordText"
-                                    Text=""
-                                    FontSize="13"
+                                    Text="LINK NOTE (@)"
+                                    Margin="8,2,8,2"
+                                    FontSize="10"
                                     FontWeight="SemiBold"
-                                    Foreground="{ThemeResource TextPrimaryBrush}" />
-                            </Border>
-                        </Grid>
+                                    Foreground="{ThemeResource TextSecondaryBrush}" />
+                                <ListView
+                                    x:Name="MentionListView"
+                                    MaxHeight="180"
+                                    SelectionMode="Single"
+                                    IsItemClickEnabled="True"
+                                    ItemClick="OnMentionItemClick"
+                                    ItemsSource="{x:Bind ViewModel.MentionSuggestions, Mode=OneWay}"
+                                    ItemContainerStyle="{StaticResource CommandPaletteItemStyle}">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:NoteItemViewModel">
+                                            <Grid Padding="10,6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <FontIcon
+                                                    Grid.Column="0"
+                                                    Glyph="&#xE70B;"
+                                                    FontSize="11"
+                                                    Margin="0,0,8,0"
+                                                    Foreground="{ThemeResource TextSecondaryBrush}"
+                                                    VerticalAlignment="Center" />
+                                                <TextBlock
+                                                    Grid.Column="1"
+                                                    Text="{x:Bind Title, Mode=OneWay}"
+                                                    FontSize="12"
+                                                    FontWeight="SemiBold"
+                                                    Foreground="{ThemeResource TextPrimaryBrush}"
+                                                    MaxLines="1"
+                                                    TextTrimming="CharacterEllipsis" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </StackPanel>
+                        </Border>
 
-                        <!-- Right / Rendered Markdown Viewer -->
-                        <ScrollViewer
-                            x:Name="PreviewScrollViewer"
-                            Grid.Column="1"
-                            Visibility="{x:Bind ViewModel.PreviewPaneVisibility, Mode=OneWay}"
-                            VerticalScrollBarVisibility="Auto">
-                            <StackPanel
-                                x:Name="MarkdownPreviewPanel"
-                                UseLayoutRounding="True"
-                                Padding="36,28,36,24"
-                                Spacing="4" />
-                        </ScrollViewer>
+                        <!-- Floating Word-Pop Animation Pill (Borderless, Crisp Opacity Fade) -->
+                        <Border
+                            x:Name="TypingWordPopupBorder"
+                            UseLayoutRounding="True"
+                            IsHitTestVisible="False"
+                            Opacity="0"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Margin="0,16,28,0"
+                            Padding="12,5"
+                            CornerRadius="12"
+                            Background="{ThemeResource SurfaceActiveBrush}"
+                            BorderThickness="0">
+                            <TextBlock
+                                x:Name="TypingWordText"
+                                Text=""
+                                FontSize="13"
+                                FontWeight="SemiBold"
+                                Foreground="{ThemeResource TextPrimaryBrush}" />
+                        </Border>
                     </Grid>
 
                     <!-- Borderless Bottom Status Bar -->
@@ -1150,6 +994,7 @@
                                             Background="{ThemeResource SurfaceActiveBrush}"
                                             BorderThickness="0">
                                             <TextBox
+                                                Style="{StaticResource BorderlessTextBoxStyle}"
                                                 PlaceholderText="Your display name"
                                                 Text="{x:Bind ViewModel.UserName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                 IsSpellCheckEnabled="False"
@@ -1671,6 +1516,7 @@
                                 VerticalAlignment="Center" />
                             <TextBox
                                 x:Name="CommandPaletteSearchBox"
+                                Style="{StaticResource BorderlessTextBoxStyle}"
                                 Grid.Column="1"
                                 PlaceholderText="Search notes or run a command..."
                                 Text="{x:Bind ViewModel.CommandSearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -1818,5 +1664,19 @@
                 </StackPanel>
             </Border>
         </Grid>
+
+        <!-- High-Contrast Blinking Caret Overlay (solves WinUI 3 DestinationInvert invisibility over Mica/Blur) -->
+        <Canvas
+            x:Name="CaretOverlayCanvas"
+            Grid.RowSpan="2"
+            IsHitTestVisible="False">
+            <Border
+                x:Name="EditorCaretBar"
+                Width="2"
+                Height="18"
+                CornerRadius="1"
+                Background="#FF0A84FF"
+                Visibility="Collapsed" />
+        </Canvas>
     </Grid>
 </Window>
