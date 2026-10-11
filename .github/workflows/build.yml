@@ -61,18 +61,34 @@ jobs:
           path: ${{ github.workspace }}/Noti-Setup-win-x64.exe
           if-no-files-found: error
 
-      - name: Publish to GitHub Release (latest)
+      - name: Publish to GitHub Releases (v1.0.<run_number> & latest)
         if: github.event_name == 'push'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = "latest"
           $ver = "1.0.${{ github.run_number }}"
-          $exists = gh release view $tag 2>$null
+          $versionTag = "v$ver"
+          $latestTag = "latest"
+          $installer = "${{ github.workspace }}/Noti-Setup-win-x64.exe"
+          $manifest = "${{ github.workspace }}/version.json"
+          $title = "Noti v$ver Setup (win-x64)"
+          $notes = "Automated Windows Setup installer for Noti v$ver."
+
+          # 1. Create a separate release for this build version (v1.0.<run_number>) and mark it as Latest
+          gh release view $versionTag 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag "${{ github.workspace }}/Noti-Setup-win-x64.exe" "${{ github.workspace }}/version.json" --title "Noti v$ver Setup (win-x64)" --notes "Automated Windows Setup installer for Noti v$ver."
+            gh release create $versionTag $installer $manifest --title $title --notes $notes --latest
           } else {
-            gh release edit $tag --title "Noti v$ver Setup (win-x64)" --notes "Automated Windows Setup installer for Noti v$ver."
-            gh release upload $tag "${{ github.workspace }}/Noti-Setup-win-x64.exe" "${{ github.workspace }}/version.json" --clobber
+            gh release edit $versionTag --title $title --notes $notes --latest
+            gh release upload $versionTag $installer $manifest --clobber
+          }
+
+          # 2. Keep the rolling 'latest' tag updated for direct tag links
+          gh release view $latestTag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $latestTag $installer $manifest --title "Noti Latest ($versionTag)" --notes $notes --latest=false
+          } else {
+            gh release edit $latestTag --title "Noti Latest ($versionTag)" --notes $notes --latest=false
+            gh release upload $latestTag $installer $manifest --clobber
           }
