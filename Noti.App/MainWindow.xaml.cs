@@ -37,7 +37,24 @@ public sealed partial class MainWindow : Window
     private LiveDocBlock? _activeLiveBlock;
     private bool _isSyncingLiveEditor;
     private string? _lastRenderedLiveMarkdown;
+    private int _liveRebuildVersion;
+    private int _liveMaterializedCount;
+    private readonly Stack<TextBox> _liveTextBoxPool = new(160);
     private readonly DispatcherTimer _liveSyncTimer;
+
+    private static readonly SolidColorBrush TransparentBrush = new(Colors.Transparent);
+    private static readonly SolidColorBrush AccentBrush = new(ColorHelper.FromArgb(255, 10, 132, 255));
+    private static readonly SolidColorBrush SelectionUnfocusedBrush = new(ColorHelper.FromArgb(140, 10, 132, 255));
+    private static readonly FontFamily MonoFontFamily = new("Cascadia Mono, Consolas, Courier New");
+    private static readonly FontFamily DefaultFontFamily = FontFamily.XamlAutoFontFamily;
+
+    private bool? _cachedIsDarkMode;
+    private SolidColorBrush _cachedPrimaryBrush = new(ColorHelper.FromArgb(255, 245, 245, 247));
+    private SolidColorBrush _cachedSecondaryBrush = new(ColorHelper.FromArgb(255, 142, 142, 147));
+    private SolidColorBrush _cachedSurfaceBrush = new(ColorHelper.FromArgb(36, 255, 255, 255));
+    private SolidColorBrush _cachedBorderBrush = new(ColorHelper.FromArgb(38, 255, 255, 255));
+    private Style? _cachedBorderlessStyle;
+    private List<string> _cachedSortedNoteTitles = [];
 
     private static readonly (string Name, string Hex)[] PaletteColors =
     [
@@ -81,6 +98,7 @@ public sealed partial class MainWindow : Window
         UpdateTopBarButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
         ZoomBadgeButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
 
+        LiveEditorScrollViewer.ViewChanged += OnLiveEditorScrollViewerViewChanged;
         RootGrid.PreviewKeyDown += OnRootPreviewKeyDown;
         EditorTextBox.PreviewKeyDown += OnEditorPreviewKeyDown;
         EditorTextBox.TextChanged += OnEditorTextChanged;
@@ -585,6 +603,148 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void OnLiveEditorScrollViewerViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
+    {
+        if (_liveMaterializedCount < _liveBlocks.Count &&
+            LiveEditorScrollViewer.VerticalOffset + LiveEditorScrollViewer.ViewportHeight >= LiveEditorScrollViewer.ExtentHeight - 420)
+        {
+            EnsureLiveBlocksMaterializedThrough(Math.Min(_liveBlocks.Count - 1, _liveMaterializedCount + 36));
+        }
+    }
+
+    private void EnsureLiveRenderResources(bool refreshTitles = false)
+    {
+        var isDarkMode = ViewModel.IsDarkMode;
+        if (_cachedIsDarkMode != isDarkMode)
+        {
+            _cachedIsDarkMode = isDarkMode;
+            _cachedPrimaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 245, 245, 247) : ColorHelper.FromArgb(255, 28, 28, 30));
+            _cachedSecondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 108, 108, 112));
+            _cachedSurfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(22, 0, 0, 0));
+            _cachedBorderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(38, 255, 255, 255) : ColorHelper.FromArgb(28, 0, 0, 0));
+        }
+
+        if (_cachedBorderlessStyle is null &&
+            Application.Current?.Resources.TryGetValue("BorderlessTextBoxStyle", out var styleObj) == true)
+        {
+            _cachedBorderlessStyle = styleObj as Style;
+        }
+
+        if (refreshTitles || (_cachedSortedNoteTitles.Count == 0 && ViewModel.AllNoteItems.Count > 0))
+        {
+            _cachedSortedNoteTitles = ViewModel.AllNoteItems
+                .Select(n => n.Title)
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .OrderByDescending(t => t.Length)
+                .ToList();
+        }
+    }
+
+    private void RecycleBlockTextBox(LiveDocBlock block)
+    {
+        if (block.Kind is LiveBlockKind.CodeBlock or LiveBlockKind.TableBlock or LiveBlockKind.Divider)
+            return;
+
+        if (block.PrimaryTextBox is not { } tb)
+            return;
+
+        tb.Tag = null;
+        if (tb.Parent is Panel parentPanel)
+            parentPanel.Children.Remove(tb);
+        else if (tb.Parent is Border parentBorder)
+            parentBorder.Child = null;
+
+        block.PrimaryTextBox = null;
+        if (_liveTextBoxPool.Count < 160)
+            _liveTextBoxPool.Push(tb);
+    }
+
+    private void RecycleAllLiveBlocksToPool()
+    {
+        for (var i = 0; i < _liveBlocks.Count; i++)
+            RecycleBlockTextBox(_liveBlocks[i]);
+    }
+
+    private TextBox RentLiveTextBox(LiveDocBlock block)
+    {
+        EnsureLiveRenderResources();
+
+        if (_liveTextBoxPool.TryPop(out var pooledTb))
+        {
+            if (pooledTb.Parent is Panel parentPanel)
+                parentPanel.Children.Remove(pooledTb);
+            else if (pooledTb.Parent is Border parentBorder)
+                parentBorder.Child = null;
+
+            pooledTb.Tag = block;
+            return pooledTb;
+        }
+
+        var tb = new TextBox
+        {
+            AcceptsReturn = false,
+            IsSpellCheckEnabled = false,
+            Background = TransparentBrush,
+            SelectionHighlightColor = AccentBrush,
+            SelectionHighlightColorWhenNotFocused = SelectionUnfocusedBrush,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0, 2, 0, 2),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center,
+            Tag = block
+        };
+        if (_cachedBorderlessStyle is not null)
+            tb.Style = _cachedBorderlessStyle;
+
+        WirePooledLiveTextBoxEvents(tb);
+        return tb;
+    }
+
+    private void EnsureLiveBlocksMaterializedThrough(int targetIndex)
+    {
+        if (_liveBlocks.Count == 0)
+            return;
+
+        var clampedTarget = Math.Clamp(targetIndex, 0, _liveBlocks.Count - 1);
+        if (_liveMaterializedCount > clampedTarget)
+            return;
+
+        EnsureLiveRenderResources();
+        var prevSync = _isSyncingLiveEditor;
+        _isSyncingLiveEditor = true;
+        try
+        {
+            for (var i = _liveMaterializedCount; i <= clampedTarget; i++)
+            {
+                var block = _liveBlocks[i];
+                var element = CreateLiveBlockElement(block, i);
+                block.RootElement = element;
+                LiveEditorPanel.Children.Add(element);
+            }
+            _liveMaterializedCount = clampedTarget + 1;
+        }
+        finally
+        {
+            _isSyncingLiveEditor = prevSync;
+        }
+    }
+
+    private void ScheduleNextLiveBlocksChunk(int rebuildVersion)
+    {
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            if (rebuildVersion != _liveRebuildVersion || _liveMaterializedCount >= _liveBlocks.Count)
+                return;
+
+            const int ChunkSize = 28;
+            var targetEnd = Math.Min(_liveBlocks.Count - 1, _liveMaterializedCount + ChunkSize - 1);
+            EnsureLiveBlocksMaterializedThrough(targetEnd);
+
+            if (rebuildVersion == _liveRebuildVersion && _liveMaterializedCount < _liveBlocks.Count)
+                ScheduleNextLiveBlocksChunk(rebuildVersion);
+        });
+    }
+
     private void OnLiveCanvasBackgroundPointerPressed(object sender, PointerRoutedEventArgs e)
     {
         if (!ReferenceEquals(e.OriginalSource, LiveCanvasRootGrid) && !ReferenceEquals(e.OriginalSource, LiveEditorPanel))
@@ -596,6 +756,8 @@ public sealed partial class MainWindow : Window
             FlushSyncLiveBlocksToViewModel();
             return;
         }
+
+        EnsureLiveBlocksMaterializedThrough(_liveBlocks.Count - 1);
 
         var lastBlock = _liveBlocks[^1];
         if (lastBlock.Kind is LiveBlockKind.TableBlock or LiveBlockKind.Divider or LiveBlockKind.CodeBlock)
@@ -610,23 +772,37 @@ public sealed partial class MainWindow : Window
 
     private void RebuildLiveEditor(bool reparse = true, int? focusBlockIndex = null, int? focusCaretIndex = null)
     {
-        if (reparse)
+        var rebuildVersion = ++_liveRebuildVersion;
+        EnsureLiveRenderResources(refreshTitles: true);
+
+        var prevSync = _isSyncingLiveEditor;
+        _isSyncingLiveEditor = true;
+        try
         {
-            _lastRenderedLiveMarkdown = ViewModel.EditorText;
-            _liveBlocks = MarkdownRenderer.ParseLiveBlocks(ViewModel.EditorText);
+            RecycleAllLiveBlocksToPool();
+            LiveEditorPanel.Children.Clear();
+            _liveMaterializedCount = 0;
+
+            if (reparse)
+            {
+                _lastRenderedLiveMarkdown = ViewModel.EditorText;
+                _liveBlocks = MarkdownRenderer.ParseLiveBlocks(ViewModel.EditorText);
+                LiveEditorScrollViewer.ChangeView(null, 0, null, true);
+            }
+
+            if (_liveBlocks.Count == 0)
+                _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+
+            const int InitialViewportBatchSize = 24;
+            var initialTarget = focusBlockIndex is int fIdx
+                ? Math.Max(InitialViewportBatchSize - 1, fIdx)
+                : InitialViewportBatchSize - 1;
+
+            EnsureLiveBlocksMaterializedThrough(Math.Min(initialTarget, _liveBlocks.Count - 1));
         }
-
-        if (_liveBlocks.Count == 0)
-            _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
-
-        LiveEditorPanel.Children.Clear();
-
-        for (var i = 0; i < _liveBlocks.Count; i++)
+        finally
         {
-            var block = _liveBlocks[i];
-            var element = CreateLiveBlockElement(block, i);
-            block.RootElement = element;
-            LiveEditorPanel.Children.Add(element);
+            _isSyncingLiveEditor = prevSync;
         }
 
         if (focusBlockIndex is int targetIdx && targetIdx >= 0 && targetIdx < _liveBlocks.Count)
@@ -637,12 +813,17 @@ public sealed partial class MainWindow : Window
         {
             _activeLiveBlock = _liveBlocks.FirstOrDefault();
         }
+
+        if (_liveMaterializedCount < _liveBlocks.Count)
+            ScheduleNextLiveBlocksChunk(rebuildVersion);
     }
 
     private void FocusLiveBlockAt(int index, int? focusCaret = null)
     {
         if (index < 0 || index >= _liveBlocks.Count)
             return;
+
+        EnsureLiveBlocksMaterializedThrough(index);
 
         var targetBlock = _liveBlocks[index];
         _activeLiveBlock = targetBlock;
@@ -674,9 +855,23 @@ public sealed partial class MainWindow : Window
         if (index < 0 || index >= _liveBlocks.Count)
             return;
 
+        EnsureLiveBlocksMaterializedThrough(index);
+
         var block = _liveBlocks[index];
-        var element = CreateLiveBlockElement(block, index);
-        block.RootElement = element;
+        RecycleBlockTextBox(block);
+
+        var prevSync = _isSyncingLiveEditor;
+        _isSyncingLiveEditor = true;
+        FrameworkElement element;
+        try
+        {
+            element = CreateLiveBlockElement(block, index);
+            block.RootElement = element;
+        }
+        finally
+        {
+            _isSyncingLiveEditor = prevSync;
+        }
 
         if (index < LiveEditorPanel.Children.Count)
             LiveEditorPanel.Children[index] = element;
@@ -690,14 +885,30 @@ public sealed partial class MainWindow : Window
     private void InsertLiveBlockAt(int index, LiveDocBlock block, int? focusCaret = null)
     {
         var clampedIdx = Math.Clamp(index, 0, _liveBlocks.Count);
+        if (clampedIdx > 0)
+            EnsureLiveBlocksMaterializedThrough(clampedIdx - 1);
+
         _liveBlocks.Insert(clampedIdx, block);
-        var element = CreateLiveBlockElement(block, clampedIdx);
-        block.RootElement = element;
+
+        var prevSync = _isSyncingLiveEditor;
+        _isSyncingLiveEditor = true;
+        FrameworkElement element;
+        try
+        {
+            element = CreateLiveBlockElement(block, clampedIdx);
+            block.RootElement = element;
+        }
+        finally
+        {
+            _isSyncingLiveEditor = prevSync;
+        }
 
         if (clampedIdx <= LiveEditorPanel.Children.Count)
             LiveEditorPanel.Children.Insert(clampedIdx, element);
         else
             LiveEditorPanel.Children.Add(element);
+
+        _liveMaterializedCount = LiveEditorPanel.Children.Count;
 
         if (focusCaret.HasValue)
             FocusLiveBlockAt(clampedIdx, focusCaret.Value);
@@ -729,20 +940,14 @@ public sealed partial class MainWindow : Window
 
     private FrameworkElement CreateLiveBlockElement(LiveDocBlock block, int blockIndex)
     {
+        EnsureLiveRenderResources();
+
         var isDarkMode = ViewModel.IsDarkMode;
         var baseFontSize = ViewModel.EditorFontSize;
-
-        var transparentBrush = new SolidColorBrush(Colors.Transparent);
-        var primaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 245, 245, 247) : ColorHelper.FromArgb(255, 28, 28, 30));
-        var secondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 108, 108, 112));
-        var surfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(22, 0, 0, 0));
-        var borderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(38, 255, 255, 255) : ColorHelper.FromArgb(28, 0, 0, 0));
-        var accentBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 10, 132, 255));
-        var selectionUnfocusedBrush = new SolidColorBrush(ColorHelper.FromArgb(140, 10, 132, 255));
-        var monoFont = new FontFamily("Cascadia Mono, Consolas, Courier New");
-        var borderlessStyle = Application.Current?.Resources.TryGetValue("BorderlessTextBoxStyle", out var styleObj) == true
-            ? styleObj as Style
-            : null;
+        var primaryBrush = _cachedPrimaryBrush;
+        var secondaryBrush = _cachedSecondaryBrush;
+        var surfaceBrush = _cachedSurfaceBrush;
+        var borderBrush = _cachedBorderBrush;
 
         if (block.Kind == LiveBlockKind.TableBlock)
         {
@@ -758,15 +963,18 @@ public sealed partial class MainWindow : Window
                     if (idx < 0)
                         return;
 
-                    if (idx + 1 < _liveBlocks.Count && _liveBlocks[idx + 1].PrimaryTextBox is not null)
+                    if (idx + 1 < _liveBlocks.Count)
                     {
-                        FocusLiveBlockAt(idx + 1, 0);
+                        EnsureLiveBlocksMaterializedThrough(idx + 1);
+                        if (_liveBlocks[idx + 1].PrimaryTextBox is not null)
+                        {
+                            FocusLiveBlockAt(idx + 1, 0);
+                            return;
+                        }
                     }
-                    else
-                    {
-                        InsertLiveBlockAt(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
-                        FlushSyncLiveBlocksToViewModel();
-                    }
+
+                    InsertLiveBlockAt(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+                    FlushSyncLiveBlocksToViewModel();
                 },
                 onRequestDeleteTable: () =>
                 {
@@ -777,6 +985,7 @@ public sealed partial class MainWindow : Window
                     _liveBlocks.RemoveAt(idx);
                     if (idx < LiveEditorPanel.Children.Count)
                         LiveEditorPanel.Children.RemoveAt(idx);
+                    _liveMaterializedCount = LiveEditorPanel.Children.Count;
 
                     if (_liveBlocks.Count == 0)
                         InsertLiveBlockAt(0, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
@@ -794,7 +1003,7 @@ public sealed partial class MainWindow : Window
             var dividerContainer = new Grid
             {
                 Padding = new Thickness(0, 10, 0, 10),
-                Background = transparentBrush
+                Background = TransparentBrush
             };
             dividerContainer.Children.Add(new Border
             {
@@ -824,21 +1033,22 @@ public sealed partial class MainWindow : Window
                 AcceptsReturn = true,
                 TextWrapping = TextWrapping.Wrap,
                 IsSpellCheckEnabled = false,
-                FontFamily = monoFont,
+                FontFamily = MonoFontFamily,
                 FontSize = Math.Max(13, baseFontSize - 2),
                 Foreground = primaryBrush,
-                Background = transparentBrush,
-                SelectionHighlightColor = accentBrush,
-                SelectionHighlightColorWhenNotFocused = selectionUnfocusedBrush,
+                Background = TransparentBrush,
+                SelectionHighlightColor = AccentBrush,
+                SelectionHighlightColorWhenNotFocused = SelectionUnfocusedBrush,
                 BorderThickness = new Thickness(0),
                 Padding = new Thickness(0),
-                MinHeight = 28
+                MinHeight = 28,
+                Tag = block
             };
-            if (borderlessStyle is not null)
-                codeTb.Style = borderlessStyle;
+            if (_cachedBorderlessStyle is not null)
+                codeTb.Style = _cachedBorderlessStyle;
 
             block.PrimaryTextBox = codeTb;
-            WireLiveBlockTextBoxEvents(block, codeTb);
+            WirePooledLiveTextBoxEvents(codeTb);
 
             return new Border
             {
@@ -887,54 +1097,34 @@ public sealed partial class MainWindow : Window
             _ => blockIndex == 0 && _liveBlocks.Count == 1 ? "Type '/' for commands, or start writing..." : string.Empty
         };
 
-        var tb = new TextBox
-        {
-            Text = block.Content,
-            PlaceholderText = placeholder,
-            AcceptsReturn = false,
-            TextWrapping = isTreeLine ? TextWrapping.NoWrap : TextWrapping.Wrap,
-            IsSpellCheckEnabled = !isTreeLine && !block.IsBlockCode,
-            FontSize = fontSize,
-            FontWeight = fontWeight,
-            FontStyle = fontStyle,
-            Foreground = textForeground,
-            Background = transparentBrush,
-            SelectionHighlightColor = accentBrush,
-            SelectionHighlightColorWhenNotFocused = selectionUnfocusedBrush,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(0, 2, 0, 2),
-            MinHeight = Math.Max(26, Math.Round(fontSize * 1.45)),
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        if (block.IsBlockCode || isTreeLine)
-            tb.FontFamily = monoFont;
-        if (borderlessStyle is not null)
-            tb.Style = borderlessStyle;
-
-        var richHost = new Border
-        {
-            Background = transparentBrush,
-            Padding = new Thickness(0, 2, 0, 2),
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            IsHitTestVisible = false,
-            Visibility = Visibility.Collapsed
-        };
+        var tb = RentLiveTextBox(block);
+        tb.Text = block.Content;
+        tb.PlaceholderText = placeholder;
+        tb.TextWrapping = isTreeLine ? TextWrapping.NoWrap : TextWrapping.Wrap;
+        tb.FontFamily = (block.IsBlockCode || isTreeLine) ? MonoFontFamily : DefaultFontFamily;
+        tb.FontSize = fontSize;
+        tb.FontWeight = fontWeight;
+        tb.FontStyle = fontStyle;
+        tb.Foreground = textForeground;
+        tb.MinHeight = Math.Max(26, Math.Round(fontSize * 1.45));
+        tb.Opacity = 1.0;
+        tb.IsHitTestVisible = true;
 
         block.PrimaryTextBox = tb;
-        block.RichDisplayHost = richHost;
-        WireLiveBlockTextBoxEvents(block, tb);
-        UpdateBlockInlineRichDisplay(block, isFocused: ReferenceEquals(_activeLiveBlock, block) && tb.FocusState != FocusState.Unfocused);
+        block.RichDisplayHost = null;
 
         var cellGrid = new Grid
         {
-            Background = transparentBrush,
+            Background = TransparentBrush,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Center
         };
-        cellGrid.Children.Add(richHost);
         cellGrid.Children.Add(tb);
+
+        if (MarkdownRenderer.HasInlineMarkdownFormatting(block.Content))
+        {
+            UpdateBlockInlineRichDisplay(block, isFocused: ReferenceEquals(_activeLiveBlock, block) && tb.FocusState != FocusState.Unfocused);
+        }
 
         if (block.IsBlockStrikethrough)
         {
@@ -966,7 +1156,6 @@ public sealed partial class MainWindow : Window
             };
             strikeGrid.Children.Add(strikeSizer);
             strikeGrid.Children.Add(strikeLine);
-            tb.TextChanged += (_, _) => strikeSizer.Text = tb.Text ?? string.Empty;
             cellGrid.Children.Add(strikeGrid);
         }
 
@@ -976,7 +1165,7 @@ public sealed partial class MainWindow : Window
             {
                 var row = new Grid
                 {
-                    Background = transparentBrush,
+                    Background = TransparentBrush,
                     Margin = new Thickness(0, 2, 0, 2),
                     ColumnSpacing = 8
                 };
@@ -992,8 +1181,9 @@ public sealed partial class MainWindow : Window
                 };
                 checkBox.Click += (_, _) =>
                 {
+                    EnsureLiveRenderResources();
                     block.IsChecked = checkBox.IsChecked == true;
-                    tb.Foreground = block.IsChecked ? secondaryBrush : primaryBrush;
+                    tb.Foreground = block.IsChecked ? _cachedSecondaryBrush : _cachedPrimaryBrush;
                     UpdateBlockInlineRichDisplay(block, isFocused: tb.FocusState != FocusState.Unfocused);
                     FlushSyncLiveBlocksToViewModel();
                 };
@@ -1009,7 +1199,7 @@ public sealed partial class MainWindow : Window
             {
                 var row = new Grid
                 {
-                    Background = transparentBrush,
+                    Background = TransparentBrush,
                     Margin = new Thickness(0, 2, 0, 2),
                     ColumnSpacing = 10
                 };
@@ -1037,7 +1227,7 @@ public sealed partial class MainWindow : Window
                 return new Border
                 {
                     BorderThickness = new Thickness(3, 0, 0, 0),
-                    BorderBrush = accentBrush,
+                    BorderBrush = AccentBrush,
                     Background = surfaceBrush,
                     CornerRadius = new CornerRadius(4),
                     Padding = new Thickness(12, 6, 12, 6),
@@ -1047,13 +1237,16 @@ public sealed partial class MainWindow : Window
             }
 
             case LiveBlockKind.Heading1:
-                return new Border { Background = transparentBrush, Margin = new Thickness(0, 10, 0, 4), Child = cellGrid };
+                cellGrid.Margin = new Thickness(0, 10, 0, 4);
+                return cellGrid;
 
             case LiveBlockKind.Heading2:
-                return new Border { Background = transparentBrush, Margin = new Thickness(0, 8, 0, 3), Child = cellGrid };
+                cellGrid.Margin = new Thickness(0, 8, 0, 3);
+                return cellGrid;
 
             case LiveBlockKind.Heading3:
-                return new Border { Background = transparentBrush, Margin = new Thickness(0, 6, 0, 2), Child = cellGrid };
+                cellGrid.Margin = new Thickness(0, 6, 0, 2);
+                return cellGrid;
 
             default:
             {
@@ -1069,19 +1262,15 @@ public sealed partial class MainWindow : Window
                     };
                 }
 
-                return new Border
-                {
-                    Background = transparentBrush,
-                    Margin = new Thickness(0, 1, 0, 1),
-                    Child = cellGrid
-                };
+                cellGrid.Margin = new Thickness(0, 1, 0, 1);
+                return cellGrid;
             }
         }
     }
 
     private void UpdateBlockInlineRichDisplay(LiveDocBlock block, bool isFocused)
     {
-        if (block.PrimaryTextBox is not { } tb || block.RichDisplayHost is not { } richHost)
+        if (block.PrimaryTextBox is not { } tb)
             return;
 
         if (!isFocused &&
@@ -1089,30 +1278,36 @@ public sealed partial class MainWindow : Window
             !string.IsNullOrWhiteSpace(block.Content) &&
             MarkdownRenderer.HasInlineMarkdownFormatting(block.Content))
         {
-            var isDarkMode = ViewModel.IsDarkMode;
-            var primaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 245, 245, 247) : ColorHelper.FromArgb(255, 28, 28, 30));
-            var secondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 108, 108, 112));
-            var accentBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 10, 132, 255));
-            var monoFont = new FontFamily("Cascadia Mono, Consolas, Courier New");
-            var sortedTitles = ViewModel.AllNoteItems
-                .Select(n => n.Title)
-                .Where(t => !string.IsNullOrWhiteSpace(t))
-                .OrderByDescending(t => t.Length)
-                .ToList();
+            EnsureLiveRenderResources();
+
+            if (block.RichDisplayHost is not { } richHost)
+            {
+                richHost = new Border
+                {
+                    Background = TransparentBrush,
+                    Padding = new Thickness(0, 2, 0, 2),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    IsHitTestVisible = false
+                };
+                block.RichDisplayHost = richHost;
+                if (tb.Parent is Grid parentGrid && !parentGrid.Children.Contains(richHost))
+                    parentGrid.Children.Insert(0, richHost);
+            }
 
             var fg = (block.Kind == LiveBlockKind.Checklist && block.IsChecked) || block.Kind == LiveBlockKind.Quote || block.IsBlockStrikethrough
-                ? secondaryBrush
-                : primaryBrush;
+                ? _cachedSecondaryBrush
+                : _cachedPrimaryBrush;
 
             var formattedTb = MarkdownRenderer.CreateFormattedTextBlock(
                 block.Content,
                 tb.FontSize,
                 tb.FontWeight,
                 fg,
-                accentBrush,
-                monoFont,
+                AccentBrush,
+                MonoFontFamily,
                 new Thickness(0),
-                sortedTitles,
+                _cachedSortedNoteTitles,
                 OnMentionClicked);
             formattedTb.FontStyle = tb.FontStyle;
             formattedTb.LineHeight = Math.Max(22, Math.Round(tb.FontSize * 1.45));
@@ -1124,35 +1319,58 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            richHost.Visibility = Visibility.Collapsed;
-            richHost.Child = null;
+            if (block.RichDisplayHost is { } richHost)
+            {
+                richHost.Visibility = Visibility.Collapsed;
+                richHost.Child = null;
+            }
             tb.Opacity = 1.0;
             tb.IsHitTestVisible = true;
         }
     }
 
-    private void WireLiveBlockTextBoxEvents(LiveDocBlock block, TextBox tb)
+    private void WirePooledLiveTextBoxEvents(TextBox tb)
     {
         tb.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) =>
         {
+            if (tb.Tag is not LiveDocBlock block)
+                return;
+
             _activeLiveBlock = block;
             UpdateBlockInlineRichDisplay(block, isFocused: true);
         }), true);
 
         tb.GotFocus += (_, _) =>
         {
+            if (tb.Tag is not LiveDocBlock block)
+                return;
+
             _activeLiveBlock = block;
             UpdateBlockInlineRichDisplay(block, isFocused: true);
         };
 
         tb.LostFocus += (_, _) =>
         {
+            if (tb.Tag is not LiveDocBlock block)
+                return;
+
             if (tb.SelectionLength == 0)
                 UpdateBlockInlineRichDisplay(block, isFocused: false);
         };
 
         tb.TextChanged += (_, _) =>
         {
+            if (tb.Tag is not LiveDocBlock block)
+                return;
+
+            if (block.IsBlockStrikethrough &&
+                tb.Parent is Grid { Children.Count: > 1 } cellGrid &&
+                cellGrid.Children[^1] is Grid { Children.Count: > 0 } strikeGrid &&
+                strikeGrid.Children[0] is TextBlock strikeSizer)
+            {
+                strikeSizer.Text = tb.Text ?? string.Empty;
+            }
+
             if (_isSyncingLiveEditor)
                 return;
 
@@ -1178,7 +1396,7 @@ public sealed partial class MainWindow : Window
 
         tb.SelectionChanged += (_, _) =>
         {
-            if (_isSyncingLiveEditor)
+            if (_isSyncingLiveEditor || tb.Tag is not LiveDocBlock block)
                 return;
 
             _activeLiveBlock = block;
@@ -1190,12 +1408,19 @@ public sealed partial class MainWindow : Window
 
         tb.PointerReleased += (_, _) =>
         {
+            if (tb.Tag is not LiveDocBlock)
+                return;
+
             var ctrlDown = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(CoreVirtualKeyStates.Down);
             if (ctrlDown && TryGetMentionedNoteAtCaret(out var targetNote) && targetNote is not null)
                 NavigateToNote(targetNote);
         };
 
-        tb.PreviewKeyDown += (_, e) => OnLiveBlockPreviewKeyDown(block, tb, e);
+        tb.PreviewKeyDown += (_, e) =>
+        {
+            if (tb.Tag is LiveDocBlock block)
+                OnLiveBlockPreviewKeyDown(block, tb, e);
+        };
     }
 
     private bool TryAutoConvertLiveBlock(LiveDocBlock block, TextBox tb)
@@ -1555,6 +1780,7 @@ public sealed partial class MainWindow : Window
                     _liveBlocks.RemoveAt(blockIdx - 1);
                     if (blockIdx - 1 < LiveEditorPanel.Children.Count)
                         LiveEditorPanel.Children.RemoveAt(blockIdx - 1);
+                    _liveMaterializedCount = LiveEditorPanel.Children.Count;
                     FocusLiveBlockAt(blockIdx - 1, 0);
                     FlushSyncLiveBlocksToViewModel();
                     return;
@@ -1564,9 +1790,11 @@ public sealed partial class MainWindow : Window
                 {
                     var prevLen = (prevBlock.Content ?? string.Empty).Length;
                     prevBlock.Content = (prevBlock.Content ?? string.Empty) + text;
+                    RecycleBlockTextBox(_liveBlocks[blockIdx]);
                     _liveBlocks.RemoveAt(blockIdx);
                     if (blockIdx < LiveEditorPanel.Children.Count)
                         LiveEditorPanel.Children.RemoveAt(blockIdx);
+                    _liveMaterializedCount = LiveEditorPanel.Children.Count;
                     RefreshLiveBlockAt(blockIdx - 1, prevLen);
                     FlushSyncLiveBlocksToViewModel();
                 }
@@ -1591,6 +1819,7 @@ public sealed partial class MainWindow : Window
         {
             for (var i = blockIdx + 1; i < _liveBlocks.Count; i++)
             {
+                EnsureLiveBlocksMaterializedThrough(i);
                 if (_liveBlocks[i].PrimaryTextBox is not null)
                 {
                     e.Handled = true;
@@ -1713,7 +1942,7 @@ public sealed partial class MainWindow : Window
 
     private void OnEditorTextChanged(object sender, TextChangedEventArgs e)
     {
-        if (_isSyncingLiveEditor)
+        if (_isSyncingLiveEditor || ViewModel.CurrentViewMode != EditorViewMode.Source)
             return;
 
         UpdateSelectionToolbar();
@@ -1732,7 +1961,7 @@ public sealed partial class MainWindow : Window
 
     private void OnEditorSelectionChanged(object sender, RoutedEventArgs e)
     {
-        if (_isSyncingLiveEditor)
+        if (_isSyncingLiveEditor || ViewModel.CurrentViewMode != EditorViewMode.Source)
             return;
 
         UpdateSelectionToolbar();
@@ -2398,16 +2627,18 @@ public sealed partial class MainWindow : Window
                 HideMentionPopup();
                 HideSlashMenuPopup();
                 SelectionToolbarBorder.Visibility = Visibility.Collapsed;
-                if (!string.Equals(_lastRenderedLiveMarkdown, ViewModel.EditorText, StringComparison.Ordinal) ||
-                    LiveEditorPanel.Children.Count == 0)
+                if (ViewModel.CurrentViewMode == EditorViewMode.Live &&
+                    (!string.Equals(_lastRenderedLiveMarkdown, ViewModel.EditorText, StringComparison.Ordinal) ||
+                     LiveEditorPanel.Children.Count == 0))
                 {
                     RebuildLiveEditor(reparse: true);
                 }
                 UpdateActiveMentionJumpPill();
                 if (ViewModel.IsFluidAnimationEnabled)
                 {
-                    PlayFluidTransition(LiveEditorScrollViewer);
-                    PlayFluidTransition(EditorTextBox);
+                    PlayFluidTransition(ViewModel.CurrentViewMode == EditorViewMode.Live
+                        ? LiveEditorScrollViewer
+                        : EditorTextBox);
                 }
                 break;
 
@@ -2804,9 +3035,9 @@ public sealed partial class MainWindow : Window
 
         var fade = new DoubleAnimation
         {
-            From = 0.35,
+            From = 0.78,
             To = 1.0,
-            Duration = new Duration(TimeSpan.FromMilliseconds(160)),
+            Duration = new Duration(TimeSpan.FromMilliseconds(95)),
             EasingFunction = ease,
             FillBehavior = FillBehavior.Stop
         };

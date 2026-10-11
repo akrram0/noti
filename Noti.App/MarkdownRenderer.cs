@@ -1463,10 +1463,11 @@ public static class MarkdownRenderer
                 var close = text.IndexOf("~~", i + 2, StringComparison.Ordinal);
                 if (close > i + 2)
                 {
-                    var strikeRun = (Run)XamlReader.Load(
-                        "<Run xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" TextDecorations=\"Strikethrough\" />");
-                    strikeRun.Text = text[(i + 2)..close];
-                    inlines.Add(strikeRun);
+                    inlines.Add(new Run
+                    {
+                        Text = text[(i + 2)..close],
+                        TextDecorations = Windows.UI.Text.TextDecorations.Strikethrough
+                    });
                     i = close + 2;
                     continue;
                 }
