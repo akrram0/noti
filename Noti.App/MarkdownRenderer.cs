@@ -1161,16 +1161,17 @@ public static class MarkdownRenderer
             }
         }
 
-        if (Path.IsPathRooted(clean) && File.Exists(clean))
+        if (System.IO.Path.IsPathRooted(clean) && File.Exists(clean))
         {
-            resolvedUri = new Uri(Path.GetFullPath(clean));
+            resolvedUri = new Uri(System.IO.Path.GetFullPath(clean));
             return true;
         }
 
-        var rel = clean.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
-        while (rel.StartsWith($".{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+        var sep = System.IO.Path.DirectorySeparatorChar;
+        var rel = clean.Replace('/', sep).Replace('\\', sep);
+        while (rel.StartsWith($".{sep}", StringComparison.Ordinal))
             rel = rel[2..];
-        rel = rel.TrimStart(Path.DirectorySeparatorChar);
+        rel = rel.TrimStart(sep);
 
         if (string.IsNullOrWhiteSpace(rel))
             return false;
@@ -1181,26 +1182,26 @@ public static class MarkdownRenderer
             if (!string.IsNullOrWhiteSpace(noteFolderPath))
             {
                 var normalizedFolder = noteFolderPath
-                    .Replace('/', Path.DirectorySeparatorChar)
-                    .Replace('\\', Path.DirectorySeparatorChar)
-                    .Trim(Path.DirectorySeparatorChar);
-                candidates.Add(Path.Combine(vaultRootPath, normalizedFolder, rel));
+                    .Replace('/', sep)
+                    .Replace('\\', sep)
+                    .Trim(sep);
+                candidates.Add(System.IO.Path.Combine(vaultRootPath, normalizedFolder, rel));
             }
 
-            candidates.Add(Path.Combine(vaultRootPath, rel));
+            candidates.Add(System.IO.Path.Combine(vaultRootPath, rel));
         }
 
         var appBase = AppContext.BaseDirectory;
         if (!string.IsNullOrWhiteSpace(appBase))
         {
-            candidates.Add(Path.Combine(appBase, rel));
-            var appPrefix = $"Noti.App{Path.DirectorySeparatorChar}";
+            candidates.Add(System.IO.Path.Combine(appBase, rel));
+            var appPrefix = $"Noti.App{sep}";
             if (rel.StartsWith(appPrefix, StringComparison.OrdinalIgnoreCase))
             {
                 var stripped = rel[appPrefix.Length..];
                 if (!string.IsNullOrWhiteSpace(vaultRootPath))
-                    candidates.Add(Path.Combine(vaultRootPath, stripped));
-                candidates.Add(Path.Combine(appBase, stripped));
+                    candidates.Add(System.IO.Path.Combine(vaultRootPath, stripped));
+                candidates.Add(System.IO.Path.Combine(appBase, stripped));
             }
         }
 
@@ -1208,7 +1209,7 @@ public static class MarkdownRenderer
         {
             try
             {
-                var full = Path.GetFullPath(candidate);
+                var full = System.IO.Path.GetFullPath(candidate);
                 if (File.Exists(full))
                 {
                     resolvedUri = new Uri(full);
