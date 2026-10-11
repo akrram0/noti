@@ -5,12 +5,12 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using Windows.System;
 using Windows.UI;
 using Windows.UI.Core;
-using Windows.UI.Text;
 
 namespace Noti.App;
 
@@ -805,11 +805,10 @@ public static class MarkdownRenderer
                 var close = text.IndexOf("~~", i + 2, StringComparison.Ordinal);
                 if (close > i + 2)
                 {
-                    inlines.Add(new Run
-                    {
-                        Text = text[(i + 2)..close],
-                        TextDecorations = Windows.UI.Text.TextDecorations.Strikethrough
-                    });
+                    var strikeRun = (Run)XamlReader.Load(
+                        "<Run xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" TextDecorations=\"Strikethrough\" />");
+                    strikeRun.Text = text[(i + 2)..close];
+                    inlines.Add(strikeRun);
                     i = close + 2;
                     continue;
                 }
