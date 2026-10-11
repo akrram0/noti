@@ -95,7 +95,7 @@ public sealed class MainViewModel : ObservableObject
     private bool _isFluidAnimationEnabled = true;
     private bool _isTreeShortcutEnabled = true;
     private double _editorFontSize = 16.0;
-    private double _surfaceOpacityPercent = 75.0;
+    private double _surfaceOpacityPercent = 42.0;
     private EditorViewMode _currentViewMode = EditorViewMode.Live;
     private string _userName = "Writer";
     private string _userAvatarPath = string.Empty;
@@ -117,6 +117,8 @@ public sealed class MainViewModel : ObservableObject
         _isFluidAnimationEnabled = _settings.IsFluidAnimationEnabled;
         _isTreeShortcutEnabled = _settings.IsTreeShortcutEnabled;
         _editorFontSize = Math.Clamp(_settings.EditorFontSize, 11.0, 28.0);
+        if (Math.Abs(_settings.SurfaceOpacityPercent - 75.0) < 0.01)
+            _settings.SurfaceOpacityPercent = 42.0;
         _surfaceOpacityPercent = Math.Clamp(_settings.SurfaceOpacityPercent, 0.0, 100.0);
         _currentBackdropMode = Enum.TryParse<BackdropMode>(_settings.BackdropKind, ignoreCase: true, out var parsedBackdrop)
             ? parsedBackdrop

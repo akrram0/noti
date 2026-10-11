@@ -659,9 +659,13 @@
                             Margin="40,12,0,0"
                             Padding="6,4"
                             CornerRadius="14"
-                            Background="{ThemeResource SidebarBackgroundBrush}"
+                            Background="{ThemeResource PopupAcrylicBrush}"
                             BorderThickness="1"
-                            BorderBrush="{ThemeResource SubtleDividerBrush}">
+                            BorderBrush="{ThemeResource SubtleDividerBrush}"
+                            Translation="0,0,16">
+                            <Border.Shadow>
+                                <ThemeShadow />
+                            </Border.Shadow>
                             <StackPanel Orientation="Horizontal" Spacing="4">
                                 <Button
                                     Content="B"
@@ -715,15 +719,26 @@
                             UseLayoutRounding="True"
                             Visibility="Collapsed"
                             Width="288"
-                            MaxHeight="310"
+                            MaxHeight="320"
                             HorizontalAlignment="Left"
                             VerticalAlignment="Top"
                             Margin="40,68,0,0"
                             Padding="8"
-                            CornerRadius="12"
-                            Background="{ThemeResource SidebarBackgroundBrush}"
+                            CornerRadius="14"
+                            Background="{ThemeResource PopupAcrylicBrush}"
                             BorderThickness="1"
-                            BorderBrush="{ThemeResource SubtleDividerBrush}">
+                            BorderBrush="{ThemeResource SubtleDividerBrush}"
+                            RenderTransformOrigin="0.12,0.0"
+                            Translation="0,0,24">
+                            <Border.Shadow>
+                                <ThemeShadow />
+                            </Border.Shadow>
+                            <Border.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform x:Name="SlashMenuScale" ScaleX="1" ScaleY="1" />
+                                    <TranslateTransform x:Name="SlashMenuTranslate" Y="0" />
+                                </TransformGroup>
+                            </Border.RenderTransform>
                             <StackPanel Spacing="4">
                                 <TextBlock
                                     Text="INSERT BLOCK (/)"
@@ -733,7 +748,7 @@
                                     Foreground="{ThemeResource TextSecondaryBrush}" />
                                 <ListView
                                     x:Name="SlashMenuListView"
-                                    MaxHeight="264"
+                                    MaxHeight="274"
                                     SelectionMode="Single"
                                     IsItemClickEnabled="True"
                                     ItemClick="OnSlashMenuItemClick"
@@ -795,10 +810,14 @@
                             VerticalAlignment="Top"
                             Margin="40,68,0,0"
                             Padding="8"
-                            CornerRadius="12"
-                            Background="{ThemeResource SidebarBackgroundBrush}"
+                            CornerRadius="14"
+                            Background="{ThemeResource PopupAcrylicBrush}"
                             BorderThickness="1"
-                            BorderBrush="{ThemeResource SubtleDividerBrush}">
+                            BorderBrush="{ThemeResource SubtleDividerBrush}"
+                            Translation="0,0,24">
+                            <Border.Shadow>
+                                <ThemeShadow />
+                            </Border.Shadow>
                             <StackPanel Spacing="4">
                                 <TextBlock
                                     Text="LINK NOTE (@)"

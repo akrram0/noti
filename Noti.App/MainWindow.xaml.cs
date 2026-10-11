@@ -53,8 +53,12 @@ public sealed partial class MainWindow : Window
     private SolidColorBrush _cachedSecondaryBrush = new(ColorHelper.FromArgb(255, 142, 142, 147));
     private SolidColorBrush _cachedSurfaceBrush = new(ColorHelper.FromArgb(36, 255, 255, 255));
     private SolidColorBrush _cachedBorderBrush = new(ColorHelper.FromArgb(38, 255, 255, 255));
+    private SolidColorBrush _cachedInputBgBrush = new(ColorHelper.FromArgb(1, 0, 0, 0));
     private Style? _cachedBorderlessStyle;
     private List<string> _cachedSortedNoteTitles = [];
+    private bool _isContextSlashMenuOpen;
+    private long _lastSlashPopupOpenTick;
+    private Storyboard? _slashPopupStoryboard;
 
     private static readonly (string Name, string Hex)[] PaletteColors =
     [
@@ -86,6 +90,7 @@ public sealed partial class MainWindow : Window
             BackdropIndicatorTranslate.X = ViewModel.BackdropIndicatorOffsetX;
             ModeIndicatorTranslate.X = ViewModel.ModeIndicatorOffsetX;
             UpdateTitleBarPassthrough();
+            ApplyEditorTextBoxTheme();
             RebuildLiveEditor(reparse: true);
         };
         RootGrid.SizeChanged += (_, _) =>
@@ -99,6 +104,8 @@ public sealed partial class MainWindow : Window
         ZoomBadgeButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
 
         LiveEditorScrollViewer.ViewChanged += OnLiveEditorScrollViewerViewChanged;
+        EditorPaneGrid.RightTapped += OnEditorPaneRightTapped;
+        EditorTextBox.ContextRequested += OnEditorContextRequested;
         RootGrid.AddHandler(UIElement.DragOverEvent, new DragEventHandler(OnRootGridDragOver), true);
         RootGrid.AddHandler(UIElement.DropEvent, new DragEventHandler(OnRootGridDrop), true);
         RootGrid.PreviewKeyDown += OnRootPreviewKeyDown;
@@ -620,6 +627,13 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void ApplyEditorTextBoxTheme()
+    {
+        EnsureLiveRenderResources();
+        EditorTextBox.RequestedTheme = ViewModel.CurrentElementTheme;
+        EditorTextBox.Background = _cachedInputBgBrush;
+    }
+
     private void EnsureLiveRenderResources(bool refreshTitles = false)
     {
         var isDarkMode = ViewModel.IsDarkMode;
@@ -630,6 +644,7 @@ public sealed partial class MainWindow : Window
             _cachedSecondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 108, 108, 112));
             _cachedSurfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(22, 0, 0, 0));
             _cachedBorderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(38, 255, 255, 255) : ColorHelper.FromArgb(28, 0, 0, 0));
+            _cachedInputBgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(1, 0, 0, 0) : ColorHelper.FromArgb(1, 255, 255, 255));
         }
 
         if (_cachedBorderlessStyle is null &&
@@ -692,7 +707,8 @@ public sealed partial class MainWindow : Window
         {
             AcceptsReturn = false,
             IsSpellCheckEnabled = false,
-            Background = TransparentBrush,
+            Background = _cachedInputBgBrush,
+            RequestedTheme = ViewModel.CurrentElementTheme,
             SelectionHighlightColor = AccentBrush,
             SelectionHighlightColorWhenNotFocused = SelectionUnfocusedBrush,
             BorderThickness = new Thickness(0),
@@ -806,9 +822,20 @@ public sealed partial class MainWindow : Window
 
     private void OnLiveCanvasBackgroundPointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        if (e.GetCurrentPoint(LiveCanvasRootGrid).Properties.IsRightButtonPressed)
+            return;
+
+        if (_isContextSlashMenuOpen)
+            HideSlashMenuPopup();
+
         if (!ReferenceEquals(e.OriginalSource, LiveCanvasRootGrid) && !ReferenceEquals(e.OriginalSource, LiveEditorPanel))
             return;
 
+        FocusNearestLiveBlockAtY(e.GetCurrentPoint(LiveEditorPanel).Position.Y);
+    }
+
+    private void FocusNearestLiveBlockAtY(double clickY)
+    {
         if (_liveBlocks.Count == 0)
         {
             InsertLiveBlockAt(0, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
@@ -816,7 +843,6 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var clickY = e.GetCurrentPoint(LiveEditorPanel).Position.Y;
         var count = Math.Min(LiveEditorPanel.Children.Count, _liveBlocks.Count);
 
         for (var i = 0; i < count; i++)
@@ -1170,7 +1196,8 @@ public sealed partial class MainWindow : Window
                 FontFamily = MonoFontFamily,
                 FontSize = Math.Max(13, baseFontSize - 2),
                 Foreground = primaryBrush,
-                Background = TransparentBrush,
+                Background = _cachedInputBgBrush,
+                RequestedTheme = ViewModel.CurrentElementTheme,
                 SelectionHighlightColor = AccentBrush,
                 SelectionHighlightColorWhenNotFocused = SelectionUnfocusedBrush,
                 BorderThickness = new Thickness(0),
@@ -1216,6 +1243,8 @@ public sealed partial class MainWindow : Window
         tb.FontWeight = fontWeight;
         tb.FontStyle = fontStyle;
         tb.Foreground = textForeground;
+        tb.Background = _cachedInputBgBrush;
+        tb.RequestedTheme = ViewModel.CurrentElementTheme;
         tb.TextAlignment = block.IsCentered ? TextAlignment.Center : TextAlignment.Left;
         tb.MinHeight = Math.Max(26, Math.Round(fontSize * 1.45));
         tb.Opacity = 1.0;
@@ -1467,6 +1496,7 @@ public sealed partial class MainWindow : Window
                 return;
 
             block.Content = tb.Text ?? string.Empty;
+            _isContextSlashMenuOpen = false;
 
             if (TryAutoConvertLiveBlock(block, tb))
                 return;
@@ -1507,6 +1537,8 @@ public sealed partial class MainWindow : Window
             if (ctrlDown && TryGetMentionedNoteAtCaret(out var targetNote) && targetNote is not null)
                 NavigateToNote(targetNote);
         };
+
+        tb.ContextRequested += OnEditorContextRequested;
 
         tb.PreviewKeyDown += (_, e) =>
         {
@@ -1919,6 +1951,8 @@ public sealed partial class MainWindow : Window
         if (e.Key == VirtualKey.Escape)
         {
             e.Handled = true;
+            HideSlashMenuPopup();
+            HideMentionPopup();
             SelectionToolbarBorder.Visibility = Visibility.Collapsed;
             tb.SelectionLength = 0;
             return;
@@ -2067,6 +2101,7 @@ public sealed partial class MainWindow : Window
         if (_isSyncingLiveEditor || ViewModel.CurrentViewMode != EditorViewMode.Source)
             return;
 
+        _isContextSlashMenuOpen = false;
         UpdateSelectionToolbar();
         UpdateSlashMenuAutocomplete();
         UpdateMentionAutocomplete();
@@ -2160,12 +2195,162 @@ public sealed partial class MainWindow : Window
         activeTb.Focus(FocusState.Programmatic);
     }
 
+    private void OnEditorContextRequested(UIElement sender, ContextRequestedEventArgs e)
+    {
+        e.Handled = true;
+
+        if (sender is TextBox tb && tb.Tag is LiveDocBlock block)
+        {
+            _activeLiveBlock = block;
+            if (tb.FocusState == FocusState.Unfocused)
+                tb.Focus(FocusState.Programmatic);
+        }
+        else if (ReferenceEquals(sender, EditorTextBox) && EditorTextBox.FocusState == FocusState.Unfocused)
+        {
+            EditorTextBox.Focus(FocusState.Programmatic);
+        }
+
+        if (!e.TryGetPosition(EditorPaneGrid, out var pos))
+            pos = GetDefaultSlashPopupAnchor();
+
+        OpenSlashMenuFromContext(pos);
+    }
+
+    private void OnEditorPaneRightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        e.Handled = true;
+
+        if (ViewModel.CurrentViewMode == EditorViewMode.Live)
+        {
+            var clickY = e.GetPosition(LiveEditorPanel).Y;
+            FocusNearestLiveBlockAtY(clickY);
+        }
+        else if (EditorTextBox.FocusState == FocusState.Unfocused)
+        {
+            EditorTextBox.Focus(FocusState.Programmatic);
+        }
+
+        OpenSlashMenuFromContext(e.GetPosition(EditorPaneGrid));
+    }
+
+    private void OpenSlashMenuFromContext(Point anchorPos)
+    {
+        var now = Environment.TickCount64;
+        if (SlashMenuPopupBorder.Visibility == Visibility.Visible && now - _lastSlashPopupOpenTick < 90)
+            return;
+
+        _lastSlashPopupOpenTick = now;
+        _isContextSlashMenuOpen = true;
+        _activeSlashIndex = -1;
+        ViewModel.UpdateSlashSuggestions(string.Empty);
+        if (ViewModel.SlashMenuSuggestions.Count > 0)
+        {
+            SlashMenuListView.SelectedIndex = 0;
+            ShowSlashMenuPopup(anchorPos, forceAnimate: true);
+        }
+    }
+
+    private Point GetDefaultSlashPopupAnchor()
+    {
+        if (ViewModel.CurrentViewMode == EditorViewMode.Live &&
+            _activeLiveBlock?.RootElement is { } rootEl)
+        {
+            try
+            {
+                return rootEl.TransformToVisual(EditorPaneGrid).TransformPoint(new Point(0, rootEl.ActualHeight + 6));
+            }
+            catch
+            {
+            }
+        }
+
+        return new Point(44, 68);
+    }
+
+    private void ShowSlashMenuPopup(Point? anchorPos = null, bool forceAnimate = false)
+    {
+        var pos = anchorPos ?? GetDefaultSlashPopupAnchor();
+        var maxW = Math.Max(320.0, EditorPaneGrid.ActualWidth);
+        var maxH = Math.Max(360.0, EditorPaneGrid.ActualHeight);
+        var clampedLeft = Math.Clamp(pos.X, 16.0, Math.Max(16.0, maxW - 304.0));
+        var clampedTop = Math.Clamp(pos.Y, 12.0, Math.Max(12.0, maxH - 332.0));
+        SlashMenuPopupBorder.Margin = new Thickness(clampedLeft, clampedTop, 0, 0);
+
+        var wasCollapsed = SlashMenuPopupBorder.Visibility != Visibility.Visible;
+        SlashMenuPopupBorder.Visibility = Visibility.Visible;
+
+        if (!wasCollapsed && !forceAnimate)
+            return;
+
+        _slashPopupStoryboard?.Stop();
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var sb = new Storyboard();
+
+        var fade = new DoubleAnimation
+        {
+            From = 0.0,
+            To = 1.0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(150)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(fade, SlashMenuPopupBorder);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+
+        var scaleX = new DoubleAnimation
+        {
+            From = 0.94,
+            To = 1.0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(165)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(scaleX, SlashMenuScale);
+        Storyboard.SetTargetProperty(scaleX, "ScaleX");
+
+        var scaleY = new DoubleAnimation
+        {
+            From = 0.94,
+            To = 1.0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(165)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(scaleY, SlashMenuScale);
+        Storyboard.SetTargetProperty(scaleY, "ScaleY");
+
+        var slideY = new DoubleAnimation
+        {
+            From = -6.0,
+            To = 0.0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(165)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(slideY, SlashMenuTranslate);
+        Storyboard.SetTargetProperty(slideY, "Y");
+
+        SlashMenuPopupBorder.Opacity = 1.0;
+        SlashMenuScale.ScaleX = 1.0;
+        SlashMenuScale.ScaleY = 1.0;
+        SlashMenuTranslate.Y = 0.0;
+
+        sb.Children.Add(fade);
+        sb.Children.Add(scaleX);
+        sb.Children.Add(scaleY);
+        sb.Children.Add(slideY);
+
+        _slashPopupStoryboard = sb;
+        sb.Begin();
+    }
+
     private void UpdateSlashMenuAutocomplete()
     {
         var activeTb = GetActiveEditorTextBox();
         if (activeTb.FocusState == FocusState.Unfocused || activeTb.SelectionLength > 0)
         {
-            HideSlashMenuPopup();
+            if (!_isContextSlashMenuOpen)
+                HideSlashMenuPopup();
             return;
         }
 
@@ -2174,22 +2359,27 @@ public sealed partial class MainWindow : Window
 
         if (TryGetActiveSlashTrigger(text, caret, out var slashIndex, out var query))
         {
+            _isContextSlashMenuOpen = false;
             _activeSlashIndex = slashIndex;
             ViewModel.UpdateSlashSuggestions(query);
             if (ViewModel.SlashMenuSuggestions.Count > 0)
             {
-                SlashMenuPopupBorder.Visibility = Visibility.Visible;
+                ShowSlashMenuPopup();
                 if (SlashMenuListView.SelectedIndex < 0 || SlashMenuListView.SelectedIndex >= ViewModel.SlashMenuSuggestions.Count)
                     SlashMenuListView.SelectedIndex = 0;
                 return;
             }
         }
 
+        if (_isContextSlashMenuOpen)
+            return;
+
         HideSlashMenuPopup();
     }
 
     private void HideSlashMenuPopup()
     {
+        _isContextSlashMenuOpen = false;
         _activeSlashIndex = -1;
         if (SlashMenuPopupBorder.Visibility != Visibility.Collapsed)
             SlashMenuPopupBorder.Visibility = Visibility.Collapsed;
@@ -2250,10 +2440,7 @@ public sealed partial class MainWindow : Window
         if (slashIndex < 0 || slashIndex >= caret || slashIndex >= text.Length || text[slashIndex] != '/')
         {
             if (!TryGetActiveSlashTrigger(text, caret, out slashIndex, out _))
-            {
-                HideSlashMenuPopup();
-                return;
-            }
+                slashIndex = caret;
         }
 
         var baseText = text[..slashIndex] + text[caret..];
@@ -2819,6 +3006,12 @@ public sealed partial class MainWindow : Window
                 break;
 
             case nameof(MainViewModel.IsDarkMode):
+                RecycleAllLiveBlocksToPool();
+                _liveTextBoxPool.Clear();
+                ApplyEditorTextBoxTheme();
+                RebuildLiveEditor(reparse: false);
+                break;
+
             case nameof(MainViewModel.EditorFontSize):
                 RebuildLiveEditor(reparse: false);
                 break;
