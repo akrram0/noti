@@ -31,9 +31,9 @@
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#26FFFFFF" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#F0FFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackground" Color="#03000000" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#03000000" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#03000000" />
                     <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
@@ -71,9 +71,9 @@
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#26FFFFFF" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#F0FFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackground" Color="#03000000" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#03000000" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#03000000" />
                     <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
@@ -111,9 +111,9 @@
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#18000000" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#FFFFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackground" Color="#03FFFFFF" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#03FFFFFF" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#03FFFFFF" />
                     <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
@@ -133,7 +133,7 @@
             <!-- Clean Borderless TextBox Style (eliminates WinUI Fluent bottom underline / elevation border artifact) -->
             <Style x:Key="BorderlessTextBoxStyle" TargetType="TextBox">
                 <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
-                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Background" Value="{ThemeResource TextControlBackground}" />
                 <Setter Property="BorderBrush" Value="Transparent" />
                 <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="SelectionHighlightColor" Value="#FF0A84FF" />

@@ -36,10 +36,7 @@ public sealed partial class MainWindow : Window
     private List<LiveDocBlock> _liveBlocks = [];
     private LiveDocBlock? _activeLiveBlock;
     private bool _isSyncingLiveEditor;
-    private readonly DispatcherTimer _caretBlinkTimer;
-    private TextBox? _focusedTextBox;
-    private ScrollViewer? _focusedScrollViewer;
-    private bool _isCaretBlinkOn = true;
+    private readonly DispatcherTimer _liveSyncTimer;
 
     private static readonly (string Name, string Hex)[] PaletteColors =
     [
@@ -61,18 +58,8 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         ConfigureWindowChrome();
 
-        _caretBlinkTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(530) };
-        _caretBlinkTimer.Tick += (_, _) =>
-        {
-            if (_focusedTextBox is null || _focusedTextBox.FocusState == FocusState.Unfocused || _focusedTextBox.SelectionLength > 0)
-            {
-                EditorCaretBar.Visibility = Visibility.Collapsed;
-                return;
-            }
-
-            _isCaretBlinkOn = !_isCaretBlinkOn;
-            EditorCaretBar.Opacity = _isCaretBlinkOn ? 1.0 : 0.0;
-        };
+        _liveSyncTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
+        _liveSyncTimer.Tick += (_, _) => FlushSyncLiveBlocksToViewModel();
 
         RootGrid.Loaded += (_, _) =>
         {
@@ -82,22 +69,17 @@ public sealed partial class MainWindow : Window
             ModeIndicatorTranslate.X = ViewModel.ModeIndicatorOffsetX;
             UpdateTitleBarPassthrough();
             RebuildLiveEditor(reparse: true);
-            UpdateActiveCaretVisual(resetBlink: true);
         };
         RootGrid.SizeChanged += (_, _) =>
         {
             ApplyResponsiveLayout();
             UpdateTitleBarPassthrough();
-            UpdateActiveCaretVisual(resetBlink: false);
         };
         SidebarToggleButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
         ViewSwitcherBorder.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
         UpdateTopBarButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
         ZoomBadgeButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
-        LiveEditorScrollViewer.ViewChanged += (_, _) => UpdateActiveCaretVisual(resetBlink: false);
 
-        RootGrid.GotFocus += OnRootGotFocus;
-        RootGrid.LostFocus += OnRootLostFocus;
         RootGrid.PreviewKeyDown += OnRootPreviewKeyDown;
         EditorTextBox.PreviewKeyDown += OnEditorPreviewKeyDown;
         EditorTextBox.TextChanged += OnEditorTextChanged;
@@ -283,11 +265,15 @@ public sealed partial class MainWindow : Window
 
             case VirtualKey.S when shiftDown:
                 e.Handled = true;
+                if (_liveSyncTimer.IsEnabled)
+                    FlushSyncLiveBlocksToViewModel();
                 _ = PickAndExportMarkdownAsync();
                 break;
 
             case VirtualKey.S:
                 e.Handled = true;
+                if (_liveSyncTimer.IsEnabled)
+                    FlushSyncLiveBlocksToViewModel();
                 _ = ViewModel.ForceSaveAsync();
                 break;
 
@@ -605,29 +591,20 @@ public sealed partial class MainWindow : Window
 
         if (_liveBlocks.Count == 0)
         {
-            _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
-            SyncLiveBlocksToViewModel();
-            RebuildLiveEditor(reparse: false, focusBlockIndex: 0, focusCaretIndex: 0);
+            InsertLiveBlockAt(0, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+            FlushSyncLiveBlocksToViewModel();
             return;
         }
 
         var lastBlock = _liveBlocks[^1];
         if (lastBlock.Kind is LiveBlockKind.TableBlock or LiveBlockKind.Divider or LiveBlockKind.CodeBlock)
         {
-            _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
-            SyncLiveBlocksToViewModel();
-            RebuildLiveEditor(reparse: false, focusBlockIndex: _liveBlocks.Count - 1, focusCaretIndex: 0);
+            InsertLiveBlockAt(_liveBlocks.Count, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+            FlushSyncLiveBlocksToViewModel();
             return;
         }
 
-        if (lastBlock.PrimaryTextBox is { } tb)
-        {
-            _activeLiveBlock = lastBlock;
-            UpdateBlockInlineRichDisplay(lastBlock, isFocused: true);
-            tb.Focus(FocusState.Programmatic);
-            tb.SelectionStart = (tb.Text ?? string.Empty).Length;
-            tb.SelectionLength = 0;
-        }
+        FocusLiveBlockAt(_liveBlocks.Count - 1);
     }
 
     private void RebuildLiveEditor(bool reparse = true, int? focusBlockIndex = null, int? focusCaretIndex = null)
@@ -650,30 +627,7 @@ public sealed partial class MainWindow : Window
 
         if (focusBlockIndex is int targetIdx && targetIdx >= 0 && targetIdx < _liveBlocks.Count)
         {
-            var targetBlock = _liveBlocks[targetIdx];
-            _activeLiveBlock = targetBlock;
-            UpdateBlockInlineRichDisplay(targetBlock, isFocused: true);
-
-            if (targetBlock.PrimaryTextBox is { } targetTb)
-            {
-                var caret = focusCaretIndex ?? (targetTb.Text ?? string.Empty).Length;
-                void FocusTarget()
-                {
-                    if (ViewModel.CurrentViewMode != EditorViewMode.Live || ViewModel.IsSettingsOpen)
-                        return;
-
-                    targetTb.Focus(FocusState.Programmatic);
-                    var clamped = Math.Clamp(caret, 0, (targetTb.Text ?? string.Empty).Length);
-                    targetTb.SelectionStart = clamped;
-                    targetTb.SelectionLength = 0;
-                    UpdateActiveCaretVisual(resetBlink: true);
-                }
-
-                if (targetTb.IsLoaded)
-                    DispatcherQueue.TryEnqueue(FocusTarget);
-                else
-                    targetTb.Loaded += (_, _) => DispatcherQueue.TryEnqueue(FocusTarget);
-            }
+            FocusLiveBlockAt(targetIdx, focusCaretIndex);
         }
         else if (_activeLiveBlock is null || !_liveBlocks.Contains(_activeLiveBlock))
         {
@@ -681,14 +635,85 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void SyncLiveBlocksToViewModel()
+    private void FocusLiveBlockAt(int index, int? focusCaret = null)
     {
+        if (index < 0 || index >= _liveBlocks.Count)
+            return;
+
+        var targetBlock = _liveBlocks[index];
+        _activeLiveBlock = targetBlock;
+        UpdateBlockInlineRichDisplay(targetBlock, isFocused: true);
+
+        if (targetBlock.PrimaryTextBox is not { } targetTb)
+            return;
+
+        var caret = focusCaret ?? (targetTb.Text ?? string.Empty).Length;
+        void FocusTarget()
+        {
+            if (ViewModel.CurrentViewMode != EditorViewMode.Live || ViewModel.IsSettingsOpen)
+                return;
+
+            targetTb.Focus(FocusState.Programmatic);
+            var clamped = Math.Clamp(caret, 0, (targetTb.Text ?? string.Empty).Length);
+            targetTb.SelectionStart = clamped;
+            targetTb.SelectionLength = 0;
+        }
+
+        if (targetTb.IsLoaded)
+            DispatcherQueue.TryEnqueue(FocusTarget);
+        else
+            targetTb.Loaded += (_, _) => DispatcherQueue.TryEnqueue(FocusTarget);
+    }
+
+    private void RefreshLiveBlockAt(int index, int? focusCaret = null)
+    {
+        if (index < 0 || index >= _liveBlocks.Count)
+            return;
+
+        var block = _liveBlocks[index];
+        var element = CreateLiveBlockElement(block, index);
+        block.RootElement = element;
+
+        if (index < LiveEditorPanel.Children.Count)
+            LiveEditorPanel.Children[index] = element;
+        else
+            LiveEditorPanel.Children.Add(element);
+
+        if (focusCaret.HasValue)
+            FocusLiveBlockAt(index, focusCaret.Value);
+    }
+
+    private void InsertLiveBlockAt(int index, LiveDocBlock block, int? focusCaret = null)
+    {
+        var clampedIdx = Math.Clamp(index, 0, _liveBlocks.Count);
+        _liveBlocks.Insert(clampedIdx, block);
+        var element = CreateLiveBlockElement(block, clampedIdx);
+        block.RootElement = element;
+
+        if (clampedIdx <= LiveEditorPanel.Children.Count)
+            LiveEditorPanel.Children.Insert(clampedIdx, element);
+        else
+            LiveEditorPanel.Children.Add(element);
+
+        if (focusCaret.HasValue)
+            FocusLiveBlockAt(clampedIdx, focusCaret.Value);
+    }
+
+    private void QueueSyncLiveBlocksToViewModel()
+    {
+        _liveSyncTimer.Stop();
+        _liveSyncTimer.Start();
+    }
+
+    private void FlushSyncLiveBlocksToViewModel()
+    {
+        _liveSyncTimer.Stop();
         var markdown = MarkdownRenderer.SerializeLiveBlocks(_liveBlocks);
         _isSyncingLiveEditor = true;
         try
         {
             ViewModel.EditorText = markdown;
-            if (EditorTextBox.Text != markdown)
+            if (ViewModel.CurrentViewMode == EditorViewMode.Source && EditorTextBox.Text != markdown)
                 EditorTextBox.Text = markdown;
         }
         finally
@@ -719,7 +744,7 @@ public sealed partial class MainWindow : Window
                 block,
                 isDarkMode,
                 baseFontSize,
-                SyncLiveBlocksToViewModel,
+                QueueSyncLiveBlocksToViewModel,
                 onRequestExitBelow: () =>
                 {
                     var idx = _liveBlocks.IndexOf(block);
@@ -728,13 +753,12 @@ public sealed partial class MainWindow : Window
 
                     if (idx + 1 < _liveBlocks.Count && _liveBlocks[idx + 1].PrimaryTextBox is not null)
                     {
-                        RebuildLiveEditor(reparse: false, focusBlockIndex: idx + 1, focusCaretIndex: 0);
+                        FocusLiveBlockAt(idx + 1, 0);
                     }
                     else
                     {
-                        _liveBlocks.Insert(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
-                        SyncLiveBlocksToViewModel();
-                        RebuildLiveEditor(reparse: false, focusBlockIndex: idx + 1, focusCaretIndex: 0);
+                        InsertLiveBlockAt(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+                        FlushSyncLiveBlocksToViewModel();
                     }
                 },
                 onRequestDeleteTable: () =>
@@ -744,11 +768,15 @@ public sealed partial class MainWindow : Window
                         return;
 
                     _liveBlocks.RemoveAt(idx);
-                    if (_liveBlocks.Count == 0)
-                        _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+                    if (idx < LiveEditorPanel.Children.Count)
+                        LiveEditorPanel.Children.RemoveAt(idx);
 
-                    SyncLiveBlocksToViewModel();
-                    RebuildLiveEditor(reparse: false, focusBlockIndex: Math.Clamp(idx - 1, 0, _liveBlocks.Count - 1), focusCaretIndex: 0);
+                    if (_liveBlocks.Count == 0)
+                        InsertLiveBlockAt(0, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+                    else
+                        FocusLiveBlockAt(Math.Clamp(idx - 1, 0, _liveBlocks.Count - 1), 0);
+
+                    FlushSyncLiveBlocksToViewModel();
                 });
         }
 
@@ -772,9 +800,8 @@ public sealed partial class MainWindow : Window
                 var idx = _liveBlocks.IndexOf(block);
                 if (idx >= 0)
                 {
-                    _liveBlocks.Insert(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
-                    SyncLiveBlocksToViewModel();
-                    RebuildLiveEditor(reparse: false, focusBlockIndex: idx + 1, focusCaretIndex: 0);
+                    InsertLiveBlockAt(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+                    FlushSyncLiveBlocksToViewModel();
                 }
             };
             return dividerContainer;
@@ -793,7 +820,6 @@ public sealed partial class MainWindow : Window
                 FontFamily = monoFont,
                 FontSize = Math.Max(13, baseFontSize - 2),
                 Foreground = primaryBrush,
-                Background = new SolidColorBrush(Colors.Transparent),
                 BorderThickness = new Thickness(0),
                 Padding = new Thickness(0),
                 MinHeight = 28
@@ -836,7 +862,7 @@ public sealed partial class MainWindow : Window
                          block.Content.Contains("└─", StringComparison.Ordinal) ||
                          block.Content.TrimStart().StartsWith('│');
 
-        var textForeground = (block.Kind == LiveBlockKind.Checklist && block.IsChecked) || block.Kind == LiveBlockKind.Quote
+        var textForeground = (block.Kind == LiveBlockKind.Checklist && block.IsChecked) || block.Kind == LiveBlockKind.Quote || block.IsBlockStrikethrough
             ? secondaryBrush
             : primaryBrush;
 
@@ -862,7 +888,6 @@ public sealed partial class MainWindow : Window
             FontWeight = fontWeight,
             FontStyle = fontStyle,
             Foreground = textForeground,
-            Background = new SolidColorBrush(Colors.Transparent),
             BorderThickness = new Thickness(0),
             Padding = new Thickness(0, 2, 0, 2),
             MinHeight = Math.Max(26, Math.Round(fontSize * 1.45)),
@@ -905,6 +930,40 @@ public sealed partial class MainWindow : Window
         cellGrid.Children.Add(tb);
         cellGrid.Children.Add(richHost);
 
+        if (block.IsBlockStrikethrough)
+        {
+            var strikeSizer = new TextBlock
+            {
+                Text = block.Content,
+                FontSize = fontSize,
+                FontWeight = fontWeight,
+                FontStyle = fontStyle,
+                FontFamily = tb.FontFamily,
+                Padding = new Thickness(0, 2, 0, 2),
+                Opacity = 0.0,
+                IsHitTestVisible = false
+            };
+            var strikeLine = new Border
+            {
+                Height = 1.5,
+                Background = textForeground,
+                Opacity = 0.85,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Center,
+                IsHitTestVisible = false
+            };
+            var strikeGrid = new Grid
+            {
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Center,
+                IsHitTestVisible = false
+            };
+            strikeGrid.Children.Add(strikeSizer);
+            strikeGrid.Children.Add(strikeLine);
+            tb.TextChanged += (_, _) => strikeSizer.Text = tb.Text ?? string.Empty;
+            cellGrid.Children.Add(strikeGrid);
+        }
+
         switch (block.Kind)
         {
             case LiveBlockKind.Checklist:
@@ -929,7 +988,7 @@ public sealed partial class MainWindow : Window
                     block.IsChecked = checkBox.IsChecked == true;
                     tb.Foreground = block.IsChecked ? secondaryBrush : primaryBrush;
                     UpdateBlockInlineRichDisplay(block, isFocused: tb.FocusState != FocusState.Unfocused);
-                    SyncLiveBlocksToViewModel();
+                    FlushSyncLiveBlocksToViewModel();
                 };
 
                 Grid.SetColumn(checkBox, 0);
@@ -1021,7 +1080,6 @@ public sealed partial class MainWindow : Window
             MarkdownRenderer.HasInlineMarkdownFormatting(block.Content))
         {
             var isDarkMode = ViewModel.IsDarkMode;
-            var baseFontSize = ViewModel.EditorFontSize;
             var primaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 245, 245, 247) : ColorHelper.FromArgb(255, 28, 28, 30));
             var secondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 108, 108, 112));
             var accentBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 10, 132, 255));
@@ -1032,7 +1090,7 @@ public sealed partial class MainWindow : Window
                 .OrderByDescending(t => t.Length)
                 .ToList();
 
-            var fg = (block.Kind == LiveBlockKind.Checklist && block.IsChecked) || block.Kind == LiveBlockKind.Quote
+            var fg = (block.Kind == LiveBlockKind.Checklist && block.IsChecked) || block.Kind == LiveBlockKind.Quote || block.IsBlockStrikethrough
                 ? secondaryBrush
                 : primaryBrush;
 
@@ -1086,12 +1144,11 @@ public sealed partial class MainWindow : Window
             if (TryAutoConvertLiveBlock(block, tb))
                 return;
 
-            SyncLiveBlocksToViewModel();
+            QueueSyncLiveBlocksToViewModel();
             UpdateSelectionToolbar();
             UpdateSlashMenuAutocomplete();
             UpdateMentionAutocomplete();
             UpdateActiveMentionJumpPill();
-            UpdateActiveCaretVisual(resetBlink: true);
 
             if (ViewModel.IsFluidAnimationEnabled && tb.FocusState != FocusState.Unfocused)
             {
@@ -1112,7 +1169,6 @@ public sealed partial class MainWindow : Window
             UpdateSlashMenuAutocomplete();
             UpdateMentionAutocomplete();
             UpdateActiveMentionJumpPill();
-            UpdateActiveCaretVisual(resetBlink: true);
         };
 
         tb.PointerReleased += (_, _) =>
@@ -1139,24 +1195,24 @@ public sealed partial class MainWindow : Window
             {
                 block.Kind = LiveBlockKind.Heading3;
                 block.Content = text[4..];
-                SyncLiveBlocksToViewModel();
-                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: 0);
+                FlushSyncLiveBlocksToViewModel();
+                RefreshLiveBlockAt(idx, 0);
                 return true;
             }
             if (text.StartsWith("## ", StringComparison.Ordinal))
             {
                 block.Kind = LiveBlockKind.Heading2;
                 block.Content = text[3..];
-                SyncLiveBlocksToViewModel();
-                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: 0);
+                FlushSyncLiveBlocksToViewModel();
+                RefreshLiveBlockAt(idx, 0);
                 return true;
             }
             if (text.StartsWith("# ", StringComparison.Ordinal))
             {
                 block.Kind = LiveBlockKind.Heading1;
                 block.Content = text[2..];
-                SyncLiveBlocksToViewModel();
-                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: 0);
+                FlushSyncLiveBlocksToViewModel();
+                RefreshLiveBlockAt(idx, 0);
                 return true;
             }
             if (text.StartsWith("- [ ] ", StringComparison.OrdinalIgnoreCase) ||
@@ -1166,8 +1222,8 @@ public sealed partial class MainWindow : Window
                 block.Kind = LiveBlockKind.Checklist;
                 block.IsChecked = false;
                 block.Content = text[prefixLen..];
-                SyncLiveBlocksToViewModel();
-                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: 0);
+                FlushSyncLiveBlocksToViewModel();
+                RefreshLiveBlockAt(idx, 0);
                 return true;
             }
             if (text.StartsWith("- [x] ", StringComparison.OrdinalIgnoreCase))
@@ -1175,8 +1231,8 @@ public sealed partial class MainWindow : Window
                 block.Kind = LiveBlockKind.Checklist;
                 block.IsChecked = true;
                 block.Content = text[6..];
-                SyncLiveBlocksToViewModel();
-                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: 0);
+                FlushSyncLiveBlocksToViewModel();
+                RefreshLiveBlockAt(idx, 0);
                 return true;
             }
             if (text.StartsWith("- ", StringComparison.Ordinal) ||
@@ -1184,33 +1240,33 @@ public sealed partial class MainWindow : Window
             {
                 block.Kind = LiveBlockKind.Bullet;
                 block.Content = text[2..];
-                SyncLiveBlocksToViewModel();
-                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: 0);
+                FlushSyncLiveBlocksToViewModel();
+                RefreshLiveBlockAt(idx, 0);
                 return true;
             }
             if (text.StartsWith("> ", StringComparison.Ordinal))
             {
                 block.Kind = LiveBlockKind.Quote;
                 block.Content = text[2..];
-                SyncLiveBlocksToViewModel();
-                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: 0);
+                FlushSyncLiveBlocksToViewModel();
+                RefreshLiveBlockAt(idx, 0);
                 return true;
             }
             if (text.StartsWith("```", StringComparison.Ordinal))
             {
                 block.Kind = LiveBlockKind.CodeBlock;
                 block.Content = text[3..].TrimStart();
-                SyncLiveBlocksToViewModel();
-                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: block.Content.Length);
+                FlushSyncLiveBlocksToViewModel();
+                RefreshLiveBlockAt(idx, block.Content.Length);
                 return true;
             }
             if (text is "---" or "***")
             {
                 block.Kind = LiveBlockKind.Divider;
                 block.Content = string.Empty;
-                _liveBlocks.Insert(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
-                SyncLiveBlocksToViewModel();
-                RebuildLiveEditor(reparse: false, focusBlockIndex: idx + 1, focusCaretIndex: 0);
+                RefreshLiveBlockAt(idx);
+                InsertLiveBlockAt(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph }, focusCaret: 0);
+                FlushSyncLiveBlocksToViewModel();
                 return true;
             }
         }
@@ -1224,8 +1280,20 @@ public sealed partial class MainWindow : Window
             {
                 block.IsBlockBold = true;
                 block.Content = text[2..^2];
-                SyncLiveBlocksToViewModel();
-                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: block.Content.Length);
+                FlushSyncLiveBlocksToViewModel();
+                RefreshLiveBlockAt(idx, block.Content.Length);
+                return true;
+            }
+
+            if (text.Length >= 5 &&
+                text.StartsWith("~~", StringComparison.Ordinal) &&
+                text.EndsWith("~~", StringComparison.Ordinal) &&
+                text.IndexOf("~~", 2, StringComparison.Ordinal) == text.Length - 2)
+            {
+                block.IsBlockStrikethrough = true;
+                block.Content = text[2..^2];
+                FlushSyncLiveBlocksToViewModel();
+                RefreshLiveBlockAt(idx, block.Content.Length);
                 return true;
             }
 
@@ -1236,8 +1304,8 @@ public sealed partial class MainWindow : Window
             {
                 block.IsBlockCode = true;
                 block.Content = text[1..^1];
-                SyncLiveBlocksToViewModel();
-                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: block.Content.Length);
+                FlushSyncLiveBlocksToViewModel();
+                RefreshLiveBlockAt(idx, block.Content.Length);
                 return true;
             }
         }
@@ -1323,26 +1391,26 @@ public sealed partial class MainWindow : Window
                 case VirtualKey.L:
                     e.Handled = true;
                     block.Kind = block.Kind == LiveBlockKind.Checklist ? LiveBlockKind.Paragraph : LiveBlockKind.Checklist;
-                    SyncLiveBlocksToViewModel();
-                    RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx, focusCaretIndex: tb.SelectionStart);
+                    FlushSyncLiveBlocksToViewModel();
+                    RefreshLiveBlockAt(blockIdx, tb.SelectionStart);
                     return;
                 case VirtualKey.Number1:
                     e.Handled = true;
                     block.Kind = block.Kind == LiveBlockKind.Heading1 ? LiveBlockKind.Paragraph : LiveBlockKind.Heading1;
-                    SyncLiveBlocksToViewModel();
-                    RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx, focusCaretIndex: tb.SelectionStart);
+                    FlushSyncLiveBlocksToViewModel();
+                    RefreshLiveBlockAt(blockIdx, tb.SelectionStart);
                     return;
                 case VirtualKey.Number2:
                     e.Handled = true;
                     block.Kind = block.Kind == LiveBlockKind.Heading2 ? LiveBlockKind.Paragraph : LiveBlockKind.Heading2;
-                    SyncLiveBlocksToViewModel();
-                    RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx, focusCaretIndex: tb.SelectionStart);
+                    FlushSyncLiveBlocksToViewModel();
+                    RefreshLiveBlockAt(blockIdx, tb.SelectionStart);
                     return;
                 case VirtualKey.Number3:
                     e.Handled = true;
                     block.Kind = block.Kind == LiveBlockKind.Heading3 ? LiveBlockKind.Paragraph : LiveBlockKind.Heading3;
-                    SyncLiveBlocksToViewModel();
-                    RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx, focusCaretIndex: tb.SelectionStart);
+                    FlushSyncLiveBlocksToViewModel();
+                    RefreshLiveBlockAt(blockIdx, tb.SelectionStart);
                     return;
             }
             return;
@@ -1361,7 +1429,7 @@ public sealed partial class MainWindow : Window
                     block.Content = text[BranchIndent.Length..];
                     tb.Text = block.Content;
                     tb.SelectionStart = Math.Max(0, caret - BranchIndent.Length);
-                    SyncLiveBlocksToViewModel();
+                    QueueSyncLiveBlocksToViewModel();
                 }
             }
             else
@@ -1369,7 +1437,7 @@ public sealed partial class MainWindow : Window
                 block.Content = BranchIndent + text;
                 tb.Text = block.Content;
                 tb.SelectionStart = caret + BranchIndent.Length;
-                SyncLiveBlocksToViewModel();
+                QueueSyncLiveBlocksToViewModel();
             }
             return;
         }
@@ -1385,8 +1453,8 @@ public sealed partial class MainWindow : Window
                     if (string.IsNullOrWhiteSpace(treeBody))
                     {
                         block.Content = string.Empty;
-                        SyncLiveBlocksToViewModel();
-                        RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx, focusCaretIndex: 0);
+                        RefreshLiveBlockAt(blockIdx, 0);
+                        FlushSyncLiveBlocksToViewModel();
                         return;
                     }
 
@@ -1394,26 +1462,25 @@ public sealed partial class MainWindow : Window
                     {
                         var prefixOffset = treeIndent.Length;
                         block.Content = treeIndent + BranchMid + text[(prefixOffset + BranchEnd.Length)..];
+                        tb.Text = block.Content;
                     }
 
                     var nextTreeLine = treeIndent + BranchEnd;
-                    _liveBlocks.Insert(blockIdx + 1, new LiveDocBlock
+                    InsertLiveBlockAt(blockIdx + 1, new LiveDocBlock
                     {
                         Kind = LiveBlockKind.Paragraph,
                         Content = nextTreeLine
-                    });
-                    SyncLiveBlocksToViewModel();
-                    RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx + 1, focusCaretIndex: nextTreeLine.Length);
+                    }, focusCaret: nextTreeLine.Length);
+                    FlushSyncLiveBlocksToViewModel();
                     return;
                 }
 
-                _liveBlocks.Insert(blockIdx + 1, new LiveDocBlock
+                InsertLiveBlockAt(blockIdx + 1, new LiveDocBlock
                 {
                     Kind = LiveBlockKind.Paragraph,
                     Content = BranchEnd
-                });
-                SyncLiveBlocksToViewModel();
-                RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx + 1, focusCaretIndex: BranchEnd.Length);
+                }, focusCaret: BranchEnd.Length);
+                FlushSyncLiveBlocksToViewModel();
                 return;
             }
 
@@ -1422,41 +1489,43 @@ public sealed partial class MainWindow : Window
             {
                 block.Kind = LiveBlockKind.Paragraph;
                 block.IsChecked = false;
-                SyncLiveBlocksToViewModel();
-                RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx, focusCaretIndex: 0);
+                RefreshLiveBlockAt(blockIdx, 0);
+                FlushSyncLiveBlocksToViewModel();
                 return;
             }
 
             var before = text[..caret];
             var after = text[caret..];
             block.Content = before;
+            if (tb.Text != before)
+                tb.Text = before;
 
             var nextKind = block.Kind is LiveBlockKind.Checklist or LiveBlockKind.Bullet
                 ? block.Kind
                 : LiveBlockKind.Paragraph;
 
-            _liveBlocks.Insert(blockIdx + 1, new LiveDocBlock
+            InsertLiveBlockAt(blockIdx + 1, new LiveDocBlock
             {
                 Kind = nextKind,
                 Content = after
-            });
-            SyncLiveBlocksToViewModel();
-            RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx + 1, focusCaretIndex: 0);
+            }, focusCaret: 0);
+            FlushSyncLiveBlocksToViewModel();
             return;
         }
 
         if (e.Key == VirtualKey.Back && tb.SelectionStart == 0 && tb.SelectionLength == 0)
         {
-            if (block.Kind != LiveBlockKind.Paragraph || block.IsBlockBold || block.IsBlockItalic || block.IsBlockCode)
+            if (block.Kind != LiveBlockKind.Paragraph || block.IsBlockBold || block.IsBlockItalic || block.IsBlockStrikethrough || block.IsBlockCode)
             {
                 e.Handled = true;
                 block.Kind = LiveBlockKind.Paragraph;
                 block.IsChecked = false;
                 block.IsBlockBold = false;
                 block.IsBlockItalic = false;
+                block.IsBlockStrikethrough = false;
                 block.IsBlockCode = false;
-                SyncLiveBlocksToViewModel();
-                RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx, focusCaretIndex: 0);
+                RefreshLiveBlockAt(blockIdx, 0);
+                FlushSyncLiveBlocksToViewModel();
                 return;
             }
 
@@ -1467,8 +1536,10 @@ public sealed partial class MainWindow : Window
                 if (prevBlock.Kind == LiveBlockKind.Divider)
                 {
                     _liveBlocks.RemoveAt(blockIdx - 1);
-                    SyncLiveBlocksToViewModel();
-                    RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx - 1, focusCaretIndex: 0);
+                    if (blockIdx - 1 < LiveEditorPanel.Children.Count)
+                        LiveEditorPanel.Children.RemoveAt(blockIdx - 1);
+                    FocusLiveBlockAt(blockIdx - 1, 0);
+                    FlushSyncLiveBlocksToViewModel();
                     return;
                 }
 
@@ -1477,8 +1548,10 @@ public sealed partial class MainWindow : Window
                     var prevLen = (prevBlock.Content ?? string.Empty).Length;
                     prevBlock.Content = (prevBlock.Content ?? string.Empty) + text;
                     _liveBlocks.RemoveAt(blockIdx);
-                    SyncLiveBlocksToViewModel();
-                    RebuildLiveEditor(reparse: false, focusBlockIndex: blockIdx - 1, focusCaretIndex: prevLen);
+                    if (blockIdx < LiveEditorPanel.Children.Count)
+                        LiveEditorPanel.Children.RemoveAt(blockIdx);
+                    RefreshLiveBlockAt(blockIdx - 1, prevLen);
+                    FlushSyncLiveBlocksToViewModel();
                 }
                 return;
             }
@@ -1488,14 +1561,10 @@ public sealed partial class MainWindow : Window
         {
             for (var i = blockIdx - 1; i >= 0; i--)
             {
-                if (_liveBlocks[i].PrimaryTextBox is { } prevTb)
+                if (_liveBlocks[i].PrimaryTextBox is not null)
                 {
                     e.Handled = true;
-                    _activeLiveBlock = _liveBlocks[i];
-                    UpdateBlockInlineRichDisplay(_liveBlocks[i], isFocused: true);
-                    prevTb.Focus(FocusState.Programmatic);
-                    prevTb.SelectionStart = Math.Clamp(caret, 0, (prevTb.Text ?? string.Empty).Length);
-                    prevTb.SelectionLength = 0;
+                    FocusLiveBlockAt(i, caret);
                     return;
                 }
             }
@@ -1505,14 +1574,10 @@ public sealed partial class MainWindow : Window
         {
             for (var i = blockIdx + 1; i < _liveBlocks.Count; i++)
             {
-                if (_liveBlocks[i].PrimaryTextBox is { } nextTb)
+                if (_liveBlocks[i].PrimaryTextBox is not null)
                 {
                     e.Handled = true;
-                    _activeLiveBlock = _liveBlocks[i];
-                    UpdateBlockInlineRichDisplay(_liveBlocks[i], isFocused: true);
-                    nextTb.Focus(FocusState.Programmatic);
-                    nextTb.SelectionStart = Math.Clamp(caret, 0, (nextTb.Text ?? string.Empty).Length);
-                    nextTb.SelectionLength = 0;
+                    FocusLiveBlockAt(i, caret);
                     return;
                 }
             }
@@ -1526,42 +1591,27 @@ public sealed partial class MainWindow : Window
         string suffix,
         bool toggleBlockBold = false,
         bool toggleBlockItalic = false,
+        bool toggleBlockStrikethrough = false,
         bool toggleBlockCode = false)
     {
         var idx = _liveBlocks.IndexOf(block);
         if (idx < 0)
             return;
 
-        var text = tb.Text ?? string.Empty;
-        var start = Math.Clamp(tb.SelectionStart, 0, text.Length);
-        var length = Math.Clamp(tb.SelectionLength, 0, text.Length - start);
+        var caret = Math.Clamp(tb.SelectionStart + tb.SelectionLength, 0, (tb.Text ?? string.Empty).Length);
 
-        if (length == 0 || length == text.Length)
-        {
-            if (toggleBlockBold)
-                block.IsBlockBold = !block.IsBlockBold;
-            else if (toggleBlockItalic)
-                block.IsBlockItalic = !block.IsBlockItalic;
-            else if (toggleBlockCode)
-                block.IsBlockCode = !block.IsBlockCode;
-            else
-            {
-                var wrapped = $"{prefix}{(length > 0 ? text : "text")}{suffix}";
-                block.Content = wrapped;
-            }
+        if (toggleBlockBold)
+            block.IsBlockBold = !block.IsBlockBold;
+        else if (toggleBlockItalic)
+            block.IsBlockItalic = !block.IsBlockItalic;
+        else if (toggleBlockStrikethrough)
+            block.IsBlockStrikethrough = !block.IsBlockStrikethrough;
+        else if (toggleBlockCode)
+            block.IsBlockCode = !block.IsBlockCode;
 
-            SyncLiveBlocksToViewModel();
-            RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: (block.Content ?? string.Empty).Length);
-            return;
-        }
-
-        var selected = text.Substring(start, length);
-        var updated = text[..start] + prefix + selected + suffix + text[(start + length)..];
-        block.Content = updated;
-        tb.Text = updated;
-        tb.SelectionStart = start + prefix.Length;
-        tb.SelectionLength = selected.Length;
-        SyncLiveBlocksToViewModel();
+        SelectionToolbarBorder.Visibility = Visibility.Collapsed;
+        FlushSyncLiveBlocksToViewModel();
+        RefreshLiveBlockAt(idx, caret);
     }
 
     private void WrapEditorSelection(string prefix, string suffix)
@@ -1575,6 +1625,7 @@ public sealed partial class MainWindow : Window
                 suffix,
                 toggleBlockBold: prefix == "**",
                 toggleBlockItalic: prefix == "*",
+                toggleBlockStrikethrough: prefix == "~~",
                 toggleBlockCode: prefix == "`");
             return;
         }
@@ -1652,7 +1703,6 @@ public sealed partial class MainWindow : Window
         UpdateSlashMenuAutocomplete();
         UpdateMentionAutocomplete();
         UpdateActiveMentionJumpPill();
-        UpdateActiveCaretVisual(resetBlink: true);
 
         if (!ViewModel.IsFluidAnimationEnabled || EditorTextBox.FocusState == FocusState.Unfocused)
             return;
@@ -1672,7 +1722,6 @@ public sealed partial class MainWindow : Window
         UpdateSlashMenuAutocomplete();
         UpdateMentionAutocomplete();
         UpdateActiveMentionJumpPill();
-        UpdateActiveCaretVisual(resetBlink: true);
     }
 
     private void OnEditorPointerReleased(object sender, PointerRoutedEventArgs e)
@@ -1731,7 +1780,7 @@ public sealed partial class MainWindow : Window
         if (ViewModel.CurrentViewMode == EditorViewMode.Live && _activeLiveBlock is not null)
         {
             _activeLiveBlock.Content = updated;
-            SyncLiveBlocksToViewModel();
+            FlushSyncLiveBlocksToViewModel();
         }
         else
         {
@@ -1967,6 +2016,7 @@ public sealed partial class MainWindow : Window
                 block.Kind = LiveBlockKind.Paragraph;
                 block.IsBlockBold = false;
                 block.IsBlockItalic = false;
+                block.IsBlockStrikethrough = false;
                 block.IsBlockCode = false;
                 block.Content = cleaned;
                 break;
@@ -2001,24 +2051,26 @@ public sealed partial class MainWindow : Window
                     block.Kind = LiveBlockKind.TableBlock;
                     block.Content = string.Empty;
                     block.TableMatrix = tableMatrix;
+                    RefreshLiveBlockAt(idx);
                     if (idx == _liveBlocks.Count - 1)
-                        _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+                        InsertLiveBlockAt(idx + 1, new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+                    FocusLiveBlockAt(idx, 0);
                 }
                 else
                 {
                     block.Content = cleaned;
-                    _liveBlocks.Insert(idx + 1, new LiveDocBlock
+                    tb.Text = cleaned;
+                    InsertLiveBlockAt(idx + 1, new LiveDocBlock
                     {
                         Kind = LiveBlockKind.TableBlock,
                         TableMatrix = tableMatrix
                     });
                     if (idx + 1 == _liveBlocks.Count - 1)
-                        _liveBlocks.Add(new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
-                    idx++;
+                        InsertLiveBlockAt(idx + 2, new LiveDocBlock { Kind = LiveBlockKind.Paragraph });
+                    FocusLiveBlockAt(idx + 1, 0);
                 }
 
-                SyncLiveBlocksToViewModel();
-                RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: 0);
+                FlushSyncLiveBlocksToViewModel();
                 return;
             }
 
@@ -2026,8 +2078,8 @@ public sealed partial class MainWindow : Window
                 return;
         }
 
-        SyncLiveBlocksToViewModel();
-        RebuildLiveEditor(reparse: false, focusBlockIndex: idx, focusCaretIndex: block.Content.Length);
+        FlushSyncLiveBlocksToViewModel();
+        RefreshLiveBlockAt(idx, block.Content.Length);
     }
 
     private static string StripBlockFormattingPrefix(string line)
@@ -2146,7 +2198,7 @@ public sealed partial class MainWindow : Window
             activeTb.Text = updated;
             activeTb.SelectionStart = Math.Clamp(newCaret, 0, updated.Length);
             activeTb.SelectionLength = 0;
-            SyncLiveBlocksToViewModel();
+            FlushSyncLiveBlocksToViewModel();
             activeTb.Focus(FocusState.Programmatic);
         }
         else
@@ -2248,6 +2300,9 @@ public sealed partial class MainWindow : Window
 
     private void NavigateToNote(NoteItemViewModel note)
     {
+        if (_liveSyncTimer.IsEnabled)
+            FlushSyncLiveBlocksToViewModel();
+
         HideMentionPopup();
         HideSlashMenuPopup();
         ViewModel.SelectedNote = note;
@@ -2322,12 +2377,12 @@ public sealed partial class MainWindow : Window
         switch (e.PropertyName)
         {
             case nameof(MainViewModel.SelectedNote):
+                _liveSyncTimer.Stop();
                 HideMentionPopup();
                 HideSlashMenuPopup();
                 SelectionToolbarBorder.Visibility = Visibility.Collapsed;
                 RebuildLiveEditor(reparse: true);
                 UpdateActiveMentionJumpPill();
-                UpdateActiveCaretVisual(resetBlink: true);
                 if (ViewModel.IsFluidAnimationEnabled)
                 {
                     PlayFluidTransition(LiveEditorScrollViewer);
@@ -2336,6 +2391,8 @@ public sealed partial class MainWindow : Window
                 break;
 
             case nameof(MainViewModel.CurrentViewMode):
+                if (_liveSyncTimer.IsEnabled)
+                    FlushSyncLiveBlocksToViewModel();
                 HideMentionPopup();
                 HideSlashMenuPopup();
                 SelectionToolbarBorder.Visibility = Visibility.Collapsed;
@@ -2344,7 +2401,6 @@ public sealed partial class MainWindow : Window
                 else if (EditorTextBox.Text != ViewModel.EditorText)
                     EditorTextBox.Text = ViewModel.EditorText;
                 AnimateViewModeChange();
-                UpdateActiveCaretVisual(resetBlink: true);
                 break;
 
             case nameof(MainViewModel.IsSidebarOpen):
@@ -2352,8 +2408,9 @@ public sealed partial class MainWindow : Window
                 break;
 
             case nameof(MainViewModel.IsSettingsOpen):
+                if (_liveSyncTimer.IsEnabled)
+                    FlushSyncLiveBlocksToViewModel();
                 AnimateSettingsModal(ViewModel.IsSettingsOpen);
-                UpdateActiveCaretVisual(resetBlink: true);
                 break;
 
             case nameof(MainViewModel.CurrentThemeMode):
@@ -2368,7 +2425,6 @@ public sealed partial class MainWindow : Window
             case nameof(MainViewModel.IsDarkMode):
             case nameof(MainViewModel.EditorFontSize):
                 RebuildLiveEditor(reparse: false);
-                UpdateActiveCaretVisual(resetBlink: true);
                 break;
         }
     }
@@ -2698,6 +2754,9 @@ public sealed partial class MainWindow : Window
     private void ExecuteCommandPaletteItem(CommandPaletteItem item)
     {
         ShowCommandPalette(open: false);
+        if (_liveSyncTimer.IsEnabled)
+            FlushSyncLiveBlocksToViewModel();
+
         if (item.TargetNote is not null)
         {
             ViewModel.SelectedNote = item.TargetNote;
@@ -2749,9 +2808,15 @@ public sealed partial class MainWindow : Window
             return;
 
         if (item.IsFolder)
+        {
             ViewModel.ToggleFolderExpansion(item.FolderPath);
+        }
         else
+        {
+            if (_liveSyncTimer.IsEnabled)
+                FlushSyncLiveBlocksToViewModel();
             ViewModel.SelectedNote = item;
+        }
     }
 
     private void OnSidebarRowPointerEntered(object sender, PointerRoutedEventArgs e)
@@ -3118,212 +3183,5 @@ public sealed partial class MainWindow : Window
         {
             // Ignore passthrough registration errors during initial window teardown/creation
         }
-    }
-
-    private void OnRootGotFocus(object sender, RoutedEventArgs e)
-    {
-        if (e.OriginalSource is TextBox tb)
-        {
-            AttachFocusedTextBox(tb);
-            UpdateActiveCaretVisual(resetBlink: true);
-            DispatcherQueue.TryEnqueue(() => UpdateActiveCaretVisual(resetBlink: true));
-        }
-    }
-
-    private void OnRootLostFocus(object sender, RoutedEventArgs e)
-    {
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            if (_focusedTextBox is null || _focusedTextBox.FocusState == FocusState.Unfocused)
-            {
-                DetachFocusedTextBox();
-                _caretBlinkTimer.Stop();
-                EditorCaretBar.Visibility = Visibility.Collapsed;
-            }
-        });
-    }
-
-    private void AttachFocusedTextBox(TextBox tb)
-    {
-        if (ReferenceEquals(_focusedTextBox, tb))
-            return;
-
-        DetachFocusedTextBox();
-        _focusedTextBox = tb;
-
-        if (!ReferenceEquals(tb, EditorTextBox))
-        {
-            tb.SelectionChanged += OnSecondaryTextBoxSelectionChanged;
-            tb.TextChanged += OnSecondaryTextBoxTextChanged;
-        }
-
-        _focusedScrollViewer = FindDescendant<ScrollViewer>(tb);
-        if (_focusedScrollViewer is not null)
-            _focusedScrollViewer.ViewChanged += OnFocusedTextBoxScrollViewChanged;
-    }
-
-    private void DetachFocusedTextBox()
-    {
-        if (_focusedScrollViewer is not null)
-        {
-            _focusedScrollViewer.ViewChanged -= OnFocusedTextBoxScrollViewChanged;
-            _focusedScrollViewer = null;
-        }
-
-        if (_focusedTextBox is not null)
-        {
-            if (!ReferenceEquals(_focusedTextBox, EditorTextBox))
-            {
-                _focusedTextBox.SelectionChanged -= OnSecondaryTextBoxSelectionChanged;
-                _focusedTextBox.TextChanged -= OnSecondaryTextBoxTextChanged;
-            }
-
-            _focusedTextBox = null;
-        }
-    }
-
-    private void OnSecondaryTextBoxSelectionChanged(object sender, RoutedEventArgs e) =>
-        UpdateActiveCaretVisual(resetBlink: true);
-
-    private void OnSecondaryTextBoxTextChanged(object sender, TextChangedEventArgs e) =>
-        UpdateActiveCaretVisual(resetBlink: true);
-
-    private void OnFocusedTextBoxScrollViewChanged(object? sender, ScrollViewerViewChangedEventArgs e) =>
-        UpdateActiveCaretVisual(resetBlink: false);
-
-    private void UpdateActiveCaretVisual(bool resetBlink = true)
-    {
-        var tb = _focusedTextBox;
-        if (tb is null ||
-            tb.FocusState == FocusState.Unfocused ||
-            tb.Visibility != Visibility.Visible ||
-            tb.ActualWidth <= 0 ||
-            tb.ActualHeight <= 0 ||
-            tb.SelectionLength > 0)
-        {
-            EditorCaretBar.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        if (ReferenceEquals(tb, EditorTextBox) &&
-            (ViewModel.IsSettingsOpen || ViewModel.SourcePaneVisibility != Visibility.Visible))
-        {
-            EditorCaretBar.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        if (_focusedScrollViewer is null)
-        {
-            _focusedScrollViewer = FindDescendant<ScrollViewer>(tb);
-            if (_focusedScrollViewer is not null)
-                _focusedScrollViewer.ViewChanged += OnFocusedTextBoxScrollViewChanged;
-        }
-
-        try
-        {
-            var text = tb.Text ?? string.Empty;
-            var caretIndex = Math.Clamp(tb.SelectionStart, 0, text.Length);
-            var lineHeight = Math.Max(16.0, Math.Round(tb.FontSize * 1.35));
-
-            var localX = 0.0;
-            var localY = 0.0;
-            var caretHeight = lineHeight;
-
-            if (text.Length > 0)
-            {
-                if (caretIndex < text.Length)
-                {
-                    var rect = tb.GetRectFromCharacterIndex(caretIndex, false);
-                    if (!rect.IsEmpty && !double.IsNaN(rect.X) && !double.IsInfinity(rect.X))
-                    {
-                        localX = rect.X;
-                        localY = rect.Y;
-                        if (rect.Height > 4)
-                            caretHeight = rect.Height;
-                    }
-                }
-                else
-                {
-                    var lastChar = text[caretIndex - 1];
-                    if (lastChar is '\r' or '\n')
-                    {
-                        var prevRect = tb.GetRectFromCharacterIndex(caretIndex - 1, false);
-                        var h = prevRect.Height > 4 ? prevRect.Height : lineHeight;
-                        localX = 0.0;
-                        localY = (!prevRect.IsEmpty && !double.IsNaN(prevRect.Y)) ? prevRect.Y + h : 0.0;
-                        caretHeight = h;
-                    }
-                    else
-                    {
-                        var trailingRect = tb.GetRectFromCharacterIndex(caretIndex - 1, true);
-                        if (!trailingRect.IsEmpty && !double.IsNaN(trailingRect.X) && !double.IsInfinity(trailingRect.X))
-                        {
-                            localX = trailingRect.X;
-                            localY = trailingRect.Y;
-                            if (trailingRect.Height > 4)
-                                caretHeight = trailingRect.Height;
-                        }
-                    }
-                }
-            }
-
-            Point canvasPos;
-            var presenter = FindDescendant<ScrollContentPresenter>(tb);
-            if (presenter is not null && presenter.ActualWidth > 0 && presenter.ActualHeight > 0)
-            {
-                canvasPos = presenter.TransformToVisual(CaretOverlayCanvas).TransformPoint(new Point(localX, localY));
-            }
-            else
-            {
-                canvasPos = tb.TransformToVisual(CaretOverlayCanvas).TransformPoint(
-                    new Point(tb.Padding.Left + localX, tb.Padding.Top + localY));
-            }
-
-            var tbBounds = tb.TransformToVisual(CaretOverlayCanvas).TransformBounds(new Rect(0, 0, tb.ActualWidth, tb.ActualHeight));
-            if (canvasPos.Y + 2 < tbBounds.Top || canvasPos.Y + caretHeight - 4 > tbBounds.Bottom ||
-                canvasPos.X + 2 < tbBounds.Left || canvasPos.X - 4 > tbBounds.Right)
-            {
-                EditorCaretBar.Visibility = Visibility.Collapsed;
-                return;
-            }
-
-            EditorCaretBar.Height = Math.Round(caretHeight);
-            Canvas.SetLeft(EditorCaretBar, Math.Round(canvasPos.X));
-            Canvas.SetTop(EditorCaretBar, Math.Round(canvasPos.Y));
-            EditorCaretBar.Visibility = Visibility.Visible;
-
-            if (resetBlink)
-            {
-                _isCaretBlinkOn = true;
-                EditorCaretBar.Opacity = 1.0;
-                _caretBlinkTimer.Stop();
-                _caretBlinkTimer.Start();
-            }
-            else if (!_caretBlinkTimer.IsEnabled)
-            {
-                _caretBlinkTimer.Start();
-            }
-        }
-        catch
-        {
-            EditorCaretBar.Visibility = Visibility.Collapsed;
-        }
-    }
-
-    private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
-    {
-        var count = VisualTreeHelper.GetChildrenCount(root);
-        for (var i = 0; i < count; i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            if (child is T match)
-                return match;
-
-            var nested = FindDescendant<T>(child);
-            if (nested is not null)
-                return nested;
-        }
-
-        return null;
     }
 }

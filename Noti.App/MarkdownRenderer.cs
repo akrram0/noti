@@ -35,6 +35,7 @@ public sealed class LiveDocBlock
     public bool IsChecked { get; set; }
     public bool IsBlockBold { get; set; }
     public bool IsBlockItalic { get; set; }
+    public bool IsBlockStrikethrough { get; set; }
     public bool IsBlockCode { get; set; }
     public List<List<string>> TableMatrix { get; set; } = [];
     public List<double> ColumnWidths { get; set; } = [];
@@ -518,7 +519,6 @@ public static class MarkdownRenderer
                         FontSize = Math.Max(12, baseFontSize - 2),
                         FontWeight = isHeader ? FontWeights.SemiBold : FontWeights.Normal,
                         Foreground = primaryBrush,
-                        Background = new SolidColorBrush(Colors.Transparent),
                         BorderThickness = new Thickness(0),
                         Padding = new Thickness(10, 7, 10, 7),
                         MinHeight = 32,
@@ -527,6 +527,8 @@ public static class MarkdownRenderer
                         TextWrapping = TextWrapping.Wrap,
                         VerticalAlignment = VerticalAlignment.Center
                     };
+                    if (Application.Current?.Resources.TryGetValue("BorderlessTextBoxStyle", out var styleObj) == true && styleObj is Style s)
+                        tb.Style = s;
 
                     tb.TextChanged += (_, _) =>
                     {
@@ -850,37 +852,71 @@ public static class MarkdownRenderer
         var block = new LiveDocBlock
         {
             Kind = kind,
-            IsChecked = isChecked,
-            Content = rawContent
+            IsChecked = isChecked
         };
 
-        var s = rawContent;
-        if (s.Length >= 6 && s.StartsWith("***", StringComparison.Ordinal) && s.EndsWith("***", StringComparison.Ordinal) &&
-            s.IndexOf("***", 3, StringComparison.Ordinal) == s.Length - 3)
+        var s = rawContent ?? string.Empty;
+        var trimmed = s.Trim();
+        if (trimmed is "**" or "****" or "~~" or "~~~~" or "``")
         {
-            block.IsBlockBold = true;
-            block.IsBlockItalic = true;
-            block.Content = s[3..^3];
-        }
-        else if (s.Length >= 4 && s.StartsWith("**", StringComparison.Ordinal) && s.EndsWith("**", StringComparison.Ordinal) &&
-                 s.IndexOf("**", 2, StringComparison.Ordinal) == s.Length - 2)
-        {
-            block.IsBlockBold = true;
-            block.Content = s[2..^2];
-        }
-        else if (s.Length >= 2 && s.StartsWith('*') && !s.StartsWith("**", StringComparison.Ordinal) &&
-                 s.EndsWith('*') && !s.EndsWith("**", StringComparison.Ordinal) &&
-                 s.IndexOf('*', 1) == s.Length - 1)
-        {
-            block.IsBlockItalic = true;
-            block.Content = s[1..^1];
-        }
-        else if (s.Length >= 2 && s.StartsWith('`') && s.EndsWith('`') && s.IndexOf('`', 1) == s.Length - 1)
-        {
-            block.IsBlockCode = true;
-            block.Content = s[1..^1];
+            block.Content = string.Empty;
+            return block;
         }
 
+        var changed = true;
+        while (changed && s.Length > 0)
+        {
+            changed = false;
+            if (s.Length >= 6 && s.StartsWith("***", StringComparison.Ordinal) && s.EndsWith("***", StringComparison.Ordinal) &&
+                s.IndexOf("***", 3, StringComparison.Ordinal) == s.Length - 3)
+            {
+                block.IsBlockBold = true;
+                block.IsBlockItalic = true;
+                s = s[3..^3];
+                changed = true;
+            }
+            else if (s.Length >= 4 && s.StartsWith("**", StringComparison.Ordinal) && s.EndsWith("**", StringComparison.Ordinal) &&
+                     s.IndexOf("**", 2, StringComparison.Ordinal) == s.Length - 2)
+            {
+                block.IsBlockBold = true;
+                s = s[2..^2];
+                changed = true;
+            }
+            else if (s.Length >= 4 && s.StartsWith("~~", StringComparison.Ordinal) && s.EndsWith("~~", StringComparison.Ordinal) &&
+                     s.IndexOf("~~", 2, StringComparison.Ordinal) == s.Length - 2)
+            {
+                block.IsBlockStrikethrough = true;
+                s = s[2..^2];
+                changed = true;
+            }
+            else if (s.Length >= 2 && s.StartsWith('*') && !s.StartsWith("**", StringComparison.Ordinal) &&
+                     s.EndsWith('*') && !s.EndsWith("**", StringComparison.Ordinal) &&
+                     s.IndexOf('*', 1) == s.Length - 1)
+            {
+                block.IsBlockItalic = true;
+                s = s[1..^1];
+                changed = true;
+            }
+            else if (s.Length >= 2 && s.StartsWith('`') && s.EndsWith('`') && s.IndexOf('`', 1) == s.Length - 1)
+            {
+                block.IsBlockCode = true;
+                s = s[1..^1];
+                changed = true;
+            }
+        }
+
+        if (s.StartsWith("**", StringComparison.Ordinal) && !s[2..].Contains("**", StringComparison.Ordinal))
+        {
+            block.IsBlockBold = true;
+            s = s[2..];
+        }
+        else if (s.StartsWith("~~", StringComparison.Ordinal) && !s[2..].Contains("~~", StringComparison.Ordinal))
+        {
+            block.IsBlockStrikethrough = true;
+            s = s[2..];
+        }
+
+        block.Content = s;
         return block;
     }
 
@@ -944,6 +980,10 @@ public static class MarkdownRenderer
 
         if (b.IsBlockCode)
             return $"`{content}`";
+
+        if (b.IsBlockStrikethrough)
+            content = $"~~{content}~~";
+
         if (b.IsBlockBold && b.IsBlockItalic)
             return $"***{content}***";
         if (b.IsBlockBold)
@@ -1142,7 +1182,6 @@ public static class MarkdownRenderer
                         FontSize = Math.Max(12, baseFontSize - 2),
                         FontWeight = isHeader ? FontWeights.SemiBold : FontWeights.Normal,
                         Foreground = primaryBrush,
-                        Background = new SolidColorBrush(Colors.Transparent),
                         BorderThickness = new Thickness(0),
                         Padding = new Thickness(10, 7, 10, 7),
                         MinHeight = 32,
