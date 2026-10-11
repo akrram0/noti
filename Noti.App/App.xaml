@@ -32,16 +32,16 @@
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#26FFFFFF" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#F0FFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackground" Color="#FF000000" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FF000000" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FF000000" />
+                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlForeground" Color="#FFFFFFFF" />
-                    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFFFFFFF" />
-                    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="TextControlForeground" Color="#FFF5F5F7" />
+                    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFF5F5F7" />
+                    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFF5F5F7" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8E8E93" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8E8E93" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF8E8E93" />
@@ -75,16 +75,16 @@
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#26FFFFFF" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#F0FFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackground" Color="#FF000000" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FF000000" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FF000000" />
+                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlForeground" Color="#FFFFFFFF" />
-                    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFFFFFFF" />
-                    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="TextControlForeground" Color="#FFF5F5F7" />
+                    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFF5F5F7" />
+                    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFF5F5F7" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF8E8E93" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8E8E93" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF8E8E93" />
@@ -96,9 +96,9 @@
                 </ResourceDictionary>
 
                 <ResourceDictionary x:Key="Light">
-                    <SolidColorBrush x:Key="CanvasBackgroundBrush" Color="#FFFFFFFF" />
-                    <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#CCF5F5F7" />
-                    <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FFFFFFFF" TintOpacity="0.22" TintLuminosityOpacity="0.24" FallbackColor="#C8F5F5F7" />
+                    <SolidColorBrush x:Key="CanvasBackgroundBrush" Color="#FFF5F5F7" />
+                    <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#88F5F5F7" />
+                    <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FFFFFFFF" TintOpacity="0.12" TintLuminosityOpacity="0.14" FallbackColor="#99F5F5F7" />
                     <SolidColorBrush x:Key="SurfaceActiveBrush" Color="#1C000000" />
                     <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#0F000000" />
                     <SolidColorBrush x:Key="InputBackgroundBrush" Color="#12000000" />
@@ -118,16 +118,16 @@
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#18000000" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#FFFFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackground" Color="#FFFFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FFFFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlForeground" Color="#FF000000" />
-                    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FF000000" />
-                    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FF000000" />
+                    <SolidColorBrush x:Key="TextControlForeground" Color="#FF1C1C1E" />
+                    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FF1C1C1E" />
+                    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FF1C1C1E" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF6C6C70" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF6C6C70" />
                     <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF6C6C70" />

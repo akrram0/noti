@@ -18,6 +18,7 @@ using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.System;
 using Windows.UI.Core;
+using WinRT;
 using WinRT.Interop;
 
 namespace Noti.App;
@@ -43,6 +44,8 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherTimer _liveSyncTimer;
     private TextAlignment _activeEditorAlignment = TextAlignment.Left;
     private ulong _lastCanvasClickTimestamp;
+    private DesktopAcrylicController? _acrylicController;
+    private SystemBackdropConfiguration? _backdropConfig;
 
     private static readonly SolidColorBrush TransparentBrush = new(Colors.Transparent);
     private static readonly SolidColorBrush AccentBrush = new(ColorHelper.FromArgb(255, 10, 132, 255));
@@ -55,7 +58,7 @@ public sealed partial class MainWindow : Window
     private SolidColorBrush _cachedSecondaryBrush = new(ColorHelper.FromArgb(255, 142, 142, 147));
     private SolidColorBrush _cachedSurfaceBrush = new(ColorHelper.FromArgb(36, 255, 255, 255));
     private SolidColorBrush _cachedBorderBrush = new(ColorHelper.FromArgb(38, 255, 255, 255));
-    private SolidColorBrush _cachedInputBgBrush = new(ColorHelper.FromArgb(255, 0, 0, 0));
+    private SolidColorBrush _cachedInputBgBrush = TransparentBrush;
     private Style? _cachedBorderlessStyle;
     private List<string> _cachedSortedNoteTitles = [];
     private bool _isContextSlashMenuOpen;
@@ -81,6 +84,7 @@ public sealed partial class MainWindow : Window
 
         InitializeComponent();
         ConfigureWindowChrome();
+        Closed += (_, _) => DisposeAcrylicController();
 
         _liveSyncTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
         _liveSyncTimer.Tick += (_, _) => FlushSyncLiveBlocksToViewModel();
@@ -155,9 +159,24 @@ public sealed partial class MainWindow : Window
         {
             if (ViewModel.CurrentBackdropMode == BackdropMode.Blur && DesktopAcrylicController.IsSupported())
             {
-                SystemBackdrop = new DesktopAcrylicBackdrop();
+                SystemBackdrop = null;
+                if (_acrylicController is null)
+                {
+                    _backdropConfig = new SystemBackdropConfiguration
+                    {
+                        IsInputActive = true,
+                        Theme = ViewModel.IsDarkMode ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light
+                    };
+                    _acrylicController = new DesktopAcrylicController();
+                    _acrylicController.AddSystemBackdropTarget(this.As<Microsoft.UI.Composition.ICompositionSupportsSystemBackdrop>());
+                    _acrylicController.SetSystemBackdropConfiguration(_backdropConfig);
+                }
+
+                UpdateAcrylicControllerProperties();
                 return;
             }
+
+            DisposeAcrylicController();
 
             if (MicaController.IsSupported())
             {
@@ -167,6 +186,45 @@ public sealed partial class MainWindow : Window
         catch
         {
         }
+    }
+
+    private void UpdateAcrylicControllerProperties()
+    {
+        if (_acrylicController is null)
+            return;
+
+        var isDark = ViewModel.IsDarkMode;
+        var t = (float)Math.Clamp(ViewModel.SurfaceOpacityPercent / 100.0, 0.0, 1.0);
+
+        if (_backdropConfig is not null)
+        {
+            _backdropConfig.IsInputActive = true;
+            _backdropConfig.Theme = isDark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light;
+        }
+
+        var tintColor = isDark
+            ? ColorHelper.FromArgb(255, 10, 10, 14)
+            : ColorHelper.FromArgb(255, 240, 240, 245);
+
+        _acrylicController.TintColor = tintColor;
+        _acrylicController.FallbackColor = tintColor;
+        _acrylicController.TintOpacity = isDark
+            ? Math.Clamp(t * 0.38f, 0.0f, 0.45f)
+            : Math.Clamp(t * 0.18f, 0.0f, 0.28f);
+        _acrylicController.LuminosityOpacity = isDark
+            ? Math.Clamp(0.03f + (t * 0.25f), 0.03f, 0.30f)
+            : Math.Clamp(0.02f + (t * 0.16f), 0.02f, 0.20f);
+    }
+
+    private void DisposeAcrylicController()
+    {
+        if (_acrylicController is not null)
+        {
+            _acrylicController.RemoveAllSystemBackdropTargets();
+            _acrylicController.Dispose();
+            _acrylicController = null;
+        }
+        _backdropConfig = null;
     }
 
     private void ApplyResponsiveLayout()
@@ -656,7 +714,7 @@ public sealed partial class MainWindow : Window
             _cachedSecondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 108, 108, 112));
             _cachedSurfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(22, 0, 0, 0));
             _cachedBorderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(38, 255, 255, 255) : ColorHelper.FromArgb(28, 0, 0, 0));
-            _cachedInputBgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 0, 0, 0) : ColorHelper.FromArgb(255, 255, 255, 255));
+            _cachedInputBgBrush = TransparentBrush;
         }
 
         if (_cachedBorderlessStyle is null &&
@@ -3258,7 +3316,12 @@ public sealed partial class MainWindow : Window
                 AnimateBackdropModePill();
                 break;
 
+            case nameof(MainViewModel.SurfaceOpacityPercent):
+                UpdateAcrylicControllerProperties();
+                break;
+
             case nameof(MainViewModel.IsDarkMode):
+                UpdateAcrylicControllerProperties();
                 RecycleAllLiveBlocksToPool();
                 _liveTextBoxPool.Clear();
                 ApplyEditorTextBoxTheme();

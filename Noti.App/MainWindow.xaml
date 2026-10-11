@@ -1151,7 +1151,7 @@
                                             CornerRadius="15"
                                             HorizontalAlignment="Right"
                                             VerticalAlignment="Center"
-                                            Background="{ThemeResource CanvasBackgroundBrush}"
+                                            Background="{ThemeResource InputBackgroundBrush}"
                                             BorderThickness="0">
                                             <Grid>
                                                 <Border
@@ -1211,7 +1211,7 @@
                                             CornerRadius="15"
                                             HorizontalAlignment="Right"
                                             VerticalAlignment="Center"
-                                            Background="{ThemeResource CanvasBackgroundBrush}"
+                                            Background="{ThemeResource InputBackgroundBrush}"
                                             BorderThickness="0">
                                             <Grid>
                                                 <Border
