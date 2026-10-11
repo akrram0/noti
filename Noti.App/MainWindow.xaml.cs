@@ -3725,7 +3725,7 @@ public sealed partial class MainWindow : Window
         try
         {
             if (ViewModel.SelectedNote is null || ViewModel.SelectedNote.IsFolder)
-                await ViewModel.CreateNewNoteInFolderAsync(ViewModel.ActiveFolderPath);
+                await ViewModel.CreateNoteInFolderAsync(ViewModel.ActiveFolderPath);
 
             var vaultDir = ViewModel.VaultDirectoryPath;
             var noteFolder = ViewModel.SelectedNote?.FolderPath;
