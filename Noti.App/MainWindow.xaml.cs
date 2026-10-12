@@ -48,15 +48,7 @@ public sealed partial class MainWindow : Window
     private DesktopAcrylicController? _acrylicController;
     private SystemBackdropConfiguration? _backdropConfig;
     private Storyboard? _sidebarContextStoryboard;
-    private nint _mainHwnd;
-    private SubclassProc? _hitTestSubclassProc;
-    private readonly HashSet<nint> _subclassedHwnds = [];
-    private RectInt32[] _titleBarInteractiveRects = [];
-    private int _titleBarHeightPx = 48;
-    private int _clientWidthPx = 1080;
-    private int _titleBarLeftInsetPx;
-    private int _titleBarRightInsetPx = 140;
-    private int _topResizeBorderPx = 6;
+    private IntPtr _mainHwnd;
 
     private static readonly SolidColorBrush TransparentBrush = new(Colors.Transparent);
     private static readonly SolidColorBrush AccentBrush = new(ColorHelper.FromArgb(255, 10, 132, 255));
@@ -95,11 +87,7 @@ public sealed partial class MainWindow : Window
 
         InitializeComponent();
         ConfigureWindowChrome();
-        Closed += (_, _) =>
-        {
-            DetachTitleBarHitTestSubclass();
-            DisposeAcrylicController();
-        };
+        Closed += (_, _) => DisposeAcrylicController();
 
         _liveSyncTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
         _liveSyncTimer.Tick += (_, _) => FlushSyncLiveBlocksToViewModel();
@@ -115,25 +103,14 @@ public sealed partial class MainWindow : Window
             BackdropIndicatorTranslate.X = ViewModel.BackdropIndicatorOffsetX;
             SettingsTabIndicatorTranslate.X = ViewModel.SettingsSectionIndicatorOffsetX;
             ModeIndicatorTranslate.X = ViewModel.ModeIndicatorOffsetX;
-            AttachTitleBarHitTestSubclass();
-            UpdateTitleBarPassthrough();
             ApplyEditorTextBoxTheme();
             RebuildLiveEditor(reparse: true);
         };
-        RootGrid.SizeChanged += (_, _) =>
-        {
-            ApplyResponsiveLayout();
-            UpdateTitleBarPassthrough();
-        };
+        RootGrid.SizeChanged += (_, _) => ApplyResponsiveLayout();
         LiveEditorScrollViewer.SizeChanged += (_, _) =>
         {
             LiveCanvasRootGrid.MinHeight = Math.Max(0, LiveEditorScrollViewer.ActualHeight);
         };
-        TopTitleBarGrid.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
-        SidebarToggleButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
-        ViewSwitcherBorder.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
-        UpdateTopBarButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
-        ZoomBadgeButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
 
         LiveEditorScrollViewer.ViewChanged += OnLiveEditorScrollViewerViewChanged;
         LiveEditorScrollViewer.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnLiveCanvasBackgroundPointerPressed), true);
@@ -155,6 +132,7 @@ public sealed partial class MainWindow : Window
 
     private void ConfigureWindowChrome()
     {
+        _mainHwnd = WindowNative.GetWindowHandle(this);
         AppWindow.Resize(new SizeInt32(1080, 680));
 
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Noti.ico");
@@ -174,9 +152,8 @@ public sealed partial class MainWindow : Window
             titleBar.ButtonBackgroundColor = Colors.Transparent;
             titleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
             titleBar.ButtonForegroundColor = Colors.Gray;
+            titleBar.SetDragRectangles([new RectInt32(0, 0, 0, 0)]);
         }
-
-        AttachTitleBarHitTestSubclass();
     }
 
     private void ApplyWindowBackdrop()
@@ -4607,206 +4584,39 @@ public sealed partial class MainWindow : Window
         return text.Length;
     }
 
-    private void UpdateTitleBarPassthrough()
+    private const uint WM_SYSCOMMAND = 0x0112;
+    private const int SC_MOVE = 0xF010;
+    private const int HTCAPTION = 0x0002;
+
+    private void OnTitleBarPointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (RootGrid.XamlRoot is null || TopTitleBarGrid.ActualWidth <= 0 || TopTitleBarGrid.ActualHeight <= 0)
-            return;
-
-        try
+        if (sender is UIElement el && e.GetCurrentPoint(el).Properties.IsLeftButtonPressed)
         {
-            var scale = RootGrid.XamlRoot.RasterizationScale;
-            var interactiveRects = new List<RectInt32>(4);
+            e.Handled = true;
+            if (_mainHwnd == IntPtr.Zero)
+                _mainHwnd = WindowNative.GetWindowHandle(this);
 
-            void AddInteractiveRect(FrameworkElement el)
-            {
-                if (el.Visibility != Visibility.Visible || el.ActualWidth <= 0 || el.ActualHeight <= 0)
-                    return;
+            ReleaseCapture();
+            SendMessage(_mainHwnd, WM_SYSCOMMAND, (IntPtr)(SC_MOVE + HTCAPTION), IntPtr.Zero);
+        }
+    }
 
-                var transform = el.TransformToVisual(RootGrid);
-                var bounds = transform.TransformBounds(new Rect(0, 0, el.ActualWidth, el.ActualHeight));
-                interactiveRects.Add(new RectInt32(
-                    (int)Math.Round(bounds.X * scale),
-                    (int)Math.Round(bounds.Y * scale),
-                    (int)Math.Round(bounds.Width * scale),
-                    (int)Math.Round(bounds.Height * scale)));
-            }
-
-            AddInteractiveRect(SidebarToggleButton);
-            AddInteractiveRect(ViewSwitcherBorder);
-            AddInteractiveRect(UpdateTopBarButton);
-            AddInteractiveRect(ZoomBadgeButton);
-
-            _titleBarInteractiveRects = interactiveRects.ToArray();
-            _titleBarHeightPx = (int)Math.Round(TopTitleBarGrid.ActualHeight * scale);
-            _clientWidthPx = (int)Math.Round(RootGrid.ActualWidth * scale);
-            _topResizeBorderPx = Math.Max(4, (int)Math.Round(5 * scale));
-
-            if (AppWindowTitleBar.IsCustomizationSupported())
-            {
-                var titleBar = AppWindow.TitleBar;
-                _titleBarLeftInsetPx = Math.Max(0, titleBar.LeftInset);
-                _titleBarRightInsetPx = titleBar.RightInset > 0 ? titleBar.RightInset : (int)Math.Round(140 * scale);
-            }
+    private void OnTitleBarDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            if (presenter.State == OverlappedPresenterState.Maximized)
+                presenter.Restore();
             else
-            {
-                _titleBarLeftInsetPx = 0;
-                _titleBarRightInsetPx = (int)Math.Round(140 * scale);
-            }
-
-            AttachTitleBarHitTestSubclass();
-        }
-        catch
-        {
-            // Ignore hit-region cache errors during initial window teardown/creation
+                presenter.Maximize();
         }
     }
 
-    private void AttachTitleBarHitTestSubclass()
-    {
-        if (_mainHwnd == 0)
-            _mainHwnd = WindowNative.GetWindowHandle(this);
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
 
-        if (_mainHwnd == 0)
-            return;
-
-        _hitTestSubclassProc ??= TitleBarHitTestWndProc;
-
-        if (_subclassedHwnds.Add(_mainHwnd))
-            SetWindowSubclass(_mainHwnd, _hitTestSubclassProc, 1, 0);
-
-        EnumChildWindows(_mainHwnd, (childHwnd, _) =>
-        {
-            if (_subclassedHwnds.Add(childHwnd))
-                SetWindowSubclass(childHwnd, _hitTestSubclassProc, 1, 0);
-            return true;
-        }, 0);
-    }
-
-    private void DetachTitleBarHitTestSubclass()
-    {
-        if (_hitTestSubclassProc is null)
-            return;
-
-        foreach (var hwnd in _subclassedHwnds)
-            RemoveWindowSubclass(hwnd, _hitTestSubclassProc, 1);
-
-        _subclassedHwnds.Clear();
-    }
-
-    private enum TitleBarHitKind
-    {
-        None,
-        Interactive,
-        Caption
-    }
-
-    private nint TitleBarHitTestWndProc(nint hWnd, uint uMsg, nint wParam, nint lParam, nuint uIdSubclass, nuint dwRefData)
-    {
-        const uint WM_NCHITTEST = 0x0084;
-        const int HTTRANSPARENT = -1;
-        const int HTCLIENT = 1;
-        const int HTCAPTION = 2;
-        const int HTMINBUTTON = 8;
-        const int HTMAXBUTTON = 9;
-        const int HTLEFT = 10;
-        const int HTBOTTOMRIGHT = 17;
-        const int HTCLOSE = 20;
-
-        if (uMsg == WM_NCHITTEST)
-        {
-            var hitKind = GetTitleBarHitKind(lParam);
-
-            if (hWnd != _mainHwnd)
-            {
-                return hitKind switch
-                {
-                    TitleBarHitKind.Caption => new nint(HTTRANSPARENT),
-                    TitleBarHitKind.Interactive => new nint(HTCLIENT),
-                    _ => DefSubclassProc(hWnd, uMsg, wParam, lParam)
-                };
-            }
-
-            var baseHit = DefSubclassProc(hWnd, uMsg, wParam, lParam);
-            var hitCode = baseHit.ToInt32();
-            if ((hitCode >= HTLEFT && hitCode <= HTBOTTOMRIGHT) ||
-                hitCode is HTMINBUTTON or HTMAXBUTTON or HTCLOSE)
-            {
-                return baseHit;
-            }
-
-            return hitKind switch
-            {
-                TitleBarHitKind.Caption => new nint(HTCAPTION),
-                TitleBarHitKind.Interactive => new nint(HTCLIENT),
-                _ => baseHit
-            };
-        }
-
-        return DefSubclassProc(hWnd, uMsg, wParam, lParam);
-    }
-
-    private TitleBarHitKind GetTitleBarHitKind(nint lParam)
-    {
-        if (_mainHwnd == 0)
-            return TitleBarHitKind.None;
-
-        var raw = lParam.ToInt64();
-        var pt = new Win32Point
-        {
-            X = (short)(raw & 0xFFFF),
-            Y = (short)((raw >> 16) & 0xFFFF)
-        };
-
-        if (!ScreenToClient(_mainHwnd, ref pt))
-            return TitleBarHitKind.None;
-
-        var isMaximized = AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Maximized };
-        var resizeInset = isMaximized ? 0 : _topResizeBorderPx;
-
-        if (pt.Y < resizeInset || pt.Y >= _titleBarHeightPx)
-            return TitleBarHitKind.None;
-
-        var maxRight = Math.Max(_titleBarLeftInsetPx, _clientWidthPx - _titleBarRightInsetPx);
-        if (pt.X < Math.Max(resizeInset, _titleBarLeftInsetPx) || pt.X >= maxRight)
-            return TitleBarHitKind.None;
-
-        var rects = _titleBarInteractiveRects;
-        for (var i = 0; i < rects.Length; i++)
-        {
-            var r = rects[i];
-            if (pt.X >= r.X && pt.X < r.X + r.Width &&
-                pt.Y >= r.Y && pt.Y < r.Y + r.Height)
-            {
-                return TitleBarHitKind.Interactive;
-            }
-        }
-
-        return TitleBarHitKind.Caption;
-    }
-
-    private delegate nint SubclassProc(nint hWnd, uint uMsg, nint wParam, nint lParam, nuint uIdSubclass, nuint dwRefData);
-    private delegate bool EnumWindowsProc(nint hWnd, nint lParam);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Win32Point
-    {
-        public int X;
-        public int Y;
-    }
-
-    [DllImport("comctl32.dll", ExactSpelling = true)]
-    private static extern bool SetWindowSubclass(nint hWnd, SubclassProc pfnSubclass, nuint uIdSubclass, nuint dwRefData);
-
-    [DllImport("comctl32.dll", ExactSpelling = true)]
-    private static extern bool RemoveWindowSubclass(nint hWnd, SubclassProc pfnSubclass, nuint uIdSubclass);
-
-    [DllImport("comctl32.dll", ExactSpelling = true)]
-    private static extern nint DefSubclassProc(nint hWnd, uint uMsg, nint wParam, nint lParam);
-
-    [DllImport("user32.dll", ExactSpelling = true)]
-    private static extern bool ScreenToClient(nint hWnd, ref Win32Point lpPoint);
-
-    [DllImport("user32.dll", ExactSpelling = true)]
-    private static extern bool EnumChildWindows(nint hWndParent, EnumWindowsProc lpEnumFunc, nint lParam);
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 }
 

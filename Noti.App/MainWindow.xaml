@@ -36,7 +36,10 @@
             <Border
                 x:Name="AppTitleBar"
                 Grid.ColumnSpan="3"
-                Background="Transparent" />
+                Margin="0,0,140,0"
+                Background="Transparent"
+                PointerPressed="OnTitleBarPointerPressed"
+                DoubleTapped="OnTitleBarDoubleTapped" />
 
             <!-- Left: Animated Sidebar Toggle, Brand & Active Folder Pill -->
             <StackPanel
