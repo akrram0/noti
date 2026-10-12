@@ -3,8 +3,18 @@ name: Build & Package Noti
 on:
   push:
     branches: [ main, master ]
+    tags: [ 'v*' ]
   pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 1.0.50 or v1.0.50). Defaults to 1.0.<run_number>.'
+        required: false
+        type: string
+      release_notes:
+        description: 'Optional release notes for the GitHub Release.'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -22,6 +32,23 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Resolve Build Version
+        id: meta
+        shell: pwsh
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          $inputVer = "$env:INPUT_VERSION".Trim()
+          if ($env:GITHUB_REF -like "refs/tags/v*") {
+            $ver = $env:GITHUB_REF_NAME.TrimStart('v', 'V')
+          } elseif (![string]::IsNullOrWhiteSpace($inputVer)) {
+            $ver = $inputVer.TrimStart('v', 'V')
+          } else {
+            $ver = "1.0.${{ github.run_number }}"
+          }
+          "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding UTF8
+          "tag=v$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding UTF8
+
       - name: Run Core & Storage unit tests
         run: dotnet test Noti.Tests/Noti.Tests.csproj --configuration Release --verbosity normal
 
@@ -32,7 +59,7 @@ jobs:
           --runtime win-x64
           --self-contained true
           -p:Platform=x64
-          -p:Version=1.0.${{ github.run_number }}
+          -p:Version=${{ steps.meta.outputs.version }}
           -p:WindowsPackageType=None
           -p:WindowsAppSDKSelfContained=true
           -p:DebugType=none
@@ -42,14 +69,15 @@ jobs:
       - name: Build Windows Setup Installer (Noti-Setup-win-x64.exe)
         shell: pwsh
         run: |
+          $ver = "${{ steps.meta.outputs.version }}"
           Remove-Item -Path "${{ runner.temp }}/noti-publish/*.pdb" -Force -ErrorAction SilentlyContinue
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           if (!(Test-Path $iscc)) {
             choco install innosetup -y --no-progress
           }
-          & $iscc "/DAppVersion=1.0.${{ github.run_number }}" "/DPublishDir=${{ runner.temp }}\noti-publish" "/DOutputDir=${{ github.workspace }}" "installer\noti.iss"
+          & $iscc "/DAppVersion=$ver" "/DPublishDir=${{ runner.temp }}\noti-publish" "/DOutputDir=${{ github.workspace }}" "installer\noti.iss"
           @{
-            version = "1.0.${{ github.run_number }}"
+            version = $ver
             downloadUrl = "https://github.com/akrram0/noti/releases/latest/download/Noti-Setup-win-x64.exe"
             publishedAt = (Get-Date).ToUniversalTime().ToString("o")
           } | ConvertTo-Json | Set-Content -Path "${{ github.workspace }}/version.json" -Encoding UTF8
@@ -58,24 +86,27 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Noti-Setup-win-x64
-          path: ${{ github.workspace }}/Noti-Setup-win-x64.exe
+          path: |
+            ${{ github.workspace }}/Noti-Setup-win-x64.exe
+            ${{ github.workspace }}/version.json
           if-no-files-found: error
 
-      - name: Publish to GitHub Releases (v1.0.<run_number> & latest)
-        if: github.event_name == 'push'
+      - name: Publish to GitHub Releases
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_NOTES: ${{ inputs.release_notes }}
         run: |
-          $ver = "1.0.${{ github.run_number }}"
-          $versionTag = "v$ver"
+          $ver = "${{ steps.meta.outputs.version }}"
+          $versionTag = "${{ steps.meta.outputs.tag }}"
           $latestTag = "latest"
           $installer = "${{ github.workspace }}/Noti-Setup-win-x64.exe"
           $manifest = "${{ github.workspace }}/version.json"
           $title = "Noti v$ver Setup (win-x64)"
-          $notes = "Automated Windows Setup installer for Noti v$ver."
+          $notes = if (![string]::IsNullOrWhiteSpace($env:INPUT_NOTES)) { $env:INPUT_NOTES } else { "Automated Windows Setup installer for Noti v$ver." }
 
-          # 1. Create a separate release for this build version (v1.0.<run_number>) and mark it as Latest
+          # 1. Create or update the versioned release and mark it as Latest
           gh release view $versionTag 2>$null
           if ($LASTEXITCODE -ne 0) {
             gh release create $versionTag $installer $manifest --title $title --notes $notes --latest
