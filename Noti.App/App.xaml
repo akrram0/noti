@@ -13,21 +13,21 @@
                     <SolidColorBrush x:Key="CanvasBackgroundBrush" Color="#FF09090B" />
                     <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#CC121216" />
                     <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FF121216" TintOpacity="0.18" TintLuminosityOpacity="0.18" FallbackColor="#B8121216" />
-                    <SolidColorBrush x:Key="SurfaceActiveBrush" Color="#28FFFFFF" />
-                    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#16FFFFFF" />
-                    <SolidColorBrush x:Key="InputBackgroundBrush" Color="#18FFFFFF" />
+                    <SolidColorBrush x:Key="SurfaceActiveBrush" Color="#1AFFFFFF" />
+                    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#0DFFFFFF" />
+                    <SolidColorBrush x:Key="InputBackgroundBrush" Color="#14FFFFFF" />
                     <SolidColorBrush x:Key="SettingsSurfaceBrush" Color="#FF050507" />
                     <SolidColorBrush x:Key="ModalBackdropBrush" Color="#B8000000" />
-                    <SolidColorBrush x:Key="SubtleDividerBrush" Color="#22FFFFFF" />
+                    <SolidColorBrush x:Key="SubtleDividerBrush" Color="#1EFFFFFF" />
                     <SolidColorBrush x:Key="ControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFF5F5F7" />
                     <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FFA1A1AA" />
                     <SolidColorBrush x:Key="TextMutedBrush" Color="#FFA1A1A6" />
                     <LinearGradientBrush x:Key="GlassFillBrush" StartPoint="0,0" EndPoint="1,1">
-                        <GradientStop Color="#1EFFFFFF" Offset="0.0" />
+                        <GradientStop Color="#18FFFFFF" Offset="0.0" />
                         <GradientStop Color="#0DFFFFFF" Offset="1.0" />
                     </LinearGradientBrush>
-                    <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#2AFFFFFF" />
+                    <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#24FFFFFF" />
                     <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#12FFFFFF" />
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#26FFFFFF" />
@@ -56,21 +56,21 @@
                     <SolidColorBrush x:Key="CanvasBackgroundBrush" Color="#FF09090B" />
                     <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#CC121216" />
                     <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FF121216" TintOpacity="0.18" TintLuminosityOpacity="0.18" FallbackColor="#B8121216" />
-                    <SolidColorBrush x:Key="SurfaceActiveBrush" Color="#28FFFFFF" />
-                    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#16FFFFFF" />
-                    <SolidColorBrush x:Key="InputBackgroundBrush" Color="#18FFFFFF" />
+                    <SolidColorBrush x:Key="SurfaceActiveBrush" Color="#1AFFFFFF" />
+                    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#0DFFFFFF" />
+                    <SolidColorBrush x:Key="InputBackgroundBrush" Color="#14FFFFFF" />
                     <SolidColorBrush x:Key="SettingsSurfaceBrush" Color="#FF050507" />
                     <SolidColorBrush x:Key="ModalBackdropBrush" Color="#B8000000" />
-                    <SolidColorBrush x:Key="SubtleDividerBrush" Color="#22FFFFFF" />
+                    <SolidColorBrush x:Key="SubtleDividerBrush" Color="#1EFFFFFF" />
                     <SolidColorBrush x:Key="ControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFF5F5F7" />
                     <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FFA1A1AA" />
                     <SolidColorBrush x:Key="TextMutedBrush" Color="#FFA1A1A6" />
                     <LinearGradientBrush x:Key="GlassFillBrush" StartPoint="0,0" EndPoint="1,1">
-                        <GradientStop Color="#1EFFFFFF" Offset="0.0" />
+                        <GradientStop Color="#18FFFFFF" Offset="0.0" />
                         <GradientStop Color="#0DFFFFFF" Offset="1.0" />
                     </LinearGradientBrush>
-                    <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#2AFFFFFF" />
+                    <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#24FFFFFF" />
                     <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#12FFFFFF" />
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#26FFFFFF" />
@@ -99,22 +99,22 @@
                     <SolidColorBrush x:Key="CanvasBackgroundBrush" Color="#FFF8F8FC" />
                     <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#98F6F6FB" />
                     <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FFFFFFFF" TintOpacity="0.45" TintLuminosityOpacity="0.62" FallbackColor="#E8F5F5F7" />
-                    <SolidColorBrush x:Key="SurfaceActiveBrush" Color="#1C000000" />
-                    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#10000000" />
-                    <SolidColorBrush x:Key="InputBackgroundBrush" Color="#12000000" />
+                    <SolidColorBrush x:Key="SurfaceActiveBrush" Color="#12000000" />
+                    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#0A000000" />
+                    <SolidColorBrush x:Key="InputBackgroundBrush" Color="#0E000000" />
                     <SolidColorBrush x:Key="SettingsSurfaceBrush" Color="#FFFAFAFC" />
                     <SolidColorBrush x:Key="ModalBackdropBrush" Color="#70000000" />
-                    <SolidColorBrush x:Key="SubtleDividerBrush" Color="#1E000000" />
+                    <SolidColorBrush x:Key="SubtleDividerBrush" Color="#16000000" />
                     <SolidColorBrush x:Key="ControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FF1C1C1E" />
                     <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FF3F3F46" />
                     <SolidColorBrush x:Key="TextMutedBrush" Color="#FF6C6C70" />
                     <LinearGradientBrush x:Key="GlassFillBrush" StartPoint="0,0" EndPoint="1,1">
-                        <GradientStop Color="#16000000" Offset="0.0" />
-                        <GradientStop Color="#0C000000" Offset="1.0" />
+                        <GradientStop Color="#12000000" Offset="0.0" />
+                        <GradientStop Color="#0A000000" Offset="1.0" />
                     </LinearGradientBrush>
-                    <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#22000000" />
-                    <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#2C000000" />
+                    <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#18000000" />
+                    <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#22000000" />
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#22000000" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#FFFFFFFF" />
@@ -485,10 +485,11 @@
                 </Setter>
             </Style>
 
-            <!-- 22px Pure Color Swatch Circle Button (suppresses ButtonBackgroundPointerOver white mask, 1.14x spring scale + 2px outer ring on hover, 0.95x on press) -->
+            <!-- 22px Pure Color Swatch Circle Button (Width=22, Height=22, CornerRadius=11, 1.15x scale + subtle outer accent ring on hover) -->
             <Style x:Key="ColorSwatchButtonStyle" TargetType="Button">
-                <Setter Property="Width" Value="26" />
-                <Setter Property="Height" Value="26" />
+                <Setter Property="Width" Value="22" />
+                <Setter Property="Height" Value="22" />
+                <Setter Property="CornerRadius" Value="11" />
                 <Setter Property="Padding" Value="0" />
                 <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="BorderBrush" Value="Transparent" />
@@ -498,8 +499,8 @@
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
                             <Grid
-                                Width="26"
-                                Height="26"
+                                Width="22"
+                                Height="22"
                                 Background="Transparent"
                                 RenderTransformOrigin="0.5,0.5"
                                 UseLayoutRounding="True">
@@ -543,7 +544,7 @@
                                                 <DoubleAnimation
                                                     Storyboard.TargetName="SwatchScale"
                                                     Storyboard.TargetProperty="ScaleX"
-                                                    To="1.14"
+                                                    To="1.15"
                                                     Duration="0:0:0.15">
                                                     <DoubleAnimation.EasingFunction>
                                                         <BackEase EasingMode="EaseOut" Amplitude="0.45" />
@@ -552,7 +553,7 @@
                                                 <DoubleAnimation
                                                     Storyboard.TargetName="SwatchScale"
                                                     Storyboard.TargetProperty="ScaleY"
-                                                    To="1.14"
+                                                    To="1.15"
                                                     Duration="0:0:0.15">
                                                     <DoubleAnimation.EasingFunction>
                                                         <BackEase EasingMode="EaseOut" Amplitude="0.45" />
@@ -586,21 +587,24 @@
                                         </VisualState>
                                     </VisualStateGroup>
                                 </VisualStateManager.VisualStateGroups>
-                                <Ellipse
+                                <Border
                                     x:Name="SwatchCircle"
                                     Width="22"
                                     Height="22"
+                                    CornerRadius="11"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
-                                    Fill="{TemplateBinding Background}" />
-                                <Ellipse
+                                    Background="{TemplateBinding Background}" />
+                                <Border
                                     x:Name="HoverRing"
                                     Width="26"
                                     Height="26"
+                                     Margin="-2"
+                                    CornerRadius="13"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
-                                    Stroke="{ThemeResource TextPrimaryBrush}"
-                                    StrokeThickness="2"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="1.5"
                                     Opacity="0"
                                     IsHitTestVisible="False" />
                                 <ContentPresenter
@@ -609,6 +613,52 @@
                                     Foreground="{TemplateBinding Foreground}"
                                     IsHitTestVisible="False" />
                             </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Context Menu Action Row Button Style (MinHeight=36, Padding=10,6,10,6, CornerRadius=8, soft glass hover) -->
+            <Style x:Key="ContextMenuActionButtonStyle" TargetType="Button">
+                <Setter Property="MinHeight" Value="36" />
+                <Setter Property="Padding" Value="10,6,10,6" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="UseSystemFocusVisuals" Value="False" />
+                <Setter Property="UseLayoutRounding" Value="True" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border
+                                x:Name="ActionBorder"
+                                MinHeight="{TemplateBinding MinHeight}"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="{TemplateBinding CornerRadius}"
+                                Background="{TemplateBinding Background}"
+                                UseLayoutRounding="True">
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="ActionBorder.Background" Value="{ThemeResource SurfaceHoverBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="ActionBorder.Background" Value="{ThemeResource SurfaceActiveBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                                <ContentPresenter
+                                    HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                    VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                            </Border>
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>

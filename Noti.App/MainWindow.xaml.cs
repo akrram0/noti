@@ -206,7 +206,7 @@ public sealed partial class MainWindow : Window
 
             if (MicaController.IsSupported())
             {
-                SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
+                SystemBackdrop = new MicaBackdrop { Kind = MicaKind.Base };
             }
         }
         catch
@@ -234,12 +234,8 @@ public sealed partial class MainWindow : Window
 
         _acrylicController.TintColor = tintColor;
         _acrylicController.FallbackColor = tintColor;
-        _acrylicController.TintOpacity = isDark
-            ? Math.Clamp(t * 0.38f, 0.0f, 0.45f)
-            : Math.Clamp(0.36f + (t * 0.34f), 0.36f, 0.70f);
-        _acrylicController.LuminosityOpacity = isDark
-            ? Math.Clamp(0.03f + (t * 0.25f), 0.03f, 0.30f)
-            : Math.Clamp(0.50f + (t * 0.28f), 0.50f, 0.78f);
+        _acrylicController.TintOpacity = Math.Clamp(t * 0.50f, 0.0f, 0.50f);
+        _acrylicController.LuminosityOpacity = Math.Clamp(t * 0.45f, 0.0f, 0.45f);
     }
 
     private void DisposeAcrylicController()
@@ -3842,9 +3838,9 @@ public sealed partial class MainWindow : Window
         var headerRow = new Grid
         {
             Padding = new Thickness(10, 6, 10, 4),
-            ColumnSpacing = 8
+            ColumnSpacing = 12
         };
-        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
         headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         var headerIcon = new FontIcon
@@ -3852,12 +3848,13 @@ public sealed partial class MainWindow : Window
             Glyph = item.IsFolder ? "\uE8B7" : "\uE8A5",
             FontSize = 12,
             Foreground = item.HasCustomColor ? item.AccentColorBrush : _cachedSecondaryBrush,
+            HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
         var headerTitle = new TextBlock
         {
             Text = item.Title,
-            FontSize = 12,
+            FontSize = 12.5,
             FontWeight = FontWeights.SemiBold,
             Foreground = _cachedPrimaryBrush,
             MaxLines = 1,
@@ -3872,8 +3869,9 @@ public sealed partial class MainWindow : Window
         var swatchRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 3,
-            Padding = new Thickness(6, 4, 6, 6)
+            Spacing = 10,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Padding = new Thickness(12, 10, 12, 10)
         };
 
         Application.Current.Resources.TryGetValue("ColorSwatchButtonStyle", out var swatchStyleObj);
@@ -3883,11 +3881,17 @@ public sealed partial class MainWindow : Window
         {
             var color = NoteItemViewModel.ParseHexColor(hex, Colors.DodgerBlue);
             var isCurrent = string.Equals(item.ColorHex, hex, StringComparison.OrdinalIgnoreCase);
+            var luminance = ((0.299 * color.R) + (0.587 * color.G) + (0.114 * color.B)) / 255.0;
+            var checkColor = luminance > 0.62 ? ColorHelper.FromArgb(255, 28, 28, 30) : Colors.White;
 
             var swatchBtn = new Button
             {
+                Width = 22,
+                Height = 22,
+                CornerRadius = new CornerRadius(11),
                 Background = new SolidColorBrush(color),
-                Foreground = new SolidColorBrush(Colors.White)
+                BorderBrush = new SolidColorBrush(ColorHelper.FromArgb(115, color.R, color.G, color.B)),
+                Foreground = new SolidColorBrush(checkColor)
             };
             if (swatchStyle is not null)
                 swatchBtn.Style = swatchStyle;
@@ -3897,50 +3901,42 @@ public sealed partial class MainWindow : Window
                 swatchBtn.Content = new FontIcon
                 {
                     Glyph = "\uE73E",
-                    FontSize = 10,
-                    Foreground = new SolidColorBrush(Colors.White)
+                    FontSize = 11,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = new SolidColorBrush(checkColor)
                 };
             }
 
-            ToolTipService.SetToolTip(swatchBtn, name);
+            ToolTipService.SetToolTip(swatchBtn, isCurrent ? $"{name} (Click to clear)" : name);
 
             var capturedHex = hex;
+            var capturedIsCurrent = isCurrent;
             swatchBtn.Click += (_, _) =>
             {
-                ViewModel.SetItemColor(item, capturedHex);
+                ViewModel.SetItemColor(item, capturedIsCurrent ? null : capturedHex);
                 HideSidebarContextPopup();
             };
 
             swatchRow.Children.Add(swatchBtn);
         }
 
-        if (item.HasCustomColor)
-        {
-            var clearBtn = new Button
-            {
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(44, 142, 142, 147)),
-                Foreground = _cachedPrimaryBrush,
-                Content = new FontIcon
-                {
-                    Glyph = "\uE711",
-                    FontSize = 9,
-                    Foreground = _cachedPrimaryBrush
-                }
-            };
-            if (swatchStyle is not null)
-                clearBtn.Style = swatchStyle;
-
-            ToolTipService.SetToolTip(clearBtn, "Reset color");
-            clearBtn.Click += (_, _) =>
-            {
-                ViewModel.SetItemColor(item, null);
-                HideSidebarContextPopup();
-            };
-            swatchRow.Children.Add(clearBtn);
-        }
-
         SidebarContextContentPanel.Children.Add(swatchRow);
         SidebarContextContentPanel.Children.Add(CreateSidebarContextDivider());
+
+        if (item.HasCustomColor)
+        {
+            SidebarContextContentPanel.Children.Add(CreateSidebarContextActionButton(
+                "\uE711",
+                "Reset color",
+                null,
+                isDestructive: false,
+                () =>
+                {
+                    HideSidebarContextPopup();
+                    ViewModel.SetItemColor(item, null);
+                }));
+        }
 
         if (item.IsFolder)
         {
@@ -4042,8 +4038,8 @@ public sealed partial class MainWindow : Window
 
         var maxW = Math.Max(320.0, RootGrid.ActualWidth);
         var maxH = Math.Max(320.0, RootGrid.ActualHeight);
-        var clampedLeft = Math.Clamp(cursorInRoot.X, 12.0, Math.Max(12.0, maxW - 236.0));
-        var clampedTop = Math.Clamp(cursorInRoot.Y, 44.0, Math.Max(44.0, maxH - 240.0));
+        var clampedLeft = Math.Clamp(cursorInRoot.X, 12.0, Math.Max(12.0, maxW - 276.0));
+        var clampedTop = Math.Clamp(cursorInRoot.Y, 44.0, Math.Max(44.0, maxH - 260.0));
         SidebarContextPopupBorder.Margin = new Thickness(clampedLeft, clampedTop, 0, 0);
 
         SidebarContextOverlay.Visibility = Visibility.Visible;
@@ -4114,7 +4110,7 @@ public sealed partial class MainWindow : Window
         new()
         {
             Height = 1,
-            Margin = new Thickness(6, 3, 6, 3),
+            Margin = new Thickness(6, 4, 6, 4),
             Background = _cachedBorderBrush
         };
 
@@ -4131,7 +4127,7 @@ public sealed partial class MainWindow : Window
 
         var rowGrid = new Grid
         {
-            ColumnSpacing = 10
+            ColumnSpacing = 12
         };
         rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
         rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -4140,7 +4136,7 @@ public sealed partial class MainWindow : Window
         var icon = new FontIcon
         {
             Glyph = glyph,
-            FontSize = 12,
+            FontSize = 13,
             Foreground = isDestructive ? fgBrush : _cachedSecondaryBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
@@ -4148,9 +4144,11 @@ public sealed partial class MainWindow : Window
         var titleBlock = new TextBlock
         {
             Text = label,
-            FontSize = 12.5,
+            FontSize = 13,
             Foreground = fgBrush,
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
+            MaxLines = 1,
+            TextTrimming = TextTrimming.CharacterEllipsis
         };
         Grid.SetColumn(titleBlock, 1);
 
@@ -4162,9 +4160,10 @@ public sealed partial class MainWindow : Window
             var shortcutBlock = new TextBlock
             {
                 Text = shortcut,
-                FontSize = 10.5,
+                FontSize = 11,
                 FontFamily = MonoFontFamily,
                 Foreground = _cachedSecondaryBrush,
+                Margin = new Thickness(8, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(shortcutBlock, 2);
@@ -4175,16 +4174,16 @@ public sealed partial class MainWindow : Window
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Height = 30,
-            Padding = new Thickness(10, 0, 10, 0),
-            CornerRadius = new CornerRadius(7),
+            MinHeight = 36,
+            Padding = new Thickness(10, 6, 10, 6),
+            CornerRadius = new CornerRadius(8),
             Background = TransparentBrush,
             BorderThickness = new Thickness(0),
             Content = rowGrid
         };
 
-        if (Application.Current.Resources.TryGetValue("IconGhostButtonStyle", out var styleObj) && styleObj is Style ghostStyle)
-            btn.Style = ghostStyle;
+        if (Application.Current.Resources.TryGetValue("ContextMenuActionButtonStyle", out var styleObj) && styleObj is Style actionStyle)
+            btn.Style = actionStyle;
 
         btn.Click += (_, _) => onClick();
         return btn;

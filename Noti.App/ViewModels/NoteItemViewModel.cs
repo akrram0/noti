@@ -63,7 +63,7 @@ public sealed class NoteItemViewModel : ObservableObject
         }
     }
 
-    public Thickness IndentMargin => new(_depth * 16, 0, 0, 4);
+    public Thickness IndentMargin => new(8 + (_depth * 16), 2, 8, 2);
     public Visibility TreeGuideVisibility => _depth > 0 ? Visibility.Visible : Visibility.Collapsed;
 
     public string ColorHex
@@ -97,13 +97,13 @@ public sealed class NoteItemViewModel : ObservableObject
         {
             if (TryParseHexColor(_colorHex, 255, out var baseColor))
             {
-                // Unselected: 9% (23), Hover: 16% (41), Selected: 22% (56), Selected+Hover: 28% (71)
+                // Unselected: 8% (20), Hover: 11% (28), Active: 14% (36), Active+Hover: 18% (46)
                 byte alpha = (_isSelected, _isHovered) switch
                 {
-                    (true, true) => 71,
-                    (true, false) => 56,
-                    (false, true) => 41,
-                    _ => 23
+                    (true, true) => 46,
+                    (true, false) => 36,
+                    (false, true) => 28,
+                    _ => 20
                 };
                 return new SolidColorBrush(ColorHelper.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
             }
@@ -113,20 +113,22 @@ public sealed class NoteItemViewModel : ObservableObject
 
             if (IsLightTheme)
             {
+                // Light mode: Hover rgba(0,0,0, 0.04) = 10, Active rgba(0,0,0, 0.07) = 18
                 byte lightAlpha = (_isSelected, _isHovered) switch
                 {
-                    (true, true) => 38,
-                    (true, false) => 28,
-                    _ => 18
+                    (true, true) => 22,
+                    (true, false) => 18,
+                    _ => 10
                 };
                 return new SolidColorBrush(ColorHelper.FromArgb(lightAlpha, 0, 0, 0));
             }
 
+            // Dark mode: Hover rgba(255,255,255, 0.05) = 13, Active rgba(255,255,255, 0.10) = 26
             byte darkAlpha = (_isSelected, _isHovered) switch
             {
-                (true, true) => 52,
-                (true, false) => 38,
-                _ => 24
+                (true, true) => 32,
+                (true, false) => 26,
+                _ => 13
             };
             return new SolidColorBrush(ColorHelper.FromArgb(darkAlpha, 255, 255, 255));
         }
@@ -143,43 +145,25 @@ public sealed class NoteItemViewModel : ObservableObject
             {
                 byte borderAlpha = (_isSelected, _isHovered) switch
                 {
-                    (true, true) => 138,
-                    (true, false) => 110,
-                    _ => 72
+                    (true, true) => 76,
+                    (true, false) => 56,
+                    _ => 36
                 };
                 return new SolidColorBrush(ColorHelper.FromArgb(borderAlpha, baseColor.R, baseColor.G, baseColor.B));
             }
 
-            if (IsLightTheme)
-            {
-                byte lightBorderAlpha = (_isSelected, _isHovered) switch
-                {
-                    (true, true) => 54,
-                    (true, false) => 40,
-                    _ => 24
-                };
-                return new SolidColorBrush(ColorHelper.FromArgb(lightBorderAlpha, 0, 0, 0));
-            }
-
-            byte darkBorderAlpha = (_isSelected, _isHovered) switch
-            {
-                (true, true) => 72,
-                (true, false) => 54,
-                _ => 34
-            };
-            return new SolidColorBrush(ColorHelper.FromArgb(darkBorderAlpha, 255, 255, 255));
+            return new SolidColorBrush(Colors.Transparent);
         }
     }
 
-    public Visibility LeftAccentVisibility =>
-        (HasCustomColor || (!IsFolder && _isSelected)) ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility LeftAccentVisibility => HasCustomColor ? Visibility.Visible : Visibility.Collapsed;
 
-    public double LeftAccentWidth => _isSelected ? 3.0 : (HasCustomColor ? 2.0 : 0.0);
+    public double LeftAccentWidth => HasCustomColor ? 3.0 : 0.0;
 
     public SolidColorBrush LeftAccentBrush =>
         TryParseHexColor(_colorHex, 255, out var c)
             ? new SolidColorBrush(c)
-            : new SolidColorBrush(ColorHelper.FromArgb(255, 10, 132, 255));
+            : new SolidColorBrush(Colors.Transparent);
 
     public Visibility FolderVisibility => IsFolder ? Visibility.Visible : Visibility.Collapsed;
     public Visibility NoteVisibility => IsFolder ? Visibility.Collapsed : Visibility.Visible;
@@ -199,6 +183,7 @@ public sealed class NoteItemViewModel : ObservableObject
 
     public string ChevronGlyph => _isExpanded ? "\uE70D" : "\uE76C";
     public string FolderIconGlyph => _isExpanded ? "\uE838" : "\uE8B7";
+    public string NoteLeadingIconGlyph => IsPinned ? "\uE840" : "\uE8A5";
 
     public int FolderNoteCount
     {
@@ -225,6 +210,7 @@ public sealed class NoteItemViewModel : ObservableObject
             OnPropertyChanged(nameof(PinBadgeVisibility));
             OnPropertyChanged(nameof(PinOpacity));
             OnPropertyChanged(nameof(PinIconGlyph));
+            OnPropertyChanged(nameof(NoteLeadingIconGlyph));
         }
     }
 

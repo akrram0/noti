@@ -602,16 +602,12 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public double SurfaceOpacity => _currentBackdropMode == BackdropMode.Blur
-        ? (_isDarkMode
-            ? (_surfaceOpacityPercent / 100.0) * 0.16
-            : Math.Clamp(0.24 + ((_surfaceOpacityPercent / 100.0) * 0.44), 0.24, 0.68))
+        ? (_surfaceOpacityPercent / 100.0) * 0.35
         : _surfaceOpacityPercent / 100.0;
 
     public double SidebarSurfaceOpacity => _currentBackdropMode == BackdropMode.Blur
-        ? (_isDarkMode
-            ? Math.Clamp((_surfaceOpacityPercent / 100.0) * 0.28, 0.04, 0.55)
-            : Math.Clamp(0.42 + ((_surfaceOpacityPercent / 100.0) * 0.38), 0.42, 0.80))
-        : Math.Clamp(_surfaceOpacityPercent / 100.0, 0.0, 1.0);
+        ? (_surfaceOpacityPercent / 100.0) * 0.45
+        : _surfaceOpacityPercent / 100.0;
 
     public string SurfaceOpacityText => $"{_surfaceOpacityPercent:0}%";
 

@@ -164,7 +164,7 @@
         </Grid>
 
         <!-- Workspace & Full-Window Settings Container -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="1" Background="Transparent">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -310,7 +310,7 @@
                 <!-- Hierarchical File Tree & Note List -->
                 <ListView
                     Grid.Row="2"
-                    Padding="12,4"
+                    Padding="0,4,0,4"
                     SelectionMode="None"
                     IsItemClickEnabled="True"
                     ItemClick="OnSidebarItemClick"
@@ -334,7 +334,7 @@
                                     Background="{x:Bind RowBackgroundBrush, Mode=OneWay}"
                                     BorderBrush="{x:Bind RowBorderBrush, Mode=OneWay}"
                                     BorderThickness="1"
-                                    CornerRadius="10"
+                                    CornerRadius="8"
                                     IsHitTestVisible="False">
                                     <Border.BackgroundTransition>
                                         <BrushTransition Duration="0:0:0.14" />
@@ -342,9 +342,11 @@
                                 </Border>
                                 <Border
                                     Width="{x:Bind LeftAccentWidth, Mode=OneWay}"
-                                    Margin="0,5,0,5"
+                                    Height="18"
+                                    Margin="4,0,8,0"
                                     CornerRadius="1.5"
                                     HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
                                     IsHitTestVisible="False"
                                     Background="{x:Bind LeftAccentBrush, Mode=OneWay}"
                                     Visibility="{x:Bind LeftAccentVisibility, Mode=OneWay}" />
@@ -356,42 +358,42 @@
                                     Background="{ThemeResource SubtleDividerBrush}"
                                     Visibility="{x:Bind TreeGuideVisibility, Mode=OneWay}" />
 
-                                <!-- Folder Row (Right-click for color, new note, new subfolder, delete) -->
+                                <!-- Folder Row (Padding="12,8,12,8", CornerRadius="8", 24px leading icon slot) -->
                                 <Border
                                     Visibility="{x:Bind FolderVisibility, Mode=OneWay}"
-                                    Padding="10,7"
-                                    CornerRadius="10"
+                                    Padding="12,8,12,8"
+                                    CornerRadius="8"
                                     Background="Transparent">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="24" />
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
 
-                                        <FontIcon
+                                        <Grid
                                             Grid.Column="0"
-                                            Glyph="{x:Bind ChevronGlyph, Mode=OneWay}"
-                                            FontSize="9"
-                                            Margin="0,0,6,0"
-                                            Foreground="{ThemeResource TextSecondaryBrush}"
-                                            VerticalAlignment="Center" />
-
-                                        <Grid Grid.Column="1" Margin="0,0,8,0" VerticalAlignment="Center">
+                                            Width="24"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center">
                                             <FontIcon
                                                 Glyph="{x:Bind FolderIconGlyph, Mode=OneWay}"
-                                                FontSize="14"
-                                                Foreground="{ThemeResource TextPrimaryBrush}" />
+                                                FontSize="13"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                Foreground="{ThemeResource TextSecondaryBrush}" />
                                             <FontIcon
                                                 Glyph="{x:Bind FolderIconGlyph, Mode=OneWay}"
-                                                FontSize="14"
+                                                FontSize="13"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
                                                 Foreground="{x:Bind AccentColorBrush, Mode=OneWay}"
                                                 Visibility="{x:Bind ColorDotVisibility, Mode=OneWay}" />
                                         </Grid>
 
                                         <TextBlock
-                                            Grid.Column="2"
+                                            Grid.Column="1"
+                                            Margin="8,0,0,0"
                                             Text="{x:Bind Title, Mode=OneWay}"
                                             FontSize="13"
                                             FontWeight="SemiBold"
@@ -400,26 +402,63 @@
                                             MaxLines="1"
                                             TextTrimming="CharacterEllipsis" />
 
-                                        <TextBlock
-                                            Grid.Column="3"
-                                            Text="{x:Bind FolderCountText, Mode=OneWay}"
-                                            FontSize="11"
-                                            Margin="6,0,2,0"
-                                            Foreground="{ThemeResource TextSecondaryBrush}"
-                                            VerticalAlignment="Center" />
+                                        <StackPanel
+                                            Grid.Column="2"
+                                            Margin="8,0,0,0"
+                                            Orientation="Horizontal"
+                                            Spacing="6"
+                                            VerticalAlignment="Center">
+                                            <TextBlock
+                                                Text="{x:Bind FolderCountText, Mode=OneWay}"
+                                                FontSize="11"
+                                                Foreground="{ThemeResource TextSecondaryBrush}"
+                                                VerticalAlignment="Center" />
+                                            <FontIcon
+                                                Glyph="{x:Bind ChevronGlyph, Mode=OneWay}"
+                                                FontSize="9"
+                                                Foreground="{ThemeResource TextSecondaryBrush}"
+                                                VerticalAlignment="Center" />
+                                        </StackPanel>
                                     </Grid>
                                 </Border>
 
-                                <!-- Note Card Row (Right-click for color, pin, export, delete) -->
-                                <Grid Visibility="{x:Bind NoteVisibility, Mode=OneWay}">
-                                    <StackPanel Padding="12,9" Spacing="3">
-                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                <!-- Note Card Row (Padding="12,8,12,8", CornerRadius="8", 24px leading icon slot) -->
+                                <Border
+                                    Visibility="{x:Bind NoteVisibility, Mode=OneWay}"
+                                    Padding="12,8,12,8"
+                                    CornerRadius="8"
+                                    Background="Transparent">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="24" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Grid
+                                            Grid.Column="0"
+                                            Width="24"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center">
                                             <FontIcon
-                                                Glyph="&#xE840;"
-                                                FontSize="10"
-                                                Foreground="{ThemeResource TextSecondaryBrush}"
-                                                Visibility="{x:Bind PinBadgeVisibility, Mode=OneWay}"
-                                                VerticalAlignment="Center" />
+                                                Glyph="{x:Bind NoteLeadingIconGlyph, Mode=OneWay}"
+                                                FontSize="12"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                Foreground="{ThemeResource TextSecondaryBrush}" />
+                                            <FontIcon
+                                                Glyph="{x:Bind NoteLeadingIconGlyph, Mode=OneWay}"
+                                                FontSize="12"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                Foreground="{x:Bind AccentColorBrush, Mode=OneWay}"
+                                                Visibility="{x:Bind ColorDotVisibility, Mode=OneWay}" />
+                                        </Grid>
+
+                                        <StackPanel
+                                            Grid.Column="1"
+                                            Margin="8,0,0,0"
+                                            Spacing="2"
+                                            VerticalAlignment="Center">
                                             <TextBlock
                                                 Text="{x:Bind Title, Mode=OneWay}"
                                                 FontSize="13"
@@ -427,15 +466,15 @@
                                                 Foreground="{ThemeResource TextPrimaryBrush}"
                                                 MaxLines="1"
                                                 TextTrimming="CharacterEllipsis" />
+                                            <TextBlock
+                                                Text="{x:Bind Snippet, Mode=OneWay}"
+                                                FontSize="12"
+                                                Foreground="{ThemeResource TextSecondaryBrush}"
+                                                MaxLines="1"
+                                                TextTrimming="CharacterEllipsis" />
                                         </StackPanel>
-                                        <TextBlock
-                                            Text="{x:Bind Snippet, Mode=OneWay}"
-                                            FontSize="12"
-                                            Foreground="{ThemeResource TextSecondaryBrush}"
-                                            MaxLines="1"
-                                            TextTrimming="CharacterEllipsis" />
-                                    </StackPanel>
-                                </Grid>
+                                    </Grid>
+                                </Border>
                             </Grid>
                         </DataTemplate>
                     </ListView.ItemTemplate>
@@ -519,17 +558,17 @@
             </Grid>
 
             <!-- Right Column: Main Editor/Preview Canvas OR Full-Window Settings View -->
-            <Grid Grid.Column="1">
+            <Grid Grid.Column="1" Background="Transparent">
 
                 <!-- 1. Main Writing & Markdown Preview Workspace -->
-                <Grid x:Name="MainWorkspaceGrid" AllowDrop="True">
+                <Grid x:Name="MainWorkspaceGrid" AllowDrop="True" Background="Transparent">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*" />
                         <RowDefinition Height="40" />
                     </Grid.RowDefinitions>
 
                     <!-- Unified In-Place Live WYSIWYG Canvas + Optional Raw Source Editor -->
-                    <Grid x:Name="EditorPaneGrid" Grid.Row="0">
+                    <Grid x:Name="EditorPaneGrid" Grid.Row="0" Background="Transparent">
 
                         <!-- 1. Primary Default: In-Place Live WYSIWYG Document Canvas -->
                         <ScrollViewer
@@ -1540,11 +1579,11 @@
             <Border
                 x:Name="SidebarContextPopupBorder"
                 UseLayoutRounding="True"
-                Width="248"
+                Width="264"
                 HorizontalAlignment="Left"
                 VerticalAlignment="Top"
-                Padding="10"
-                CornerRadius="14"
+                Padding="8"
+                CornerRadius="12"
                 Background="{ThemeResource PopupAcrylicBrush}"
                 BorderThickness="1"
                 BorderBrush="{ThemeResource SubtleDividerBrush}"
@@ -1560,7 +1599,7 @@
                         <TranslateTransform x:Name="SidebarContextPopupTranslate" X="0" Y="0" />
                     </TransformGroup>
                 </Border.RenderTransform>
-                <StackPanel x:Name="SidebarContextContentPanel" Spacing="4" />
+                <StackPanel x:Name="SidebarContextContentPanel" Spacing="2" />
             </Border>
         </Grid>
 
