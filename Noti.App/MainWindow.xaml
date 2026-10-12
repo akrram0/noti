@@ -37,13 +37,7 @@
                 x:Name="AppTitleBar"
                 Grid.ColumnSpan="3"
                 Margin="0,0,140,0"
-                Background="Transparent"
-                PointerPressed="OnTitleBarPointerPressed"
-                PointerMoved="OnTitleBarPointerMoved"
-                PointerReleased="OnTitleBarPointerReleased"
-                PointerCanceled="OnTitleBarPointerReleased"
-                PointerCaptureLost="OnTitleBarPointerReleased"
-                DoubleTapped="OnTitleBarDoubleTapped" />
+                Background="Transparent" />
 
             <!-- Left: Symmetrical 32x32 Sidebar Toggle, Brand & Active Folder Pill -->
             <StackPanel
@@ -197,7 +191,6 @@
                 Background="Transparent">
                 <Grid
                     Margin="8,0,0,8"
-                    CornerRadius="12"
                     Background="Transparent">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -206,14 +199,14 @@
                         <RowDefinition Height="56" />
                     </Grid.RowDefinitions>
 
-                    <!-- Dynamic Sidebar Tint Layer with Subtle 1px Glass Border -->
+                    <!-- Dynamic Sidebar Tint Layer (Borderless — separated from main content via right-edge drop shadow) -->
                     <Border
                         Grid.RowSpan="4"
-                        CornerRadius="12"
+                        CornerRadius="0"
+                        Margin="-8,0,0,-8"
                         IsHitTestVisible="False"
                         Background="{ThemeResource SidebarBackgroundBrush}"
-                        BorderBrush="{ThemeResource GlassBorderBrush}"
-                        BorderThickness="1"
+                        BorderThickness="0"
                         Opacity="{x:Bind ViewModel.SidebarSurfaceOpacity, Mode=OneWay}" />
 
                 <!-- Search, New Note & New Folder (32px height, 8px column spacing) -->
@@ -590,6 +583,16 @@
 
             <!-- Right Column: Main Editor/Preview Canvas OR Full-Window Settings View -->
             <Grid Grid.Column="1" Background="Transparent">
+
+                <!-- Vertical Right-Edge Drop Shadow cast by Sidebar onto Main Content (independent of window opacity) -->
+                <Border
+                    x:Name="SidebarDropShadow"
+                    Width="16"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Stretch"
+                    IsHitTestVisible="False"
+                    Canvas.ZIndex="10"
+                    Background="{ThemeResource SidebarEdgeShadowBrush}" />
 
                 <!-- 1. Main Writing & Markdown Preview Workspace -->
                 <Grid x:Name="MainWorkspaceGrid" AllowDrop="True" Background="Transparent">

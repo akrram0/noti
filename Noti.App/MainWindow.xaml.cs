@@ -101,6 +101,7 @@ public sealed partial class MainWindow : Window
             ApplyResponsiveLayout();
             UpdateTitleBarChromeRegions();
         };
+        TopTitleBarGrid.LayoutUpdated += (_, _) => UpdateTitleBarChromeRegions();
         LiveEditorScrollViewer.SizeChanged += (_, _) =>
         {
             LiveCanvasRootGrid.MinHeight = Math.Max(0, LiveEditorScrollViewer.ActualHeight);
@@ -163,11 +164,13 @@ public sealed partial class MainWindow : Window
             {
                 SidebarContainer.Width = 0;
                 SidebarContainer.Opacity = 0;
+                SidebarDropShadow.Opacity = 0;
             }
             else
             {
                 SidebarContainer.Width = TargetSidebarWidth;
                 SidebarContainer.Opacity = 1;
+                SidebarDropShadow.Opacity = 1;
             }
         }
     }
@@ -1779,6 +1782,17 @@ public sealed partial class MainWindow : Window
         Storyboard.SetTarget(fadeAnim, SidebarContainer);
         Storyboard.SetTargetProperty(fadeAnim, "Opacity");
 
+        var shadowFadeAnim = new DoubleAnimation
+        {
+            From = open ? 0.0 : 1.0,
+            To = targetOpacity,
+            Duration = new Duration(TimeSpan.FromMilliseconds(170)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(shadowFadeAnim, SidebarDropShadow);
+        Storyboard.SetTargetProperty(shadowFadeAnim, "Opacity");
+
         var iconAnim = new DoubleAnimation
         {
             To = targetIconX,
@@ -1791,10 +1805,12 @@ public sealed partial class MainWindow : Window
 
         SidebarContainer.Width = targetWidth;
         SidebarContainer.Opacity = targetOpacity;
+        SidebarDropShadow.Opacity = targetOpacity;
         SidebarIconTranslate.X = targetIconX;
 
         sb.Children.Add(widthAnim);
         sb.Children.Add(fadeAnim);
+        sb.Children.Add(shadowFadeAnim);
         sb.Children.Add(iconAnim);
         sb.Begin();
     }
@@ -2510,25 +2526,4 @@ public sealed partial class MainWindow : Window
             ViewSwitcherBorder,
             UpdateTopBarButton,
             ZoomBadgeButton);
-
-    private void OnTitleBarPointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        if (sender is UIElement el)
-            _chromeService.OnDragSurfacePointerPressed(el, e);
-    }
-
-    private void OnTitleBarPointerMoved(object sender, PointerRoutedEventArgs e)
-    {
-        if (sender is UIElement el)
-            _chromeService.OnDragSurfacePointerMoved(el, e);
-    }
-
-    private void OnTitleBarPointerReleased(object sender, PointerRoutedEventArgs e) =>
-        _chromeService.OnDragSurfacePointerReleased();
-
-    private void OnTitleBarDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
-    {
-        e.Handled = true;
-        _chromeService.ToggleMaximize();
-    }
 }
