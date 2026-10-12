@@ -91,7 +91,7 @@ public sealed partial class MainWindow : Window
             LiveCanvasRootGrid.MinHeight = Math.Max(0, LiveEditorScrollViewer.ActualHeight);
             ThemeIndicatorTranslate.X = ViewModel.ThemeIndicatorOffsetX;
             BackdropIndicatorTranslate.X = ViewModel.BackdropIndicatorOffsetX;
-            SettingsTabIndicatorTranslate.X = ViewModel.SettingsSectionIndicatorOffsetX;
+            SettingsTabIndicatorTranslate.X = GetSettingsTabIndicatorTargetX();
             ModeIndicatorTranslate.X = ViewModel.ModeIndicatorOffsetX;
             ApplyEditorTextBoxTheme();
             RebuildLiveEditor(reparse: true);
@@ -122,7 +122,12 @@ public sealed partial class MainWindow : Window
 
     public MainViewModel ViewModel { get; }
 
-    private double TargetSidebarWidth => RootGrid.ActualWidth is > 0 and < 860 ? 224.0 : 272.0;
+    private double TargetSidebarWidth => RootGrid.ActualWidth switch
+    {
+        > 0 and < 640 => 196.0,
+        >= 640 and < 860 => 224.0,
+        _ => 272.0
+    };
 
     private void ApplyWindowBackdrop() =>
         _backdropService.Apply(ViewModel.CurrentBackdropMode, ViewModel.IsDarkMode, ViewModel.SurfaceOpacityPercent);
@@ -137,15 +142,31 @@ public sealed partial class MainWindow : Window
             return;
 
         var isCompact = width < 860;
-        var horizPad = isCompact ? 20.0 : 44.0;
-        var vertPad = isCompact ? 18.0 : 28.0;
+        var isSmall   = width < 640;
+        var horizPad  = isSmall ? 16.0 : (isCompact ? 24.0 : 44.0);
+        var vertPad   = isCompact ? 18.0 : 28.0;
 
         EditorTextBox.Padding = new Thickness(horizPad, vertPad, horizPad, 16);
         LiveEditorPanel.Padding = new Thickness(horizPad, vertPad, horizPad, 80);
         StatusBarGrid.Padding = new Thickness(horizPad, 0, horizPad, 0);
 
+        var settingsHorizPad = isSmall ? 16.0 : (isCompact ? 24.0 : 32.0);
+        var settingsVertPad  = isCompact ? 16.0 : 20.0;
+        SettingsScrollViewer.Padding = new Thickness(settingsHorizPad, settingsVertPad, settingsHorizPad, 32);
+
         if (ViewModel.IsSidebarOpen)
-            SidebarContainer.Width = TargetSidebarWidth;
+        {
+            if (ViewModel.IsSettingsOpen && isSmall)
+            {
+                SidebarContainer.Width = 0;
+                SidebarContainer.Opacity = 0;
+            }
+            else
+            {
+                SidebarContainer.Width = TargetSidebarWidth;
+                SidebarContainer.Opacity = 1;
+            }
+        }
     }
 
     private void OnRootPointerWheelChanged(object sender, PointerRoutedEventArgs e)
@@ -1846,11 +1867,24 @@ public sealed partial class MainWindow : Window
         sb.Begin();
     }
 
+    private double GetSettingsTabIndicatorTargetX()
+    {
+        var step = SettingsTabBarGrid.ActualWidth > 0
+            ? SettingsTabBarGrid.ActualWidth / 4.0
+            : ViewModel.SettingsSectionIndicatorOffsetX;
+        return (int)ViewModel.CurrentSettingsSection * step;
+    }
+
+    private void OnSettingsTabBarSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        SettingsTabIndicatorTranslate.X = GetSettingsTabIndicatorTargetX();
+    }
+
     private void AnimateSettingsTabPill()
     {
         var sb = new Storyboard();
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        var targetX = ViewModel.SettingsSectionIndicatorOffsetX;
+        var targetX = GetSettingsTabIndicatorTargetX();
 
         var pillSlide = new DoubleAnimation
         {
@@ -1875,11 +1909,13 @@ public sealed partial class MainWindow : Window
         var targetOpacity = open ? 1.0 : 0.0;
         var targetAngle = open ? 180.0 : 0.0;
 
+        ApplyResponsiveLayout();
+
         if (open)
         {
             ThemeIndicatorTranslate.X = ViewModel.ThemeIndicatorOffsetX;
             BackdropIndicatorTranslate.X = ViewModel.BackdropIndicatorOffsetX;
-            SettingsTabIndicatorTranslate.X = ViewModel.SettingsSectionIndicatorOffsetX;
+            SettingsTabIndicatorTranslate.X = GetSettingsTabIndicatorTargetX();
             MainWorkspaceGrid.Visibility = Visibility.Collapsed;
             SettingsOverlayGrid.Visibility = Visibility.Visible;
         }

@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
@@ -10,30 +11,41 @@ using WinRT.Interop;
 namespace Noti.App.Services;
 
 /// <summary>
-/// Manages window chrome configuration (icon, size, title bar regions, and click-and-hold drag behaviour)
+/// Manages window chrome configuration (icon, size, minimum bounds, title bar regions, and click-and-hold drag behaviour)
 /// for a single WinUI 3 Window.
 /// </summary>
 internal sealed class WindowChromeService
 {
+    public const int DefaultMinWidth  = 520;
+    public const int DefaultMinHeight = 450;
+
     private readonly Window _window;
     private readonly IntPtr _hwnd;
+    private readonly NativeMethods.SUBCLASSPROC _subclassProc;
+    private int _minWidth  = DefaultMinWidth;
+    private int _minHeight = DefaultMinHeight;
     private bool _isDragCandidate;
     private Point _dragStartPoint;
 
     public WindowChromeService(Window window)
     {
         ArgumentNullException.ThrowIfNull(window);
-        _window = window;
-        _hwnd   = WindowNative.GetWindowHandle(window);
+        _window       = window;
+        _hwnd         = WindowNative.GetWindowHandle(window);
+        _subclassProc = WindowSubclassProc;
     }
 
     /// <summary>
-    /// Configures the initial window chrome: icon, size, and custom title bar.
+    /// Configures the initial window chrome: icon, size, minimum window bounds, and custom title bar.
     /// Call once from the Window constructor after InitializeComponent().
     /// </summary>
-    public void Configure(int width = 1080, int height = 680)
+    public void Configure(int width = 1080, int height = 680, int minWidth = DefaultMinWidth, int minHeight = DefaultMinHeight)
     {
-        _window.AppWindow.Resize(new SizeInt32(width, height));
+        _minWidth  = minWidth;
+        _minHeight = minHeight;
+
+        NativeMethods.SetWindowSubclass(_hwnd, _subclassProc, (UIntPtr)1, IntPtr.Zero);
+        _window.AppWindow.Resize(new SizeInt32(Math.Max(width, minWidth), Math.Max(height, minHeight)));
 
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Noti.ico");
         if (File.Exists(iconPath))
@@ -49,6 +61,22 @@ internal sealed class WindowChromeService
             titleBar.ButtonBackgroundColor          = Colors.Transparent;
             titleBar.ButtonInactiveBackgroundColor  = Colors.Transparent;
         }
+    }
+
+    private IntPtr WindowSubclassProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam, UIntPtr uIdSubclass, IntPtr dwRefData)
+    {
+        if (uMsg == NativeMethods.WM_GETMINMAXINFO && lParam != IntPtr.Zero)
+        {
+            var dpi   = NativeMethods.GetDpiForWindow(hWnd);
+            var scale = dpi > 0 ? dpi / 96.0 : 1.0;
+            var info  = Marshal.PtrToStructure<NativeMethods.MINMAXINFO>(lParam);
+            info.ptMinTrackSize.X = (int)Math.Ceiling(_minWidth * scale);
+            info.ptMinTrackSize.Y = (int)Math.Ceiling(_minHeight * scale);
+            Marshal.StructureToPtr(info, lParam, false);
+            return IntPtr.Zero;
+        }
+
+        return NativeMethods.DefSubclassProc(hWnd, uMsg, wParam, lParam);
     }
 
     /// <summary>
