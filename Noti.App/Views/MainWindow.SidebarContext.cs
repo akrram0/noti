@@ -83,9 +83,10 @@ public sealed partial class MainWindow
         var swatchRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 10,
+            Spacing = 6,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Padding = new Thickness(12, 10, 12, 10)
+            Padding = new Thickness(8, 8, 8, 8),
+            UseLayoutRounding = false
         };
 
         Application.Current.Resources.TryGetValue("ColorSwatchButtonStyle", out var swatchStyleObj);
@@ -99,12 +100,10 @@ public sealed partial class MainWindow
 
             var swatchBtn = new Button
             {
-                Width = 22,
-                Height = 22,
-                CornerRadius = new CornerRadius(11),
                 Background = new SolidColorBrush(color),
-                BorderBrush = new SolidColorBrush(ColorHelper.FromArgb(115, color.R, color.G, color.B)),
-                Foreground = new SolidColorBrush(checkColor)
+                BorderBrush = new SolidColorBrush(ColorHelper.FromArgb(140, color.R, color.G, color.B)),
+                Foreground = new SolidColorBrush(checkColor),
+                UseLayoutRounding = false
             };
             if (swatchStyle is not null)
                 swatchBtn.Style = swatchStyle;
@@ -114,10 +113,11 @@ public sealed partial class MainWindow
                 swatchBtn.Content = new FontIcon
                 {
                     Glyph = "\uE73E",
-                    FontSize = 11,
+                    FontSize = 10,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
-                    Foreground = new SolidColorBrush(checkColor)
+                    Foreground = new SolidColorBrush(checkColor),
+                    UseLayoutRounding = false
                 };
             }
 

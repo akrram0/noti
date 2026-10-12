@@ -505,25 +505,27 @@
                 </Setter>
             </Style>
 
-            <!-- 22px Pure Color Swatch Circle Button (Width=22, Height=22, CornerRadius=11, 1.15x scale + subtle outer accent ring on hover) -->
+            <!-- Concentric Color Swatch Circle Button (28x28 slot, identical 26x26 Ellipse bounds + 0.7692 GPU scale so ring and circle share the exact geometric center at any DPI) -->
             <Style x:Key="ColorSwatchButtonStyle" TargetType="Button">
-                <Setter Property="Width" Value="22" />
-                <Setter Property="Height" Value="22" />
-                <Setter Property="CornerRadius" Value="11" />
+                <Setter Property="Width" Value="28" />
+                <Setter Property="Height" Value="28" />
+                <Setter Property="CornerRadius" Value="14" />
                 <Setter Property="Padding" Value="0" />
                 <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
                 <Setter Property="UseSystemFocusVisuals" Value="False" />
-                <Setter Property="UseLayoutRounding" Value="True" />
+                <Setter Property="UseLayoutRounding" Value="False" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
                             <Grid
-                                Width="22"
-                                Height="22"
+                                Width="28"
+                                Height="28"
                                 Background="Transparent"
                                 RenderTransformOrigin="0.5,0.5"
-                                UseLayoutRounding="True">
+                                UseLayoutRounding="False">
                                 <Grid.RenderTransform>
                                     <ScaleTransform x:Name="SwatchScale" ScaleX="1" ScaleY="1" />
                                 </Grid.RenderTransform>
@@ -564,7 +566,7 @@
                                                 <DoubleAnimation
                                                     Storyboard.TargetName="SwatchScale"
                                                     Storyboard.TargetProperty="ScaleX"
-                                                    To="1.15"
+                                                    To="1.14"
                                                     Duration="0:0:0.15">
                                                     <DoubleAnimation.EasingFunction>
                                                         <BackEase EasingMode="EaseOut" Amplitude="0.45" />
@@ -573,7 +575,7 @@
                                                 <DoubleAnimation
                                                     Storyboard.TargetName="SwatchScale"
                                                     Storyboard.TargetProperty="ScaleY"
-                                                    To="1.15"
+                                                    To="1.14"
                                                     Duration="0:0:0.15">
                                                     <DoubleAnimation.EasingFunction>
                                                         <BackEase EasingMode="EaseOut" Amplitude="0.45" />
@@ -607,29 +609,39 @@
                                         </VisualState>
                                     </VisualStateGroup>
                                 </VisualStateManager.VisualStateGroups>
-                                <Border
+                                <Ellipse
                                     x:Name="SwatchCircle"
-                                    Width="22"
-                                    Height="22"
-                                    CornerRadius="11"
+                                    Width="26"
+                                    Height="26"
+                                    UseLayoutRounding="False"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
-                                    Background="{TemplateBinding Background}" />
-                                <Border
+                                    RenderTransformOrigin="0.5,0.5"
+                                    Fill="{TemplateBinding Background}">
+                                    <Ellipse.RenderTransform>
+                                        <ScaleTransform ScaleX="0.7692" ScaleY="0.7692" />
+                                    </Ellipse.RenderTransform>
+                                </Ellipse>
+                                <Ellipse
                                     x:Name="HoverRing"
                                     Width="26"
                                     Height="26"
-                                     Margin="-2"
-                                    CornerRadius="13"
+                                    UseLayoutRounding="False"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="1.5"
+                                    Fill="Transparent"
+                                    Stroke="{TemplateBinding BorderBrush}"
+                                    StrokeThickness="1.5"
                                     Opacity="0"
                                     IsHitTestVisible="False" />
                                 <ContentPresenter
+                                    Width="16"
+                                    Height="16"
+                                    UseLayoutRounding="False"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
+                                    HorizontalContentAlignment="Center"
+                                    VerticalContentAlignment="Center"
                                     Foreground="{TemplateBinding Foreground}"
                                     IsHitTestVisible="False" />
                             </Grid>

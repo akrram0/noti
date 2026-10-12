@@ -411,7 +411,7 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    public double SettingsSectionIndicatorOffsetX => (int)_currentSettingsSection * 100.0;
+    public double SettingsSectionIndicatorOffsetX => (int)_currentSettingsSection * 160.0;
     public Visibility AppearanceSettingsVisibility => _currentSettingsSection == SettingsSection.Appearance ? Visibility.Visible : Visibility.Collapsed;
     public Visibility ProfileSettingsVisibility => _currentSettingsSection == SettingsSection.Profile ? Visibility.Visible : Visibility.Collapsed;
     public Visibility VaultSettingsVisibility => _currentSettingsSection == SettingsSection.Vault ? Visibility.Visible : Visibility.Collapsed;
