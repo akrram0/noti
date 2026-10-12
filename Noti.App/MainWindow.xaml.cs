@@ -125,9 +125,9 @@ public sealed partial class MainWindow : Window
 
     private double TargetSidebarWidth => RootGrid.ActualWidth switch
     {
-        > 0 and < 640 => 196.0,
-        >= 640 and < 860 => 224.0,
-        _ => 272.0
+        > 0 and < 640 => 208.0,
+        >= 640 and < 860 => 236.0,
+        _ => 284.0
     };
 
     private void ApplyWindowBackdrop() =>
@@ -164,13 +164,11 @@ public sealed partial class MainWindow : Window
             {
                 SidebarContainer.Width = 0;
                 SidebarContainer.Opacity = 0;
-                SidebarDropShadow.Opacity = 0;
             }
             else
             {
                 SidebarContainer.Width = TargetSidebarWidth;
                 SidebarContainer.Opacity = 1;
-                SidebarDropShadow.Opacity = 1;
             }
         }
     }
@@ -1782,17 +1780,6 @@ public sealed partial class MainWindow : Window
         Storyboard.SetTarget(fadeAnim, SidebarContainer);
         Storyboard.SetTargetProperty(fadeAnim, "Opacity");
 
-        var shadowFadeAnim = new DoubleAnimation
-        {
-            From = open ? 0.0 : 1.0,
-            To = targetOpacity,
-            Duration = new Duration(TimeSpan.FromMilliseconds(170)),
-            EasingFunction = ease,
-            FillBehavior = FillBehavior.Stop
-        };
-        Storyboard.SetTarget(shadowFadeAnim, SidebarDropShadow);
-        Storyboard.SetTargetProperty(shadowFadeAnim, "Opacity");
-
         var iconAnim = new DoubleAnimation
         {
             To = targetIconX,
@@ -1805,12 +1792,10 @@ public sealed partial class MainWindow : Window
 
         SidebarContainer.Width = targetWidth;
         SidebarContainer.Opacity = targetOpacity;
-        SidebarDropShadow.Opacity = targetOpacity;
         SidebarIconTranslate.X = targetIconX;
 
         sb.Children.Add(widthAnim);
         sb.Children.Add(fadeAnim);
-        sb.Children.Add(shadowFadeAnim);
         sb.Children.Add(iconAnim);
         sb.Begin();
     }

@@ -37,9 +37,9 @@ Derived from the project's visual reference mockups and Apple/macOS dark-first d
 - **Glass Rim Border (`glass-border`)**: `rgba(255, 255, 255, 0.22)` (Dark) / `rgba(0, 0, 0, 0.14)` (Light)
 - **Toggle Track Fill (`toggle-track`)**: `rgba(255, 255, 255, 0.16)` (Dark) / `rgba(0, 0, 0, 0.10)` (Light)
 - **Toggle Thumb Fill (`toggle-thumb`)**: `rgba(255, 255, 255, 0.22)` (Dark) / `#FFFFFF` (Light)
-- **Sidebar Right-Edge Drop Shadow (`SidebarEdgeShadowBrush`, `16px` horizontal spread)**:
-  - **Dark**: `#42000000` (0.00) $\rightarrow$ `#2B000000` (0.18) $\rightarrow$ `#14000000` (0.45) $\rightarrow$ `#06000000` (0.75) $\rightarrow$ `#00000000` (1.00)
-  - **Light**: `#18000000` (0.00) $\rightarrow$ `#10000000` (0.18) $\rightarrow$ `#07000000` (0.45) $\rightarrow$ `#02000000` (0.75) $\rightarrow$ `#00000000` (1.00)
+- **Sidebar Floating Card Silhouette & Right-Edge Elevation Shadow (`CornerRadius="12"` concentric rings)**:
+  - **Dark**: Perimeter Rim `#1EFFFFFF`, Shadow Steps `#38000000` $\rightarrow$ `#24000000` $\rightarrow$ `#12000000` $\rightarrow$ `#06000000`
+  - **Light**: Perimeter Rim `#14000000`, Shadow Steps `#14000000` $\rightarrow$ `#0D000000` $\rightarrow$ `#07000000` $\rightarrow$ `#03000000`
 
 ---
 

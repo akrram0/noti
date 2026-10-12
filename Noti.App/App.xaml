@@ -30,13 +30,11 @@
                     <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#24FFFFFF" />
                     <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#14FFFFFF" />
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="#22FFFFFF" />
-                    <LinearGradientBrush x:Key="SidebarEdgeShadowBrush" StartPoint="0,0" EndPoint="1,0">
-                        <GradientStop Color="#42000000" Offset="0.00" />
-                        <GradientStop Color="#2B000000" Offset="0.18" />
-                        <GradientStop Color="#14000000" Offset="0.45" />
-                        <GradientStop Color="#06000000" Offset="0.75" />
-                        <GradientStop Color="#00000000" Offset="1.00" />
-                    </LinearGradientBrush>
+                    <SolidColorBrush x:Key="SidebarPerimeterRingBrush" Color="#1EFFFFFF" />
+                    <SolidColorBrush x:Key="SidebarShadowStep1Brush" Color="#38000000" />
+                    <SolidColorBrush x:Key="SidebarShadowStep2Brush" Color="#24000000" />
+                    <SolidColorBrush x:Key="SidebarShadowStep3Brush" Color="#12000000" />
+                    <SolidColorBrush x:Key="SidebarShadowStep4Brush" Color="#06000000" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#26FFFFFF" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#F0FFFFFF" />
                     <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
@@ -80,13 +78,11 @@
                     <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#24FFFFFF" />
                     <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#14FFFFFF" />
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="#22FFFFFF" />
-                    <LinearGradientBrush x:Key="SidebarEdgeShadowBrush" StartPoint="0,0" EndPoint="1,0">
-                        <GradientStop Color="#42000000" Offset="0.00" />
-                        <GradientStop Color="#2B000000" Offset="0.18" />
-                        <GradientStop Color="#14000000" Offset="0.45" />
-                        <GradientStop Color="#06000000" Offset="0.75" />
-                        <GradientStop Color="#00000000" Offset="1.00" />
-                    </LinearGradientBrush>
+                    <SolidColorBrush x:Key="SidebarPerimeterRingBrush" Color="#1EFFFFFF" />
+                    <SolidColorBrush x:Key="SidebarShadowStep1Brush" Color="#38000000" />
+                    <SolidColorBrush x:Key="SidebarShadowStep2Brush" Color="#24000000" />
+                    <SolidColorBrush x:Key="SidebarShadowStep3Brush" Color="#12000000" />
+                    <SolidColorBrush x:Key="SidebarShadowStep4Brush" Color="#06000000" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#26FFFFFF" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#F0FFFFFF" />
                     <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
@@ -130,13 +126,11 @@
                     <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#18000000" />
                     <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#22000000" />
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="#18000000" />
-                    <LinearGradientBrush x:Key="SidebarEdgeShadowBrush" StartPoint="0,0" EndPoint="1,0">
-                        <GradientStop Color="#18000000" Offset="0.00" />
-                        <GradientStop Color="#10000000" Offset="0.18" />
-                        <GradientStop Color="#07000000" Offset="0.45" />
-                        <GradientStop Color="#02000000" Offset="0.75" />
-                        <GradientStop Color="#00000000" Offset="1.00" />
-                    </LinearGradientBrush>
+                    <SolidColorBrush x:Key="SidebarPerimeterRingBrush" Color="#14000000" />
+                    <SolidColorBrush x:Key="SidebarShadowStep1Brush" Color="#14000000" />
+                    <SolidColorBrush x:Key="SidebarShadowStep2Brush" Color="#0D000000" />
+                    <SolidColorBrush x:Key="SidebarShadowStep3Brush" Color="#07000000" />
+                    <SolidColorBrush x:Key="SidebarShadowStep4Brush" Color="#03000000" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#22000000" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#FFFFFFFF" />
                     <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />

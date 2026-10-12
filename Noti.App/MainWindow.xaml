@@ -182,15 +182,54 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Frosted Glass Sidebar with Symmetrical 8px/4px Grid Metrics -->
+            <!-- Frosted Glass Sidebar with Symmetrical 8px/4px Grid Metrics & Rounded Silhouette Shadow -->
             <Grid
                 x:Name="SidebarContainer"
                 Grid.Column="0"
-                Width="272"
+                Width="284"
                 UseLayoutRounding="True"
                 Background="Transparent">
+
+                <!-- Concentric Rounded Elevation Shadow Rings (conform to CornerRadius="12" silhouette, visible at 0%–100% opacity) -->
+                <Border
+                    Margin="8,0.5,1,4"
+                    CornerRadius="21"
+                    Background="Transparent"
+                    BorderBrush="{ThemeResource SidebarShadowStep4Brush}"
+                    BorderThickness="0,0,3.5,0.5"
+                    IsHitTestVisible="False" />
+                <Border
+                    Margin="8,1,4.5,5"
+                    CornerRadius="18"
+                    Background="Transparent"
+                    BorderBrush="{ThemeResource SidebarShadowStep3Brush}"
+                    BorderThickness="0,0,3,1"
+                    IsHitTestVisible="False" />
+                <Border
+                    Margin="8,1.5,7.5,6"
+                    CornerRadius="15.5"
+                    Background="Transparent"
+                    BorderBrush="{ThemeResource SidebarShadowStep2Brush}"
+                    BorderThickness="0,0,2.5,1"
+                    IsHitTestVisible="False" />
+                <Border
+                    Margin="8,2,10,7"
+                    CornerRadius="13.5"
+                    Background="Transparent"
+                    BorderBrush="{ThemeResource SidebarShadowStep1Brush}"
+                    BorderThickness="0,0.5,2,1"
+                    IsHitTestVisible="False" />
+                <Border
+                    Margin="8,2,12,8"
+                    CornerRadius="12"
+                    Background="Transparent"
+                    BorderBrush="{ThemeResource SidebarPerimeterRingBrush}"
+                    BorderThickness="1"
+                    IsHitTestVisible="False" />
+
                 <Grid
-                    Margin="8,0,0,8"
+                    Margin="8,2,12,8"
+                    CornerRadius="12"
                     Background="Transparent">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -199,11 +238,10 @@
                         <RowDefinition Height="56" />
                     </Grid.RowDefinitions>
 
-                    <!-- Dynamic Sidebar Tint Layer (Borderless — separated from main content via right-edge drop shadow) -->
+                    <!-- Dynamic Sidebar Tint Layer with Symmetrical Rounded Corners -->
                     <Border
                         Grid.RowSpan="4"
-                        CornerRadius="0"
-                        Margin="-8,0,0,-8"
+                        CornerRadius="12"
                         IsHitTestVisible="False"
                         Background="{ThemeResource SidebarBackgroundBrush}"
                         BorderThickness="0"
@@ -583,16 +621,6 @@
 
             <!-- Right Column: Main Editor/Preview Canvas OR Full-Window Settings View -->
             <Grid Grid.Column="1" Background="Transparent">
-
-                <!-- Vertical Right-Edge Drop Shadow cast by Sidebar onto Main Content (independent of window opacity) -->
-                <Border
-                    x:Name="SidebarDropShadow"
-                    Width="16"
-                    HorizontalAlignment="Left"
-                    VerticalAlignment="Stretch"
-                    IsHitTestVisible="False"
-                    Canvas.ZIndex="10"
-                    Background="{ThemeResource SidebarEdgeShadowBrush}" />
 
                 <!-- 1. Main Writing & Markdown Preview Workspace -->
                 <Grid x:Name="MainWorkspaceGrid" AllowDrop="True" Background="Transparent">
