@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Input;
@@ -46,6 +48,13 @@ public sealed partial class MainWindow : Window
     private ulong _lastCanvasClickTimestamp;
     private DesktopAcrylicController? _acrylicController;
     private SystemBackdropConfiguration? _backdropConfig;
+    private Storyboard? _sidebarContextStoryboard;
+    private SubclassProc? _windowSubclassProc;
+    private bool _isInWindowSizeMove;
+    private long _lastMoveUpdateTimestamp;
+    private int _pendingMoveX;
+    private int _pendingMoveY;
+    private bool _hasPendingMovePosition;
 
     private static readonly SolidColorBrush TransparentBrush = new(Colors.Transparent);
     private static readonly SolidColorBrush AccentBrush = new(ColorHelper.FromArgb(255, 10, 132, 255));
@@ -84,7 +93,11 @@ public sealed partial class MainWindow : Window
 
         InitializeComponent();
         ConfigureWindowChrome();
-        Closed += (_, _) => DisposeAcrylicController();
+        Closed += (_, _) =>
+        {
+            RemoveWindowDragSubclass();
+            DisposeAcrylicController();
+        };
 
         _liveSyncTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
         _liveSyncTimer.Tick += (_, _) => FlushSyncLiveBlocksToViewModel();
@@ -95,6 +108,7 @@ public sealed partial class MainWindow : Window
             LiveCanvasRootGrid.MinHeight = Math.Max(0, LiveEditorScrollViewer.ActualHeight);
             ThemeIndicatorTranslate.X = ViewModel.ThemeIndicatorOffsetX;
             BackdropIndicatorTranslate.X = ViewModel.BackdropIndicatorOffsetX;
+            SettingsTabIndicatorTranslate.X = ViewModel.SettingsSectionIndicatorOffsetX;
             ModeIndicatorTranslate.X = ViewModel.ModeIndicatorOffsetX;
             UpdateTitleBarPassthrough();
             ApplyEditorTextBoxTheme();
@@ -120,8 +134,8 @@ public sealed partial class MainWindow : Window
         EditorPaneGrid.AddHandler(UIElement.RightTappedEvent, new RightTappedEventHandler(OnEditorPaneRightTapped), true);
         EditorTextBox.ContextRequested += OnEditorContextRequested;
         EditorTextBox.Paste += OnEditorTextBoxPaste;
-        RootGrid.AddHandler(UIElement.DragOverEvent, new DragEventHandler(OnRootGridDragOver), true);
-        RootGrid.AddHandler(UIElement.DropEvent, new DragEventHandler(OnRootGridDrop), true);
+        MainWorkspaceGrid.AddHandler(UIElement.DragOverEvent, new DragEventHandler(OnRootGridDragOver), true);
+        MainWorkspaceGrid.AddHandler(UIElement.DropEvent, new DragEventHandler(OnRootGridDrop), true);
         RootGrid.PreviewKeyDown += OnRootPreviewKeyDown;
         EditorTextBox.PreviewKeyDown += OnEditorPreviewKeyDown;
         EditorTextBox.TextChanged += OnEditorTextChanged;
@@ -150,7 +164,124 @@ public sealed partial class MainWindow : Window
             titleBar.ButtonBackgroundColor = Colors.Transparent;
             titleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
             titleBar.ButtonForegroundColor = Colors.Gray;
+            SetTitleBar(TopTitleBarGrid);
         }
+
+        InstallWindowDragSubclass();
+    }
+
+    private delegate nint SubclassProc(nint hWnd, uint uMsg, nint wParam, nint lParam, nuint uIdSubclass, nuint dwRefData);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WINDOWPOS
+    {
+        public nint hwnd;
+        public nint hwndInsertAfter;
+        public int x;
+        public int y;
+        public int cx;
+        public int cy;
+        public uint flags;
+    }
+
+    [DllImport("comctl32.dll")]
+    private static extern bool SetWindowSubclass(nint hWnd, SubclassProc pfnSubclass, nuint uIdSubclass, nuint dwRefData);
+
+    [DllImport("comctl32.dll")]
+    private static extern bool RemoveWindowSubclass(nint hWnd, SubclassProc pfnSubclass, nuint uIdSubclass);
+
+    [DllImport("comctl32.dll")]
+    private static extern nint DefSubclassProc(nint hWnd, uint uMsg, nint wParam, nint lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    private void InstallWindowDragSubclass()
+    {
+        try
+        {
+            var hwnd = WindowNative.GetWindowHandle(this);
+            if (hwnd == 0)
+                return;
+
+            _windowSubclassProc = WindowDragSubclassWndProc;
+            SetWindowSubclass(hwnd, _windowSubclassProc, 1, 0);
+        }
+        catch
+        {
+        }
+    }
+
+    private void RemoveWindowDragSubclass()
+    {
+        try
+        {
+            if (_windowSubclassProc is null)
+                return;
+
+            var hwnd = WindowNative.GetWindowHandle(this);
+            if (hwnd != 0)
+                RemoveWindowSubclass(hwnd, _windowSubclassProc, 1);
+            _windowSubclassProc = null;
+        }
+        catch
+        {
+        }
+    }
+
+    // shortcut: 120Hz move throttle during Blur backdrop drag prevents high-polling mouse DWM blur queue lag, remove if WinUI DesktopAcrylicController fixes DWM sync
+    private nint WindowDragSubclassWndProc(nint hWnd, uint uMsg, nint wParam, nint lParam, nuint uIdSubclass, nuint dwRefData)
+    {
+        const uint WM_WINDOWPOSCHANGING = 0x0046;
+        const uint WM_ENTERSIZEMOVE = 0x0231;
+        const uint WM_EXITSIZEMOVE = 0x0232;
+        const uint SWP_NOSIZE = 0x0001;
+        const uint SWP_NOMOVE = 0x0002;
+        const uint SWP_NOZORDER = 0x0004;
+        const uint SWP_NOACTIVATE = 0x0010;
+
+        if (uMsg == WM_ENTERSIZEMOVE)
+        {
+            _isInWindowSizeMove = true;
+            _hasPendingMovePosition = false;
+            _lastMoveUpdateTimestamp = 0;
+        }
+        else if (uMsg == WM_EXITSIZEMOVE)
+        {
+            _isInWindowSizeMove = false;
+            if (_hasPendingMovePosition)
+            {
+                _hasPendingMovePosition = false;
+                SetWindowPos(hWnd, 0, _pendingMoveX, _pendingMoveY, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+        }
+        else if (uMsg == WM_WINDOWPOSCHANGING &&
+                 _isInWindowSizeMove &&
+                 ViewModel.CurrentBackdropMode == BackdropMode.Blur &&
+                 lParam != 0)
+        {
+            var pos = Marshal.PtrToStructure<WINDOWPOS>(lParam);
+            if ((pos.flags & SWP_NOMOVE) == 0 && (pos.flags & SWP_NOSIZE) != 0)
+            {
+                var now = Stopwatch.GetTimestamp();
+                var minInterval = Stopwatch.Frequency / 120; // ~8.3ms (120Hz)
+                if (_lastMoveUpdateTimestamp != 0 && (now - _lastMoveUpdateTimestamp) < minInterval)
+                {
+                    _pendingMoveX = pos.x;
+                    _pendingMoveY = pos.y;
+                    _hasPendingMovePosition = true;
+                    pos.flags |= SWP_NOMOVE;
+                    Marshal.StructureToPtr(pos, lParam, false);
+                }
+                else
+                {
+                    _lastMoveUpdateTimestamp = now;
+                    _hasPendingMovePosition = false;
+                }
+            }
+        }
+
+        return DefSubclassProc(hWnd, uMsg, wParam, lParam);
     }
 
     private void ApplyWindowBackdrop()
@@ -264,6 +395,12 @@ public sealed partial class MainWindow : Window
     {
         if (e.Key == VirtualKey.Escape)
         {
+            if (SidebarContextOverlay.Visibility == Visibility.Visible)
+            {
+                HideSidebarContextPopup();
+                e.Handled = true;
+                return;
+            }
             if (SlashMenuPopupBorder.Visibility == Visibility.Visible)
             {
                 HideSlashMenuPopup();
@@ -3257,6 +3394,7 @@ public sealed partial class MainWindow : Window
         {
             case nameof(MainViewModel.SelectedNote):
                 _liveSyncTimer.Stop();
+                HideSidebarContextPopup();
                 HideMentionPopup();
                 HideSlashMenuPopup();
                 SelectionToolbarBorder.Visibility = Visibility.Collapsed;
@@ -3287,6 +3425,7 @@ public sealed partial class MainWindow : Window
             case nameof(MainViewModel.CurrentViewMode):
                 if (_liveSyncTimer.IsEnabled)
                     FlushSyncLiveBlocksToViewModel();
+                HideSidebarContextPopup();
                 HideMentionPopup();
                 HideSlashMenuPopup();
                 SelectionToolbarBorder.Visibility = Visibility.Collapsed;
@@ -3298,13 +3437,19 @@ public sealed partial class MainWindow : Window
                 break;
 
             case nameof(MainViewModel.IsSidebarOpen):
+                HideSidebarContextPopup();
                 AnimateSidebar(ViewModel.IsSidebarOpen);
                 break;
 
             case nameof(MainViewModel.IsSettingsOpen):
+                HideSidebarContextPopup();
                 if (_liveSyncTimer.IsEnabled)
                     FlushSyncLiveBlocksToViewModel();
                 AnimateSettingsModal(ViewModel.IsSettingsOpen);
+                break;
+
+            case nameof(MainViewModel.CurrentSettingsSection):
+                AnimateSettingsTabPill();
                 break;
 
             case nameof(MainViewModel.CurrentThemeMode):
@@ -3456,6 +3601,28 @@ public sealed partial class MainWindow : Window
         sb.Begin();
     }
 
+    private void AnimateSettingsTabPill()
+    {
+        var sb = new Storyboard();
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var targetX = ViewModel.SettingsSectionIndicatorOffsetX;
+
+        var pillSlide = new DoubleAnimation
+        {
+            From = SettingsTabIndicatorTranslate.X,
+            To = targetX,
+            Duration = new Duration(TimeSpan.FromMilliseconds(190)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(pillSlide, SettingsTabIndicatorTranslate);
+        Storyboard.SetTargetProperty(pillSlide, "X");
+        SettingsTabIndicatorTranslate.X = targetX;
+
+        sb.Children.Add(pillSlide);
+        sb.Begin();
+    }
+
     private void AnimateSettingsModal(bool open)
     {
         var sb = new Storyboard();
@@ -3467,6 +3634,7 @@ public sealed partial class MainWindow : Window
         {
             ThemeIndicatorTranslate.X = ViewModel.ThemeIndicatorOffsetX;
             BackdropIndicatorTranslate.X = ViewModel.BackdropIndicatorOffsetX;
+            SettingsTabIndicatorTranslate.X = ViewModel.SettingsSectionIndicatorOffsetX;
             MainWorkspaceGrid.Visibility = Visibility.Collapsed;
             SettingsOverlayGrid.Visibility = Visibility.Visible;
         }
@@ -3709,6 +3877,7 @@ public sealed partial class MainWindow : Window
 
     private void OnSidebarItemClick(object sender, ItemClickEventArgs e)
     {
+        HideSidebarContextPopup();
         if (e.ClickedItem is not NoteItemViewModel item)
             return;
 
@@ -3726,66 +3895,90 @@ public sealed partial class MainWindow : Window
 
     private void OnSidebarRowPointerEntered(object sender, PointerRoutedEventArgs e)
     {
-        if (sender is Grid { Children.Count: > 0 } grid)
+        if (sender is Grid { Children.Count: > 0 } grid && grid.Children[0] is Border hoverBorder)
         {
-            if (grid.Children[0] is Border hoverBorder)
-            {
-                var isAlreadySelected = grid.DataContext is NoteItemViewModel { IsFolder: false, IsSelected: true };
-                hoverBorder.Opacity = isAlreadySelected ? 0.0 : 1.0;
-            }
-
-            if (grid.FindName("FolderColorBtn") is Button folderColorBtn)
-                folderColorBtn.Opacity = 1.0;
-            if (grid.FindName("NoteColorBtn") is Button noteColorBtn)
-                noteColorBtn.Opacity = 1.0;
+            var isAlreadySelected = grid.DataContext is NoteItemViewModel { IsFolder: false, IsSelected: true };
+            hoverBorder.Opacity = isAlreadySelected ? 0.0 : 1.0;
         }
     }
 
     private void OnSidebarRowPointerExited(object sender, PointerRoutedEventArgs e)
     {
-        if (sender is Grid { Children.Count: > 0 } grid)
-        {
-            if (grid.Children[0] is Border hoverBorder)
-                hoverBorder.Opacity = 0.0;
-
-            var restingOpacity = (grid.DataContext as NoteItemViewModel)?.ColorDotRestingOpacity ?? 0.0;
-            if (grid.FindName("FolderColorBtn") is Button folderColorBtn)
-                folderColorBtn.Opacity = restingOpacity;
-            if (grid.FindName("NoteColorBtn") is Button noteColorBtn)
-                noteColorBtn.Opacity = restingOpacity;
-        }
+        if (sender is Grid { Children.Count: > 0 } grid && grid.Children[0] is Border hoverBorder)
+            hoverBorder.Opacity = 0.0;
     }
 
-    private void OnCreateNoteInFolderClick(object sender, RoutedEventArgs e)
+    private void OnSidebarRowRightTapped(object sender, RightTappedRoutedEventArgs e)
     {
-        if (sender is Button { Tag: string folderPath })
-            _ = ViewModel.CreateNoteInFolderAsync(folderPath);
-    }
-
-    private void OnCreateSubfolderInFolderClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button { Tag: string folderPath } && !string.IsNullOrWhiteSpace(folderPath))
-        {
-            ViewModel.StartNewSubfolder(folderPath);
-            NewFolderTextBox.Focus(FocusState.Programmatic);
-        }
-    }
-
-    private void OnItemColorDotClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button { Tag: NoteItemViewModel item } anchorButton)
+        if (sender is not FrameworkElement { DataContext: NoteItemViewModel item })
             return;
 
-        var flyout = new Flyout
-        {
-            Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft
-        };
+        e.Handled = true;
+        ShowSidebarContextPopup(item, e.GetPosition(RootGrid));
+    }
 
-        var row = new StackPanel
+    private void OnSidebarContextBackdropPressed(object sender, PointerRoutedEventArgs e)
+    {
+        e.Handled = true;
+        HideSidebarContextPopup();
+    }
+
+    private void OnSidebarContextBackdropRightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        HideSidebarContextPopup();
+    }
+
+    private void OnSidebarContextCardPointerPressed(object sender, PointerRoutedEventArgs e) =>
+        e.Handled = true;
+
+    private void HideSidebarContextPopup()
+    {
+        _sidebarContextStoryboard?.Stop();
+        if (SidebarContextOverlay.Visibility != Visibility.Collapsed)
+            SidebarContextOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private void ShowSidebarContextPopup(NoteItemViewModel item, Point cursorInRoot)
+    {
+        EnsureLiveRenderResources();
+        SidebarContextContentPanel.Children.Clear();
+
+        var headerRow = new Grid
+        {
+            Padding = new Thickness(10, 6, 10, 4),
+            ColumnSpacing = 8
+        };
+        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var headerIcon = new FontIcon
+        {
+            Glyph = item.IsFolder ? "\uE8B7" : "\uE8A5",
+            FontSize = 12,
+            Foreground = item.HasCustomColor ? item.CustomColorBrush : _cachedSecondaryBrush,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var headerTitle = new TextBlock
+        {
+            Text = item.Title,
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = _cachedPrimaryBrush,
+            MaxLines = 1,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(headerTitle, 1);
+        headerRow.Children.Add(headerIcon);
+        headerRow.Children.Add(headerTitle);
+        SidebarContextContentPanel.Children.Add(headerRow);
+
+        var swatchRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 6,
-            Padding = new Thickness(4, 2, 4, 2)
+            Padding = new Thickness(10, 4, 10, 6)
         };
 
         foreach (var (name, hex) in PaletteColors)
@@ -3795,10 +3988,10 @@ public sealed partial class MainWindow : Window
 
             var swatchBtn = new Button
             {
-                Width = 22,
-                Height = 22,
+                Width = 20,
+                Height = 20,
                 Padding = new Thickness(0),
-                CornerRadius = new CornerRadius(11),
+                CornerRadius = new CornerRadius(10),
                 Background = new SolidColorBrush(color),
                 BorderThickness = new Thickness(isCurrent ? 2 : 0),
                 BorderBrush = new SolidColorBrush(Colors.White)
@@ -3809,49 +4002,287 @@ public sealed partial class MainWindow : Window
             swatchBtn.Click += (_, _) =>
             {
                 ViewModel.SetItemColor(item, capturedHex);
-                flyout.Hide();
+                HideSidebarContextPopup();
             };
 
-            row.Children.Add(swatchBtn);
+            swatchRow.Children.Add(swatchBtn);
         }
 
         if (item.HasCustomColor)
         {
             var clearBtn = new Button
             {
-                Width = 22,
-                Height = 22,
+                Width = 20,
+                Height = 20,
                 Padding = new Thickness(0),
-                CornerRadius = new CornerRadius(11),
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(40, 142, 142, 147)),
+                CornerRadius = new CornerRadius(10),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(44, 142, 142, 147)),
                 BorderThickness = new Thickness(0),
                 Content = new FontIcon
                 {
                     Glyph = "\uE711",
-                    FontSize = 9
+                    FontSize = 8,
+                    Foreground = _cachedPrimaryBrush
                 }
             };
             ToolTipService.SetToolTip(clearBtn, "Reset color");
             clearBtn.Click += (_, _) =>
             {
                 ViewModel.SetItemColor(item, null);
-                flyout.Hide();
+                HideSidebarContextPopup();
             };
-            row.Children.Add(clearBtn);
+            swatchRow.Children.Add(clearBtn);
         }
 
-        flyout.Content = row;
-        flyout.ShowAt(anchorButton);
+        SidebarContextContentPanel.Children.Add(swatchRow);
+        SidebarContextContentPanel.Children.Add(CreateSidebarContextDivider());
+
+        if (item.IsFolder)
+        {
+            SidebarContextContentPanel.Children.Add(CreateSidebarContextActionButton(
+                "\uE710",
+                "New note in folder",
+                null,
+                isDestructive: false,
+                () =>
+                {
+                    HideSidebarContextPopup();
+                    _ = ViewModel.CreateNoteInFolderAsync(item.FolderPath);
+                }));
+
+            SidebarContextContentPanel.Children.Add(CreateSidebarContextActionButton(
+                "\uE8F4",
+                "New subfolder",
+                null,
+                isDestructive: false,
+                () =>
+                {
+                    HideSidebarContextPopup();
+                    if (!string.IsNullOrWhiteSpace(item.FolderPath))
+                    {
+                        ViewModel.StartNewSubfolder(item.FolderPath);
+                        NewFolderTextBox.Focus(FocusState.Programmatic);
+                    }
+                }));
+
+            SidebarContextContentPanel.Children.Add(CreateSidebarContextActionButton(
+                item.IsFolderExpanded ? "\uE70D" : "\uE76C",
+                item.IsFolderExpanded ? "Collapse folder" : "Expand folder",
+                null,
+                isDestructive: false,
+                () =>
+                {
+                    HideSidebarContextPopup();
+                    ViewModel.ToggleFolderExpansion(item.FolderPath);
+                }));
+
+            SidebarContextContentPanel.Children.Add(CreateSidebarContextDivider());
+
+            SidebarContextContentPanel.Children.Add(CreateSidebarContextActionButton(
+                "\uE74D",
+                "Delete folder",
+                null,
+                isDestructive: true,
+                () =>
+                {
+                    HideSidebarContextPopup();
+                    if (!string.IsNullOrWhiteSpace(item.FolderPath))
+                    {
+                        _pendingDeleteFolderPath = item.FolderPath;
+                        DeleteFolderConfirmTitle.Text = $"Delete \"{item.FolderPath}\"?";
+                        ShowDeleteFolderOverlay(open: true);
+                    }
+                }));
+        }
+        else
+        {
+            SidebarContextContentPanel.Children.Add(CreateSidebarContextActionButton(
+                "\uE718",
+                item.IsPinned ? "Unpin from top" : "Pin to top",
+                null,
+                isDestructive: false,
+                () =>
+                {
+                    HideSidebarContextPopup();
+                    ViewModel.TogglePinNote(item);
+                }));
+
+            SidebarContextContentPanel.Children.Add(CreateSidebarContextActionButton(
+                "\uEDE1",
+                "Export Markdown (.md)",
+                "Ctrl+Shift+S",
+                isDestructive: false,
+                () =>
+                {
+                    HideSidebarContextPopup();
+                    if (_liveSyncTimer.IsEnabled)
+                        FlushSyncLiveBlocksToViewModel();
+                    ViewModel.SelectedNote = item;
+                    _ = PickAndExportMarkdownAsync();
+                }));
+
+            SidebarContextContentPanel.Children.Add(CreateSidebarContextDivider());
+
+            SidebarContextContentPanel.Children.Add(CreateSidebarContextActionButton(
+                "\uE74D",
+                "Delete note",
+                "Ctrl+Del",
+                isDestructive: true,
+                () =>
+                {
+                    HideSidebarContextPopup();
+                    _ = ViewModel.DeleteNoteAsync(item);
+                }));
+        }
+
+        var maxW = Math.Max(320.0, RootGrid.ActualWidth);
+        var maxH = Math.Max(320.0, RootGrid.ActualHeight);
+        var clampedLeft = Math.Clamp(cursorInRoot.X, 12.0, Math.Max(12.0, maxW - 236.0));
+        var clampedTop = Math.Clamp(cursorInRoot.Y, 44.0, Math.Max(44.0, maxH - 240.0));
+        SidebarContextPopupBorder.Margin = new Thickness(clampedLeft, clampedTop, 0, 0);
+
+        SidebarContextOverlay.Visibility = Visibility.Visible;
+
+        _sidebarContextStoryboard?.Stop();
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var sb = new Storyboard();
+
+        var fade = new DoubleAnimation
+        {
+            From = 0.0,
+            To = 1.0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(140)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(fade, SidebarContextPopupBorder);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+
+        var scaleX = new DoubleAnimation
+        {
+            From = 0.94,
+            To = 1.0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(155)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(scaleX, SidebarContextPopupScale);
+        Storyboard.SetTargetProperty(scaleX, "ScaleX");
+
+        var scaleY = new DoubleAnimation
+        {
+            From = 0.94,
+            To = 1.0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(155)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(scaleY, SidebarContextPopupScale);
+        Storyboard.SetTargetProperty(scaleY, "ScaleY");
+
+        var slideY = new DoubleAnimation
+        {
+            From = -5.0,
+            To = 0.0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(155)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(slideY, SidebarContextPopupTranslate);
+        Storyboard.SetTargetProperty(slideY, "Y");
+
+        SidebarContextPopupBorder.Opacity = 1.0;
+        SidebarContextPopupScale.ScaleX = 1.0;
+        SidebarContextPopupScale.ScaleY = 1.0;
+        SidebarContextPopupTranslate.Y = 0.0;
+
+        sb.Children.Add(fade);
+        sb.Children.Add(scaleX);
+        sb.Children.Add(scaleY);
+        sb.Children.Add(slideY);
+
+        _sidebarContextStoryboard = sb;
+        sb.Begin();
     }
 
-    private void OnDeleteFolderClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button { Tag: string folderPath } || string.IsNullOrWhiteSpace(folderPath))
-            return;
+    private Border CreateSidebarContextDivider() =>
+        new()
+        {
+            Height = 1,
+            Margin = new Thickness(6, 3, 6, 3),
+            Background = _cachedBorderBrush
+        };
 
-        _pendingDeleteFolderPath = folderPath;
-        DeleteFolderConfirmTitle.Text = $"Delete \"{folderPath}\"?";
-        ShowDeleteFolderOverlay(open: true);
+    private Button CreateSidebarContextActionButton(
+        string glyph,
+        string label,
+        string? shortcut,
+        bool isDestructive,
+        Action onClick)
+    {
+        var fgBrush = isDestructive
+            ? new SolidColorBrush(ColorHelper.FromArgb(255, 255, 69, 58))
+            : _cachedPrimaryBrush;
+
+        var rowGrid = new Grid
+        {
+            ColumnSpacing = 10
+        };
+        rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
+        rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var icon = new FontIcon
+        {
+            Glyph = glyph,
+            FontSize = 12,
+            Foreground = isDestructive ? fgBrush : _cachedSecondaryBrush,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var titleBlock = new TextBlock
+        {
+            Text = label,
+            FontSize = 12.5,
+            Foreground = fgBrush,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(titleBlock, 1);
+
+        rowGrid.Children.Add(icon);
+        rowGrid.Children.Add(titleBlock);
+
+        if (!string.IsNullOrWhiteSpace(shortcut))
+        {
+            var shortcutBlock = new TextBlock
+            {
+                Text = shortcut,
+                FontSize = 10.5,
+                FontFamily = MonoFontFamily,
+                Foreground = _cachedSecondaryBrush,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(shortcutBlock, 2);
+            rowGrid.Children.Add(shortcutBlock);
+        }
+
+        var btn = new Button
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Height = 30,
+            Padding = new Thickness(10, 0, 10, 0),
+            CornerRadius = new CornerRadius(7),
+            Background = TransparentBrush,
+            BorderThickness = new Thickness(0),
+            Content = rowGrid
+        };
+
+        if (Application.Current.Resources.TryGetValue("IconGhostButtonStyle", out var styleObj) && styleObj is Style ghostStyle)
+            btn.Style = ghostStyle;
+
+        btn.Click += (_, _) => onClick();
+        return btn;
     }
 
     private void OnCancelDeleteFolderClick(object sender, RoutedEventArgs e)
@@ -3900,18 +4331,6 @@ public sealed partial class MainWindow : Window
         }
 
         sb.Begin();
-    }
-
-    private void OnTogglePinNoteClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button { Tag: NoteItemViewModel item })
-            ViewModel.TogglePinNote(item);
-    }
-
-    private void OnDeleteNoteItemClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button { Tag: NoteItemViewModel item })
-            _ = ViewModel.DeleteNoteAsync(item);
     }
 
     private void OnPickUserAvatarClick(object sender, RoutedEventArgs e) =>

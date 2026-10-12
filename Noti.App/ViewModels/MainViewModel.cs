@@ -30,6 +30,14 @@ public enum BackdropMode
     Mica = 1
 }
 
+public enum SettingsSection
+{
+    Appearance = 0,
+    Profile = 1,
+    Vault = 2,
+    Shortcuts = 3
+}
+
 public sealed class CommandPaletteItem : ObservableObject
 {
     private bool _isSelected;
@@ -89,6 +97,7 @@ public sealed class MainViewModel : ObservableObject
     private string _saveStatusText = "Saved";
     private bool _isSidebarOpen = true;
     private bool _isSettingsOpen;
+    private SettingsSection _currentSettingsSection = SettingsSection.Appearance;
     private bool _isCreatingFolder;
     private string _newFolderParentPath = string.Empty;
     private string _newFolderName = string.Empty;
@@ -168,7 +177,17 @@ public sealed class MainViewModel : ObservableObject
         });
         ToggleSidebarCommand = new RelayCommand(() => IsSidebarOpen = !IsSidebarOpen);
         ToggleSettingsCommand = new RelayCommand(() => IsSettingsOpen = !IsSettingsOpen);
+        OpenProfileSettingsCommand = new RelayCommand(() =>
+        {
+            CurrentSettingsSection = SettingsSection.Profile;
+            IsSettingsOpen = true;
+        });
         CloseSettingsCommand = new RelayCommand(() => IsSettingsOpen = false);
+
+        SetAppearanceSettingsCommand = new RelayCommand(() => CurrentSettingsSection = SettingsSection.Appearance);
+        SetProfileSettingsCommand = new RelayCommand(() => CurrentSettingsSection = SettingsSection.Profile);
+        SetVaultSettingsCommand = new RelayCommand(() => CurrentSettingsSection = SettingsSection.Vault);
+        SetShortcutsSettingsCommand = new RelayCommand(() => CurrentSettingsSection = SettingsSection.Shortcuts);
 
         SetSystemThemeCommand = new RelayCommand(() => CurrentThemeMode = ThemeMode.System);
         SetDarkThemeCommand = new RelayCommand(() => CurrentThemeMode = ThemeMode.Dark);
@@ -216,7 +235,12 @@ public sealed class MainViewModel : ObservableObject
     public IRelayCommand CancelNewFolderCommand { get; }
     public IRelayCommand ToggleSidebarCommand { get; }
     public IRelayCommand ToggleSettingsCommand { get; }
+    public IRelayCommand OpenProfileSettingsCommand { get; }
     public IRelayCommand CloseSettingsCommand { get; }
+    public IRelayCommand SetAppearanceSettingsCommand { get; }
+    public IRelayCommand SetProfileSettingsCommand { get; }
+    public IRelayCommand SetVaultSettingsCommand { get; }
+    public IRelayCommand SetShortcutsSettingsCommand { get; }
     public IRelayCommand SetSystemThemeCommand { get; }
     public IRelayCommand SetDarkThemeCommand { get; }
     public IRelayCommand SetLightThemeCommand { get; }
@@ -432,6 +456,28 @@ public sealed class MainViewModel : ObservableObject
         get => _isSettingsOpen;
         set => SetProperty(ref _isSettingsOpen, value);
     }
+
+    public SettingsSection CurrentSettingsSection
+    {
+        get => _currentSettingsSection;
+        set
+        {
+            if (SetProperty(ref _currentSettingsSection, value))
+            {
+                OnPropertyChanged(nameof(SettingsSectionIndicatorOffsetX));
+                OnPropertyChanged(nameof(AppearanceSettingsVisibility));
+                OnPropertyChanged(nameof(ProfileSettingsVisibility));
+                OnPropertyChanged(nameof(VaultSettingsVisibility));
+                OnPropertyChanged(nameof(ShortcutsSettingsVisibility));
+            }
+        }
+    }
+
+    public double SettingsSectionIndicatorOffsetX => (int)_currentSettingsSection * 100.0;
+    public Visibility AppearanceSettingsVisibility => _currentSettingsSection == SettingsSection.Appearance ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ProfileSettingsVisibility => _currentSettingsSection == SettingsSection.Profile ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility VaultSettingsVisibility => _currentSettingsSection == SettingsSection.Vault ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ShortcutsSettingsVisibility => _currentSettingsSection == SettingsSection.Shortcuts ? Visibility.Visible : Visibility.Collapsed;
 
     public ThemeMode CurrentThemeMode
     {

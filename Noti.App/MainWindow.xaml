@@ -8,7 +8,6 @@
     <Grid
         x:Name="RootGrid"
         UseLayoutRounding="True"
-        AllowDrop="True"
         PointerWheelChanged="OnRootPointerWheelChanged"
         Background="Transparent"
         RequestedTheme="{x:Bind ViewModel.CurrentElementTheme, Mode=OneWay}">
@@ -26,7 +25,7 @@
             Opacity="{x:Bind ViewModel.SurfaceOpacity, Mode=OneWay}" />
 
         <!-- Borderless Top Title Bar -->
-        <Grid Grid.Row="0" Background="Transparent">
+        <Grid x:Name="TopTitleBarGrid" Grid.Row="0" Background="Transparent">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -39,6 +38,7 @@
                 Margin="14,0,0,0"
                 Orientation="Horizontal"
                 Spacing="10"
+                HorizontalAlignment="Left"
                 VerticalAlignment="Center">
                 <Button
                     x:Name="SidebarToggleButton"
@@ -72,12 +72,14 @@
                     Text="Noti"
                     FontSize="14"
                     FontWeight="SemiBold"
+                    IsHitTestVisible="False"
                     Foreground="{ThemeResource TextPrimaryBrush}"
                     VerticalAlignment="Center" />
 
                 <Border
                     Padding="8,3"
                     CornerRadius="8"
+                    IsHitTestVisible="False"
                     Background="{ThemeResource InputBackgroundBrush}"
                     BorderThickness="0"
                     VerticalAlignment="Center">
@@ -319,6 +321,7 @@
                             <Grid
                                 Margin="{x:Bind IndentMargin, Mode=OneWay}"
                                 Background="Transparent"
+                                RightTapped="OnSidebarRowRightTapped"
                                 PointerEntered="OnSidebarRowPointerEntered"
                                 PointerExited="OnSidebarRowPointerExited">
                                 <Border
@@ -337,7 +340,7 @@
                                     Background="{ThemeResource SubtleDividerBrush}"
                                     Visibility="{x:Bind TreeGuideVisibility, Mode=OneWay}" />
 
-                                <!-- Folder Row with Open/Closed Icon + Color Picker + Add Note + Add Subfolder + Delete Folder -->
+                                <!-- Folder Row (Right-click for color, new note, new subfolder, delete) -->
                                 <Border
                                     Visibility="{x:Bind FolderVisibility, Mode=OneWay}"
                                     Padding="10,7"
@@ -348,10 +351,6 @@
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
 
@@ -389,132 +388,41 @@
                                             Grid.Column="3"
                                             Text="{x:Bind FolderCountText, Mode=OneWay}"
                                             FontSize="11"
-                                            Margin="6,0,4,0"
+                                            Margin="6,0,2,0"
                                             Foreground="{ThemeResource TextSecondaryBrush}"
                                             VerticalAlignment="Center" />
-
-                                        <Button
-                                            x:Name="FolderColorBtn"
-                                            Grid.Column="4"
-                                            Style="{StaticResource SubtleIconButtonStyle}"
-                                            Tag="{x:Bind}"
-                                            Opacity="{x:Bind ColorDotRestingOpacity, Mode=OneWay}"
-                                            Click="OnItemColorDotClick"
-                                            ToolTipService.ToolTip="Choose folder color">
-                                            <Ellipse
-                                                Width="8"
-                                                Height="8"
-                                                Fill="{x:Bind AccentColorBrush, Mode=OneWay}" />
-                                        </Button>
-
-                                        <Button
-                                            Grid.Column="5"
-                                            Style="{StaticResource SubtleIconButtonStyle}"
-                                            Tag="{x:Bind FolderPath, Mode=OneWay}"
-                                            Click="OnCreateNoteInFolderClick"
-                                            ToolTipService.ToolTip="New note in folder">
-                                            <FontIcon Glyph="&#xE710;" FontSize="10" />
-                                        </Button>
-
-                                        <Button
-                                            Grid.Column="6"
-                                            Style="{StaticResource SubtleIconButtonStyle}"
-                                            Tag="{x:Bind FolderPath, Mode=OneWay}"
-                                            Click="OnCreateSubfolderInFolderClick"
-                                            ToolTipService.ToolTip="New subfolder inside this folder">
-                                            <FontIcon Glyph="&#xE8F4;" FontSize="10" />
-                                        </Button>
-
-                                        <Button
-                                            Grid.Column="7"
-                                            Style="{StaticResource SubtleIconButtonStyle}"
-                                            Tag="{x:Bind FolderPath, Mode=OneWay}"
-                                            Opacity="0.65"
-                                            Click="OnDeleteFolderClick"
-                                            ToolTipService.ToolTip="Delete folder and its notes">
-                                            <FontIcon Glyph="&#xE74D;" FontSize="10" />
-                                        </Button>
                                     </Grid>
                                 </Border>
 
-                                <!-- Note Card Row -->
+                                <!-- Note Card Row (Right-click for color, pin, export, delete) -->
                                 <Grid Visibility="{x:Bind NoteVisibility, Mode=OneWay}">
                                     <Border
                                         Background="{ThemeResource SurfaceActiveBrush}"
                                         CornerRadius="12"
                                         Opacity="{x:Bind SelectionOpacity, Mode=OneWay}" />
-                                    <Grid Padding="12,9">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-
-                                        <StackPanel Grid.Column="0" Spacing="3">
-                                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <Ellipse
-                                                    Width="7"
-                                                    Height="7"
-                                                    Fill="{x:Bind AccentColorBrush, Mode=OneWay}"
-                                                    Visibility="{x:Bind ColorDotVisibility, Mode=OneWay}"
-                                                    VerticalAlignment="Center" />
-                                                <FontIcon
-                                                    Glyph="&#xE840;"
-                                                    FontSize="10"
-                                                    Foreground="{ThemeResource TextPrimaryBrush}"
-                                                    Visibility="{x:Bind PinBadgeVisibility, Mode=OneWay}"
-                                                    VerticalAlignment="Center" />
-                                                <TextBlock
-                                                    Text="{x:Bind Title, Mode=OneWay}"
-                                                    FontSize="13"
-                                                    FontWeight="SemiBold"
-                                                    Foreground="{ThemeResource TextPrimaryBrush}"
-                                                    MaxLines="1"
-                                                    TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                            <TextBlock
-                                                Text="{x:Bind Snippet, Mode=OneWay}"
-                                                FontSize="12"
+                                    <StackPanel Padding="12,9" Spacing="3">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <FontIcon
+                                                Glyph="&#xE840;"
+                                                FontSize="10"
                                                 Foreground="{ThemeResource TextSecondaryBrush}"
+                                                Visibility="{x:Bind PinBadgeVisibility, Mode=OneWay}"
+                                                VerticalAlignment="Center" />
+                                            <TextBlock
+                                                Text="{x:Bind Title, Mode=OneWay}"
+                                                FontSize="13"
+                                                FontWeight="SemiBold"
+                                                Foreground="{ThemeResource TextPrimaryBrush}"
                                                 MaxLines="1"
                                                 TextTrimming="CharacterEllipsis" />
                                         </StackPanel>
-
-                                        <StackPanel
-                                            Grid.Column="1"
-                                            Orientation="Horizontal"
-                                            Spacing="2"
-                                            VerticalAlignment="Center"
-                                            Margin="4,0,0,0">
-                                            <Button
-                                                x:Name="NoteColorBtn"
-                                                Style="{StaticResource SubtleIconButtonStyle}"
-                                                Tag="{x:Bind}"
-                                                Opacity="{x:Bind ColorDotRestingOpacity, Mode=OneWay}"
-                                                Click="OnItemColorDotClick"
-                                                ToolTipService.ToolTip="Choose note color">
-                                                <Ellipse
-                                                    Width="8"
-                                                    Height="8"
-                                                    Fill="{x:Bind AccentColorBrush, Mode=OneWay}" />
-                                            </Button>
-                                            <Button
-                                                Style="{StaticResource SubtleIconButtonStyle}"
-                                                Tag="{x:Bind}"
-                                                Opacity="{x:Bind PinOpacity, Mode=OneWay}"
-                                                Click="OnTogglePinNoteClick"
-                                                ToolTipService.ToolTip="Pin note to top">
-                                                <FontIcon Glyph="{x:Bind PinIconGlyph, Mode=OneWay}" FontSize="11" />
-                                            </Button>
-                                            <Button
-                                                Style="{StaticResource SubtleIconButtonStyle}"
-                                                Tag="{x:Bind}"
-                                                Opacity="0.45"
-                                                Click="OnDeleteNoteItemClick"
-                                                ToolTipService.ToolTip="Delete note (Ctrl+Delete)">
-                                                <FontIcon Glyph="&#xE74D;" FontSize="11" />
-                                            </Button>
-                                        </StackPanel>
-                                    </Grid>
+                                        <TextBlock
+                                            Text="{x:Bind Snippet, Mode=OneWay}"
+                                            FontSize="12"
+                                            Foreground="{ThemeResource TextSecondaryBrush}"
+                                            MaxLines="1"
+                                            TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
                                 </Grid>
                             </Grid>
                         </DataTemplate>
@@ -537,7 +445,7 @@
                         HorizontalContentAlignment="Left"
                         Background="Transparent"
                         Style="{StaticResource GlassPillButtonStyle}"
-                        Command="{x:Bind ViewModel.ToggleSettingsCommand}"
+                        Command="{x:Bind ViewModel.OpenProfileSettingsCommand}"
                         ToolTipService.ToolTip="Profile &amp; Settings">
                         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                             <Grid Width="32" Height="32">
@@ -602,7 +510,7 @@
             <Grid Grid.Column="1">
 
                 <!-- 1. Main Writing & Markdown Preview Workspace -->
-                <Grid x:Name="MainWorkspaceGrid">
+                <Grid x:Name="MainWorkspaceGrid" AllowDrop="True">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*" />
                         <RowDefinition Height="40" />
@@ -1023,8 +931,61 @@
                                     Command="{x:Bind ViewModel.CloseSettingsCommand}" />
                             </Grid>
 
+                            <!-- Segmented Category Tabs: Appearance | Profile | Vault | Shortcuts -->
+                            <Border
+                                Width="404"
+                                Height="34"
+                                Padding="2"
+                                CornerRadius="17"
+                                HorizontalAlignment="Left"
+                                Background="{ThemeResource InputBackgroundBrush}"
+                                BorderThickness="0">
+                                <Grid>
+                                    <Border
+                                        Width="100"
+                                        Height="30"
+                                        CornerRadius="15"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Center"
+                                        Background="{ThemeResource SurfaceActiveBrush}"
+                                        BorderThickness="0">
+                                        <Border.RenderTransform>
+                                            <TranslateTransform x:Name="SettingsTabIndicatorTranslate" X="0" />
+                                        </Border.RenderTransform>
+                                    </Border>
+                                    <StackPanel Orientation="Horizontal" Spacing="0">
+                                        <Button
+                                            Width="100"
+                                            Height="30"
+                                            Content="Appearance"
+                                            Style="{StaticResource SegmentTabButtonStyle}"
+                                            Command="{x:Bind ViewModel.SetAppearanceSettingsCommand}" />
+                                        <Button
+                                            Width="100"
+                                            Height="30"
+                                            Content="Profile"
+                                            Style="{StaticResource SegmentTabButtonStyle}"
+                                            Command="{x:Bind ViewModel.SetProfileSettingsCommand}" />
+                                        <Button
+                                            Width="100"
+                                            Height="30"
+                                            Content="Vault"
+                                            Style="{StaticResource SegmentTabButtonStyle}"
+                                            Command="{x:Bind ViewModel.SetVaultSettingsCommand}" />
+                                        <Button
+                                            Width="100"
+                                            Height="30"
+                                            Content="Shortcuts"
+                                            Style="{StaticResource SegmentTabButtonStyle}"
+                                            Command="{x:Bind ViewModel.SetShortcutsSettingsCommand}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
                             <!-- Section 1: User Profile (Avatar Picture + Display Name) -->
                             <Border
+                                x:Name="SettingsProfileCard"
+                                Visibility="{x:Bind ViewModel.ProfileSettingsVisibility, Mode=OneWay}"
                                 Padding="20"
                                 CornerRadius="16"
                                 Background="{ThemeResource InputBackgroundBrush}"
@@ -1113,6 +1074,8 @@
 
                             <!-- Section 2: Smart Theme, Blur / Mica Backdrop, Opacity, Zoom & Typing Animations -->
                             <Border
+                                x:Name="SettingsAppearanceCard"
+                                Visibility="{x:Bind ViewModel.AppearanceSettingsVisibility, Mode=OneWay}"
                                 Padding="20"
                                 CornerRadius="16"
                                 Background="{ThemeResource InputBackgroundBrush}"
@@ -1423,99 +1386,105 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- Section 3: Markdown Files & Vault Storage -->
-                            <Border
-                                Padding="20"
-                                CornerRadius="16"
-                                Background="{ThemeResource InputBackgroundBrush}"
-                                BorderThickness="0">
-                                <StackPanel Spacing="12">
-                                    <TextBlock
-                                        Text="MARKDOWN FILES &amp; VAULT STORAGE"
-                                        FontSize="11"
-                                        FontWeight="SemiBold"
-                                        Foreground="{ThemeResource TextSecondaryBrush}" />
-                                    <TextBlock
-                                        Text="{x:Bind ViewModel.VaultDirectoryPath, Mode=OneWay}"
-                                        FontSize="12"
-                                        Foreground="{ThemeResource TextPrimaryBrush}"
-                                        TextWrapping="Wrap" />
-                                    <Grid ColumnSpacing="8" RowSpacing="8">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                        </Grid.RowDefinitions>
-                                        <Button
-                                            Grid.Row="0"
-                                            Grid.Column="0"
-                                            HorizontalAlignment="Stretch"
-                                            Content="Import .md (Ctrl+O)"
-                                            Style="{StaticResource GlassPillButtonStyle}"
-                                            Click="OnImportMarkdownClick" />
-                                        <Button
-                                            Grid.Row="0"
-                                            Grid.Column="1"
-                                            HorizontalAlignment="Stretch"
-                                            Content="Export .md (Ctrl+Shift+S)"
-                                            Style="{StaticResource GlassPillButtonStyle}"
-                                            Click="OnExportMarkdownClick" />
-                                        <Button
-                                            Grid.Row="1"
-                                            Grid.Column="0"
-                                            HorizontalAlignment="Stretch"
-                                            Content="Change Vault Folder..."
-                                            Style="{StaticResource GlassPillButtonStyle}"
-                                            Click="OnChangeVaultFolderClick" />
-                                        <Button
-                                            Grid.Row="1"
-                                            Grid.Column="1"
-                                            HorizontalAlignment="Stretch"
-                                            Content="Open in Explorer"
-                                            Style="{StaticResource GlassPillButtonStyle}"
-                                            Command="{x:Bind ViewModel.OpenVaultFolderCommand}" />
-                                    </Grid>
-                                </StackPanel>
-                            </Border>
-
-                            <!-- Section 4: In-App Updates -->
-                            <Border
-                                Padding="20"
-                                CornerRadius="16"
-                                Background="{ThemeResource InputBackgroundBrush}"
-                                BorderThickness="0">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Center" Margin="0,0,16,0">
+                            <!-- Section 3 & 4: Markdown Files, Vault Storage & In-App Updates -->
+                            <StackPanel
+                                x:Name="SettingsVaultCard"
+                                Visibility="{x:Bind ViewModel.VaultSettingsVisibility, Mode=OneWay}"
+                                Spacing="16">
+                                <Border
+                                    Padding="20"
+                                    CornerRadius="16"
+                                    Background="{ThemeResource InputBackgroundBrush}"
+                                    BorderThickness="0">
+                                    <StackPanel Spacing="12">
                                         <TextBlock
-                                            Text="IN-APP UPDATES (GITHUB RELEASES)"
+                                            Text="MARKDOWN FILES &amp; VAULT STORAGE"
                                             FontSize="11"
                                             FontWeight="SemiBold"
                                             Foreground="{ThemeResource TextSecondaryBrush}" />
                                         <TextBlock
-                                            Text="{x:Bind ViewModel.UpdateStatusText, Mode=OneWay}"
-                                            FontSize="13"
-                                            TextWrapping="Wrap"
-                                            Foreground="{ThemeResource TextPrimaryBrush}" />
+                                            Text="{x:Bind ViewModel.VaultDirectoryPath, Mode=OneWay}"
+                                            FontSize="12"
+                                            Foreground="{ThemeResource TextPrimaryBrush}"
+                                            TextWrapping="Wrap" />
+                                        <Grid ColumnSpacing="8" RowSpacing="8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Button
+                                                Grid.Row="0"
+                                                Grid.Column="0"
+                                                HorizontalAlignment="Stretch"
+                                                Content="Import .md (Ctrl+O)"
+                                                Style="{StaticResource GlassPillButtonStyle}"
+                                                Click="OnImportMarkdownClick" />
+                                            <Button
+                                                Grid.Row="0"
+                                                Grid.Column="1"
+                                                HorizontalAlignment="Stretch"
+                                                Content="Export .md (Ctrl+Shift+S)"
+                                                Style="{StaticResource GlassPillButtonStyle}"
+                                                Click="OnExportMarkdownClick" />
+                                            <Button
+                                                Grid.Row="1"
+                                                Grid.Column="0"
+                                                HorizontalAlignment="Stretch"
+                                                Content="Change Vault Folder..."
+                                                Style="{StaticResource GlassPillButtonStyle}"
+                                                Click="OnChangeVaultFolderClick" />
+                                            <Button
+                                                Grid.Row="1"
+                                                Grid.Column="1"
+                                                HorizontalAlignment="Stretch"
+                                                Content="Open in Explorer"
+                                                Style="{StaticResource GlassPillButtonStyle}"
+                                                Command="{x:Bind ViewModel.OpenVaultFolderCommand}" />
+                                        </Grid>
                                     </StackPanel>
-                                    <Button
-                                        Grid.Column="1"
-                                        HorizontalAlignment="Right"
-                                        VerticalAlignment="Center"
-                                        Content="{x:Bind ViewModel.UpdateButtonText, Mode=OneWay}"
-                                        Style="{StaticResource GlassPillButtonStyle}"
-                                        Command="{x:Bind ViewModel.CheckOrInstallUpdateCommand}" />
-                                </Grid>
-                            </Border>
+                                </Border>
+
+                                <Border
+                                    Padding="20"
+                                    CornerRadius="16"
+                                    Background="{ThemeResource InputBackgroundBrush}"
+                                    BorderThickness="0">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Center" Margin="0,0,16,0">
+                                            <TextBlock
+                                                Text="IN-APP UPDATES (GITHUB RELEASES)"
+                                                FontSize="11"
+                                                FontWeight="SemiBold"
+                                                Foreground="{ThemeResource TextSecondaryBrush}" />
+                                            <TextBlock
+                                                Text="{x:Bind ViewModel.UpdateStatusText, Mode=OneWay}"
+                                                FontSize="13"
+                                                TextWrapping="Wrap"
+                                                Foreground="{ThemeResource TextPrimaryBrush}" />
+                                        </StackPanel>
+                                        <Button
+                                            Grid.Column="1"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Center"
+                                            Content="{x:Bind ViewModel.UpdateButtonText, Mode=OneWay}"
+                                            Style="{StaticResource GlassPillButtonStyle}"
+                                            Command="{x:Bind ViewModel.CheckOrInstallUpdateCommand}" />
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
 
                             <!-- Section 5: Keyboard Shortcuts -->
                             <Border
+                                x:Name="SettingsShortcutsCard"
+                                Visibility="{x:Bind ViewModel.ShortcutsSettingsVisibility, Mode=OneWay}"
                                 Padding="20"
                                 CornerRadius="16"
                                 Background="{ThemeResource InputBackgroundBrush}"
@@ -1533,7 +1502,7 @@
                                     <Grid><TextBlock Text="Zoom In / Zoom Out / Reset Zoom" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Ctrl + Plus / Ctrl + Minus / Ctrl + 0" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid><TextBlock Text="Insert / continue connected tree branch" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Shift + Enter" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid><TextBlock Text="Indent / outdent tree branch" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Tab / Shift + Tab" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
-                                    <Grid><TextBlock Text="Cycle Write / Split / View mode" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Ctrl + E" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
+                                    <Grid><TextBlock Text="Cycle Live / Source mode" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Ctrl + E" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid><TextBlock Text="New note / New folder" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Ctrl + N / Ctrl + Shift + N" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid><TextBlock Text="Import .md / Export .md" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Ctrl + O / Ctrl + Shift + S" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid><TextBlock Text="Bold / Italic / Checklist (- [ ])" FontSize="13" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Text="Ctrl + B / Ctrl + I / Ctrl + L" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
@@ -1546,6 +1515,41 @@
                     </ScrollViewer>
                 </Grid>
             </Grid>
+        </Grid>
+
+        <!-- Frosted Blur Right-Click Context Popup for Sidebar Folders & Notes -->
+        <Grid
+            x:Name="SidebarContextOverlay"
+            Grid.RowSpan="2"
+            Visibility="Collapsed"
+            Background="Transparent"
+            PointerPressed="OnSidebarContextBackdropPressed"
+            RightTapped="OnSidebarContextBackdropRightTapped">
+            <Border
+                x:Name="SidebarContextPopupBorder"
+                UseLayoutRounding="True"
+                Width="228"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Padding="10"
+                CornerRadius="14"
+                Background="{ThemeResource PopupAcrylicBrush}"
+                BorderThickness="1"
+                BorderBrush="{ThemeResource SubtleDividerBrush}"
+                Translation="0,0,24"
+                RenderTransformOrigin="0.1,0.0"
+                PointerPressed="OnSidebarContextCardPointerPressed">
+                <Border.Shadow>
+                    <ThemeShadow />
+                </Border.Shadow>
+                <Border.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="SidebarContextPopupScale" ScaleX="1" ScaleY="1" />
+                        <TranslateTransform x:Name="SidebarContextPopupTranslate" X="0" Y="0" />
+                    </TransformGroup>
+                </Border.RenderTransform>
+                <StackPanel x:Name="SidebarContextContentPanel" Spacing="4" />
+            </Border>
         </Grid>
 
         <!-- Raycast-Style Command Palette Floating Modal (Ctrl+K / Ctrl+P) -->

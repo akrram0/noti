@@ -376,7 +376,7 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <Grid Width="60" Height="26" Background="Transparent" UseLayoutRounding="True">
+                            <Grid Width="{TemplateBinding Width}" Height="{TemplateBinding Height}" Background="Transparent" UseLayoutRounding="True">
                                 <VisualStateManager.VisualStateGroups>
                                     <VisualStateGroup x:Name="CommonStates">
                                         <VisualState x:Name="Normal" />
