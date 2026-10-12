@@ -3956,7 +3956,7 @@ public sealed partial class MainWindow : Window
         {
             Glyph = item.IsFolder ? "\uE8B7" : "\uE8A5",
             FontSize = 12,
-            Foreground = item.HasCustomColor ? item.CustomColorBrush : _cachedSecondaryBrush,
+            Foreground = item.HasCustomColor ? item.AccentColorBrush : _cachedSecondaryBrush,
             VerticalAlignment = VerticalAlignment.Center
         };
         var headerTitle = new TextBlock
@@ -4066,8 +4066,8 @@ public sealed partial class MainWindow : Window
                 }));
 
             SidebarContextContentPanel.Children.Add(CreateSidebarContextActionButton(
-                item.IsFolderExpanded ? "\uE70D" : "\uE76C",
-                item.IsFolderExpanded ? "Collapse folder" : "Expand folder",
+                item.IsExpanded ? "\uE70D" : "\uE76C",
+                item.IsExpanded ? "Collapse folder" : "Expand folder",
                 null,
                 isDestructive: false,
                 () =>
