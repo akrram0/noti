@@ -6,6 +6,7 @@ namespace Noti.App;
 
 public static class AppUpdater
 {
+    private const string LatestReleaseApiUrl = "https://api.github.com/repos/akrram0/noti/releases/latest";
     private const string VersionManifestUrl = "https://github.com/akrram0/noti/releases/latest/download/version.json";
     private const string DefaultInstallerUrl = "https://github.com/akrram0/noti/releases/latest/download/Noti-Setup-win-x64.exe";
 
@@ -28,27 +29,65 @@ public static class AppUpdater
         {
             var url = $"{VersionManifestUrl}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
             using var response = await Http.GetAsync(url, cancellationToken).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-                return (false, CurrentVersionText, DefaultInstallerUrl);
+            if (response.IsSuccessStatusCode)
+            {
+                var json = (await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false)).Trim('\uFEFF', ' ', '\t', '\r', '\n');
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
 
-            var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
+                var versionStr = root.TryGetProperty("version", out var vProp) ? vProp.GetString() : null;
+                var downloadUrl = root.TryGetProperty("downloadUrl", out var dProp) ? dProp.GetString() : DefaultInstallerUrl;
 
-            var versionStr = root.TryGetProperty("version", out var vProp) ? vProp.GetString() : null;
-            var downloadUrl = root.TryGetProperty("downloadUrl", out var dProp) ? dProp.GetString() : DefaultInstallerUrl;
-
-            if (string.IsNullOrWhiteSpace(versionStr) || !Version.TryParse(versionStr.TrimStart('v', 'V'), out var remoteVersion))
-                return (false, CurrentVersionText, DefaultInstallerUrl);
-
-            var normalizedRemote = new Version(remoteVersion.Major, remoteVersion.Minor, Math.Max(0, remoteVersion.Build));
-            var isNewer = normalizedRemote > CurrentVersion;
-            return (isNewer, $"v{normalizedRemote}", string.IsNullOrWhiteSpace(downloadUrl) ? DefaultInstallerUrl : downloadUrl);
+                if (!string.IsNullOrWhiteSpace(versionStr) && Version.TryParse(versionStr.TrimStart('v', 'V'), out var remoteVersion))
+                {
+                    var normalizedRemote = new Version(remoteVersion.Major, remoteVersion.Minor, Math.Max(0, remoteVersion.Build));
+                    if (normalizedRemote > CurrentVersion)
+                        return (true, $"v{normalizedRemote}", string.IsNullOrWhiteSpace(downloadUrl) ? DefaultInstallerUrl : downloadUrl);
+                }
+            }
         }
         catch
         {
-            return (false, CurrentVersionText, DefaultInstallerUrl);
         }
+
+        try
+        {
+            using var apiResponse = await Http.GetAsync(LatestReleaseApiUrl, cancellationToken).ConfigureAwait(false);
+            if (apiResponse.IsSuccessStatusCode)
+            {
+                var apiJson = (await apiResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false)).Trim('\uFEFF', ' ', '\t', '\r', '\n');
+                using var apiDoc = JsonDocument.Parse(apiJson);
+                var apiRoot = apiDoc.RootElement;
+
+                var tagName = apiRoot.TryGetProperty("tag_name", out var tagProp) ? tagProp.GetString() : null;
+                if (!string.IsNullOrWhiteSpace(tagName) && Version.TryParse(tagName.TrimStart('v', 'V'), out var tagVersion))
+                {
+                    var normalizedTag = new Version(tagVersion.Major, tagVersion.Minor, Math.Max(0, tagVersion.Build));
+                    var assetUrl = DefaultInstallerUrl;
+                    if (apiRoot.TryGetProperty("assets", out var assetsProp) && assetsProp.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var asset in assetsProp.EnumerateArray())
+                        {
+                            var name = asset.TryGetProperty("name", out var nProp) ? nProp.GetString() : null;
+                            var bUrl = asset.TryGetProperty("browser_download_url", out var uProp) ? uProp.GetString() : null;
+                            if (string.Equals(name, "Noti-Setup-win-x64.exe", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(bUrl))
+                            {
+                                assetUrl = bUrl;
+                                break;
+                            }
+                        }
+                    }
+
+                    var isNewer = normalizedTag > CurrentVersion;
+                    return (isNewer, $"v{normalizedTag}", assetUrl);
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        return (false, CurrentVersionText, DefaultInstallerUrl);
     }
 
     public static async Task<bool> DownloadAndInstallAsync(
