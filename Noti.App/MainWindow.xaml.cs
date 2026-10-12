@@ -151,7 +151,6 @@ public sealed partial class MainWindow : Window
             titleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
             titleBar.ButtonBackgroundColor = Colors.Transparent;
             titleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
-            titleBar.ButtonForegroundColor = Colors.Gray;
             titleBar.SetDragRectangles([new RectInt32(0, 0, 0, 0)]);
         }
     }
@@ -211,8 +210,11 @@ public sealed partial class MainWindow : Window
 
         _acrylicController.TintColor = tintColor;
         _acrylicController.FallbackColor = tintColor;
+        // TintOpacity scales with user setting; LuminosityOpacity has a floor so blur
+        // remains visible even at 0% tint (without floor, 0,0 collapses to solid black).
         _acrylicController.TintOpacity = Math.Clamp(t * 0.50f, 0.0f, 0.50f);
-        _acrylicController.LuminosityOpacity = Math.Clamp(t * 0.45f, 0.0f, 0.45f);
+        var luminosityFloor = isDark ? 0.64f : 0.85f;
+        _acrylicController.LuminosityOpacity = Math.Clamp(luminosityFloor + t * (1.0f - luminosityFloor), luminosityFloor, 1.0f);
     }
 
     private void DisposeAcrylicController()
