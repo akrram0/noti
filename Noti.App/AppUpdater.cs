@@ -54,9 +54,14 @@ public static class AppUpdater
     public static async Task<bool> DownloadAndInstallAsync(
         string downloadUrl,
         Action<string>? onProgress = null,
+        Action? onBeforeExit = null,
         CancellationToken cancellationToken = default)
     {
-        var tempSetupPath = Path.Combine(Path.GetTempPath(), $"Noti-Setup-Update-{Guid.NewGuid():N}.exe");
+        var tempDir = Path.GetTempPath();
+        var id = Guid.NewGuid().ToString("N");
+        var tempSetupPath = Path.Combine(tempDir, $"Noti-Setup-Update-{id}.exe");
+        var handoffScriptPath = Path.Combine(tempDir, $"noti-update-handoff-{id}.cmd");
+
         try
         {
             onProgress?.Invoke("Downloading update...");
@@ -83,15 +88,53 @@ public static class AppUpdater
             }
 
             onProgress?.Invoke("Installing & restarting...");
+
+            var currentPid = Environment.ProcessId;
+            var currentExe = Environment.ProcessPath;
+            var defaultInstalledExe = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Programs",
+                "Noti",
+                "Noti.exe");
+            var targetExe = !string.IsNullOrWhiteSpace(currentExe) && File.Exists(currentExe)
+                ? currentExe
+                : defaultInstalledExe;
+
+            var scriptContent =
+                "@echo off\r\n" +
+                "cd /d \"%TEMP%\"\r\n" +
+                $"taskkill /F /PID {currentPid} >nul 2>&1\r\n" +
+                "timeout /t 1 /nobreak >nul 2>&1\r\n" +
+                $"start \"\" /wait \"{tempSetupPath}\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS\r\n" +
+                "tasklist /FI \"IMAGENAME eq Noti.exe\" 2>nul | find /I \"Noti.exe\" >nul\r\n" +
+                "if errorlevel 1 (\r\n" +
+                $"  if exist \"{targetExe}\" start \"\" \"{targetExe}\"\r\n" +
+                $"  if not exist \"{targetExe}\" if exist \"{defaultInstalledExe}\" start \"\" \"{defaultInstalledExe}\"\r\n" +
+                ")\r\n" +
+                $"del /f /q \"{tempSetupPath}\" >nul 2>&1\r\n" +
+                "del /f /q \"%~f0\" >nul 2>&1\r\n";
+
+            await File.WriteAllTextAsync(handoffScriptPath, scriptContent, cancellationToken).ConfigureAwait(false);
+
+            try
+            {
+                onBeforeExit?.Invoke();
+            }
+            catch
+            {
+            }
+
             Process.Start(new ProcessStartInfo
             {
-                FileName = tempSetupPath,
-                Arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS",
+                FileName = "cmd.exe",
+                Arguments = $"/c \"\"{handoffScriptPath}\"\"",
+                WorkingDirectory = tempDir,
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
             });
 
-            Environment.Exit(0);
+            Process.GetCurrentProcess().Kill();
             return true;
         }
         catch
@@ -100,6 +143,8 @@ public static class AppUpdater
             {
                 if (File.Exists(tempSetupPath))
                     File.Delete(tempSetupPath);
+                if (File.Exists(handoffScriptPath))
+                    File.Delete(handoffScriptPath);
             }
             catch
             {

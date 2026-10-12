@@ -19,11 +19,10 @@ public partial class App : Application
         var store = new MarkdownNoteStore();
         var service = new NoteService(store);
         var viewModel = new MainViewModel(service);
+        await viewModel.InitializeAsync();
 
         var mainWindow = new MainWindow(viewModel);
         _window = mainWindow;
         mainWindow.Activate();
-
-        await viewModel.InitializeAsync();
     }
 }

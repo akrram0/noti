@@ -14,7 +14,7 @@ namespace Noti.App.Services;
 /// Manages window chrome configuration (icon, size, minimum bounds, title bar regions, and click-and-hold drag behaviour)
 /// for a single WinUI 3 Window.
 /// </summary>
-internal sealed class WindowChromeService
+internal sealed class WindowChromeService : IDisposable
 {
     public const int DefaultMinWidth  = 520;
     public const int DefaultMinHeight = 450;
@@ -26,6 +26,7 @@ internal sealed class WindowChromeService
     private int _minHeight = DefaultMinHeight;
     private RectInt32 _lastCaptionRect;
     private RectInt32[] _lastPassthroughRects = [];
+    private bool _disposed;
 
     public WindowChromeService(Window window)
     {
@@ -85,7 +86,7 @@ internal sealed class WindowChromeService
     /// </summary>
     public void UpdateTitleBarRegions(FrameworkElement titleBarContainer, params FrameworkElement[] interactiveControls)
     {
-        if (!AppWindowTitleBar.IsCustomizationSupported() || titleBarContainer.XamlRoot is null)
+        if (_disposed || !AppWindowTitleBar.IsCustomizationSupported() || titleBarContainer.XamlRoot is null)
             return;
 
         var scale = titleBarContainer.XamlRoot.RasterizationScale;
@@ -170,6 +171,21 @@ internal sealed class WindowChromeService
         }
 
         return true;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        try
+        {
+            NativeMethods.RemoveWindowSubclass(_hwnd, _subclassProc, (UIntPtr)1);
+        }
+        catch
+        {
+        }
     }
 }
 

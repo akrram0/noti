@@ -19,24 +19,39 @@ internal sealed class BackdropService : IDisposable
     private readonly Window _window;
     private DesktopAcrylicController? _acrylicController;
     private SystemBackdropConfiguration? _backdropConfig;
+    private BackdropMode _lastMode = BackdropMode.Blur;
+    private bool _lastIsDark = true;
+    private double _lastOpacityPercent = 22.0;
+    private bool _hasBoundPostActivation;
     private bool _disposed;
 
     public BackdropService(Window window)
     {
         ArgumentNullException.ThrowIfNull(window);
         _window = window;
+        _window.Activated += OnWindowActivated;
     }
 
     /// <summary>
     /// Applies (or re-applies) the backdrop for the given mode, theme, and opacity.
     /// Safe to call multiple times; disposes and recreates the acrylic controller when switching modes.
     /// </summary>
-    public void Apply(BackdropMode mode, bool isDark, double opacityPercent)
+    public void Apply(BackdropMode mode, bool isDark, double opacityPercent, bool forceRecreate = false)
     {
+        if (_disposed)
+            return;
+
+        _lastMode = mode;
+        _lastIsDark = isDark;
+        _lastOpacityPercent = opacityPercent;
+
         try
         {
             if (mode == BackdropMode.Blur && DesktopAcrylicController.IsSupported())
             {
+                if (forceRecreate)
+                    DisposeAcrylicController();
+
                 _window.SystemBackdrop = null;
 
                 if (_acrylicController is null)
@@ -46,13 +61,18 @@ internal sealed class BackdropService : IDisposable
                         IsInputActive = true,
                         Theme = isDark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light
                     };
-                    _acrylicController = new DesktopAcrylicController();
-                    _acrylicController.AddSystemBackdropTarget(
+                    var controller = new DesktopAcrylicController();
+                    ApplyAcrylicPropertiesTo(controller, _backdropConfig, isDark, opacityPercent);
+                    controller.SetSystemBackdropConfiguration(_backdropConfig);
+                    controller.AddSystemBackdropTarget(
                         _window.As<Microsoft.UI.Composition.ICompositionSupportsSystemBackdrop>());
-                    _acrylicController.SetSystemBackdropConfiguration(_backdropConfig);
+                    _acrylicController = controller;
+                }
+                else
+                {
+                    ApplyAcrylicProperties(isDark, opacityPercent);
                 }
 
-                ApplyAcrylicProperties(isDark, opacityPercent);
                 return;
             }
 
@@ -60,11 +80,36 @@ internal sealed class BackdropService : IDisposable
 
             if (MicaController.IsSupported())
                 _window.SystemBackdrop = new MicaBackdrop { Kind = MicaKind.Base };
+            else
+                _window.SystemBackdrop = new DesktopAcrylicBackdrop();
         }
         catch
         {
-            // Backdrop is non-critical — swallow silently so the app still opens.
+            DisposeAcrylicController();
+            try
+            {
+                _window.SystemBackdrop = mode == BackdropMode.Blur
+                    ? new DesktopAcrylicBackdrop()
+                    : new MicaBackdrop { Kind = MicaKind.Base };
+            }
+            catch
+            {
+            }
         }
+    }
+
+    /// <summary>
+    /// Called once from RootGrid.Loaded (after Window.Activate and swapchain creation)
+    /// to ensure DWM has a live, post-activation composition target even after rapid close/reopen.
+    /// </summary>
+    public void EnsurePostActivationBinding(BackdropMode mode, bool isDark, double opacityPercent)
+    {
+        if (_disposed)
+            return;
+
+        var needsRebind = !_hasBoundPostActivation || (mode == BackdropMode.Blur && _acrylicController is null);
+        _hasBoundPostActivation = true;
+        Apply(mode, isDark, opacityPercent, forceRecreate: needsRebind && mode == BackdropMode.Blur);
     }
 
     /// <summary>
@@ -73,6 +118,12 @@ internal sealed class BackdropService : IDisposable
     /// </summary>
     public void UpdateOpacity(bool isDark, double opacityPercent)
     {
+        if (_disposed)
+            return;
+
+        _lastIsDark = isDark;
+        _lastOpacityPercent = opacityPercent;
+
         if (_acrylicController is null)
             return;
 
@@ -81,31 +132,57 @@ internal sealed class BackdropService : IDisposable
 
     // ── private ────────────────────────────────────────────────────────────
 
+    private void OnWindowActivated(object sender, WindowActivatedEventArgs args)
+    {
+        if (_disposed)
+            return;
+
+        if (_backdropConfig is not null)
+            _backdropConfig.IsInputActive = args.WindowActivationState != WindowActivationState.Deactivated;
+
+        if (args.WindowActivationState != WindowActivationState.Deactivated &&
+            _lastMode == BackdropMode.Blur &&
+            _acrylicController is null &&
+            DesktopAcrylicController.IsSupported())
+        {
+            Apply(_lastMode, _lastIsDark, _lastOpacityPercent, forceRecreate: true);
+        }
+    }
+
     private void ApplyAcrylicProperties(bool isDark, double opacityPercent)
     {
         if (_acrylicController is null)
             return;
 
+        ApplyAcrylicPropertiesTo(_acrylicController, _backdropConfig, isDark, opacityPercent);
+    }
+
+    private static void ApplyAcrylicPropertiesTo(
+        DesktopAcrylicController controller,
+        SystemBackdropConfiguration? config,
+        bool isDark,
+        double opacityPercent)
+    {
         var t = (float)Math.Clamp(opacityPercent / 100.0, 0.0, 1.0);
 
-        if (_backdropConfig is not null)
+        if (config is not null)
         {
-            _backdropConfig.IsInputActive = true;
-            _backdropConfig.Theme = isDark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light;
+            config.IsInputActive = true;
+            config.Theme = isDark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light;
         }
 
         var tintColor = isDark
             ? ColorHelper.FromArgb(255, 10, 10, 14)
             : ColorHelper.FromArgb(255, 248, 248, 252);
 
-        _acrylicController.TintColor    = tintColor;
-        _acrylicController.FallbackColor = tintColor;
+        controller.TintColor     = tintColor;
+        controller.FallbackColor = tintColor;
         // TintOpacity scales with the user's slider (0 → 50%).
         // LuminosityOpacity has a floor so blur stays visible at 0% tint
         // (without a floor, TintOpacity=0 + LuminosityOpacity=0 → pitch black).
-        _acrylicController.TintOpacity = Math.Clamp(t * 0.50f, 0.0f, 0.50f);
+        controller.TintOpacity = Math.Clamp(t * 0.50f, 0.0f, 0.50f);
         var luminosityFloor = isDark ? 0.64f : 0.85f;
-        _acrylicController.LuminosityOpacity =
+        controller.LuminosityOpacity =
             Math.Clamp(luminosityFloor + t * (1.0f - luminosityFloor), luminosityFloor, 1.0f);
     }
 
@@ -113,8 +190,14 @@ internal sealed class BackdropService : IDisposable
     {
         if (_acrylicController is not null)
         {
-            _acrylicController.RemoveAllSystemBackdropTargets();
-            _acrylicController.Dispose();
+            try
+            {
+                _acrylicController.RemoveAllSystemBackdropTargets();
+                _acrylicController.Dispose();
+            }
+            catch
+            {
+            }
             _acrylicController = null;
         }
         _backdropConfig = null;
@@ -124,6 +207,7 @@ internal sealed class BackdropService : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _window.Activated -= OnWindowActivated;
         DisposeAcrylicController();
     }
 }

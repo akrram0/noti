@@ -85,11 +85,7 @@ public sealed class MainViewModel : ObservableObject
             : ThemeMode.System;
         ApplyThemeMode();
 
-        _uiSettings.ColorValuesChanged += (_, _) =>
-        {
-            if (_currentThemeMode == ThemeMode.System)
-                EnqueueUi(ApplyThemeMode);
-        };
+        _uiSettings.ColorValuesChanged += OnSystemColorValuesChanged;
 
         foreach (var id in _settings.PinnedNoteIds)
             _pinnedNoteIds.Add(id);
@@ -166,6 +162,7 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<SlashCommandItem> SlashMenuSuggestions { get; } = new();
     public IReadOnlyList<NoteItemViewModel> AllNoteItems => _allNotes;
     public Action? RequestExportMarkdown { get; set; }
+    public Action? RequestPrepareForUpdateExit { get; set; }
 
     public IAsyncRelayCommand CreateNoteCommand { get; }
     public IRelayCommand StartNewFolderCommand { get; }
@@ -951,6 +948,12 @@ public sealed class MainViewModel : ObservableObject
         });
     }
 
+    private void OnSystemColorValuesChanged(UISettings sender, object args)
+    {
+        if (_currentThemeMode == ThemeMode.System)
+            EnqueueUi(ApplyThemeMode);
+    }
+
     private async Task InstallUpdateAsync()
     {
         var url = string.IsNullOrWhiteSpace(_latestUpdateUrl)
@@ -958,11 +961,14 @@ public sealed class MainViewModel : ObservableObject
             : _latestUpdateUrl;
 
         await ForceSaveAsync();
-        await AppUpdater.DownloadAndInstallAsync(url, progress =>
-        {
-            SetUpdateStatus(progress);
-            EnqueueUi(() => UpdateTopBarText = progress);
-        });
+        await AppUpdater.DownloadAndInstallAsync(
+            url,
+            progress =>
+            {
+                SetUpdateStatus(progress);
+                EnqueueUi(() => UpdateTopBarText = progress);
+            },
+            onBeforeExit: () => EnqueueUi(() => RequestPrepareForUpdateExit?.Invoke()));
     }
 
     private void SetUpdateStatus(string status) =>
@@ -1398,6 +1404,27 @@ public sealed class MainViewModel : ObservableObject
 
         await _noteService.SaveNoteAsync(_selectedNote.Model);
         SetSaveStatus("Saved");
+    }
+
+    public void Shutdown()
+    {
+        try
+        {
+            _uiSettings.ColorValuesChanged -= OnSystemColorValuesChanged;
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            _autosaveCts?.Cancel();
+            _autosaveCts?.Dispose();
+            _autosaveCts = null;
+        }
+        catch
+        {
+        }
     }
 
     private void SetSaveStatus(string status)

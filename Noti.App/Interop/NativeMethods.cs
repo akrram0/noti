@@ -56,6 +56,10 @@ internal static class NativeMethods
     [DllImport("comctl32.dll", SetLastError = true)]
     internal static extern bool SetWindowSubclass(IntPtr hWnd, SUBCLASSPROC pfnSubclass, UIntPtr uIdSubclass, IntPtr dwRefData);
 
+    /// <summary>Removes a window subclass callback installed via SetWindowSubclass.</summary>
+    [DllImport("comctl32.dll", SetLastError = true)]
+    internal static extern bool RemoveWindowSubclass(IntPtr hWnd, SUBCLASSPROC pfnSubclass, UIntPtr uIdSubclass);
+
     /// <summary>Calls the next handler in a window's subclass chain.</summary>
     [DllImport("comctl32.dll", SetLastError = true)]
     internal static extern IntPtr DefSubclassProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);

@@ -64,11 +64,14 @@ public sealed partial class MainWindow : Window
     private long _lastSlashPopupOpenTick;
     private Storyboard? _slashPopupStoryboard;
 
+    private bool _isCleanedUp;
+
     public MainWindow(MainViewModel viewModel)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ViewModel = viewModel;
         ViewModel.RequestExportMarkdown = () => _ = PickAndExportMarkdownAsync();
+        ViewModel.RequestPrepareForUpdateExit = CleanupWindowResources;
 
         _backdropService = new BackdropService(this);
         _chromeService   = new WindowChromeService(this);
@@ -76,13 +79,17 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         _chromeService.Configure();
         _backdropService.Apply(ViewModel.CurrentBackdropMode, ViewModel.IsDarkMode, ViewModel.SurfaceOpacityPercent);
-        Closed += (_, _) => _backdropService.Dispose();
+        Closed += OnWindowClosed;
 
         _liveSyncTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
         _liveSyncTimer.Tick += (_, _) => FlushSyncLiveBlocksToViewModel();
 
         RootGrid.Loaded += (_, _) =>
         {
+            _backdropService.EnsurePostActivationBinding(
+                ViewModel.CurrentBackdropMode,
+                ViewModel.IsDarkMode,
+                ViewModel.SurfaceOpacityPercent);
             NoteItemViewModel.IsLightTheme = !ViewModel.IsDarkMode;
             foreach (var n in ViewModel.FilteredNotes)
                 n.NotifyVisualStateChanged();
@@ -101,7 +108,7 @@ public sealed partial class MainWindow : Window
             ApplyResponsiveLayout();
             UpdateTitleBarChromeRegions();
         };
-        TopTitleBarGrid.LayoutUpdated += (_, _) => UpdateTitleBarChromeRegions();
+        TopTitleBarGrid.LayoutUpdated += OnTopTitleBarLayoutUpdated;
         LiveEditorScrollViewer.SizeChanged += (_, _) =>
         {
             LiveCanvasRootGrid.MinHeight = Math.Max(0, LiveEditorScrollViewer.ActualHeight);
@@ -119,6 +126,49 @@ public sealed partial class MainWindow : Window
         EditorTextBox.PreviewKeyDown += OnEditorPreviewKeyDown;
         EditorTextBox.TextChanged += OnEditorTextChanged;
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+    }
+
+    private void OnTopTitleBarLayoutUpdated(object? sender, object e) =>
+        UpdateTitleBarChromeRegions();
+
+    private void CleanupWindowResources()
+    {
+        if (_isCleanedUp)
+            return;
+
+        _isCleanedUp = true;
+
+        try
+        {
+            TopTitleBarGrid.LayoutUpdated -= OnTopTitleBarLayoutUpdated;
+            ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            if (_liveSyncTimer.IsEnabled)
+                FlushSyncLiveBlocksToViewModel();
+            _liveSyncTimer.Stop();
+            if (ViewModel.SelectedNote?.Model is not null)
+            {
+                _ = ViewModel.ForceSaveAsync();
+            }
+            ViewModel.Shutdown();
+        }
+        catch
+        {
+        }
+
+        _chromeService.Dispose();
+        _backdropService.Dispose();
+    }
+
+    private void OnWindowClosed(object sender, WindowEventArgs args)
+    {
+        CleanupWindowResources();
+        try
+        {
+            Application.Current.Exit();
+        }
+        catch
+        {
+        }
     }
 
     public MainViewModel ViewModel { get; }
