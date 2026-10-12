@@ -27,16 +27,16 @@
         <!-- Borderless Top Title Bar -->
         <Grid x:Name="TopTitleBarGrid" Grid.Row="0" Height="48" Background="{x:Null}">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <!-- Dedicated Native DWM TitleBar Drag Surface (clears right 148px for Min/Max/Close caption buttons) -->
+            <!-- Dedicated Native DWM TitleBar Drag Surface (clears right 140px for Min/Max/Close caption buttons) -->
             <Border
                 x:Name="AppTitleBar"
                 Grid.ColumnSpan="3"
-                Margin="0,0,148,0"
+                Margin="0,0,140,0"
                 Background="Transparent"
                 PointerPressed="OnTitleBarPointerPressed"
                 PointerMoved="OnTitleBarPointerMoved"
@@ -48,7 +48,7 @@
             <!-- Left: Symmetrical 32x32 Sidebar Toggle, Brand & Active Folder Pill -->
             <StackPanel
                 Grid.Column="0"
-                Margin="12,0,0,0"
+                Margin="12,0,8,0"
                 Orientation="Horizontal"
                 Spacing="8"
                 HorizontalAlignment="Left"
@@ -84,6 +84,7 @@
                 </Button>
 
                 <TextBlock
+                    x:Name="BrandTitleText"
                     Text="Noti"
                     FontSize="14"
                     FontWeight="SemiBold"
@@ -92,6 +93,7 @@
                     VerticalAlignment="Center" />
 
                 <Border
+                    x:Name="ActiveFolderBadgeBorder"
                     Padding="8,3"
                     CornerRadius="6"
                     IsHitTestVisible="False"
@@ -117,6 +119,7 @@
                 Height="32"
                 Padding="2"
                 CornerRadius="8"
+                HorizontalAlignment="Center"
                 Background="{ThemeResource InputBackgroundBrush}"
                 BorderBrush="{ThemeResource GlassBorderBrush}"
                 BorderThickness="1"
@@ -155,7 +158,7 @@
             <!-- Right: Compact Zoom Badge & Update Pill (padded left of window caption buttons) -->
             <StackPanel
                 Grid.Column="2"
-                Margin="0,0,148,0"
+                Margin="8,0,140,0"
                 Orientation="Horizontal"
                 Spacing="8"
                 HorizontalAlignment="Right"

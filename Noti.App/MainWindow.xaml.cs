@@ -146,6 +146,9 @@ public sealed partial class MainWindow : Window
         var horizPad  = isSmall ? 16.0 : (isCompact ? 24.0 : 44.0);
         var vertPad   = isCompact ? 18.0 : 28.0;
 
+        ActiveFolderBadgeBorder.Visibility = isSmall ? Visibility.Collapsed : Visibility.Visible;
+        BrandTitleText.Visibility = width < 560 ? Visibility.Collapsed : Visibility.Visible;
+
         EditorTextBox.Padding = new Thickness(horizPad, vertPad, horizPad, 16);
         LiveEditorPanel.Padding = new Thickness(horizPad, vertPad, horizPad, 80);
         StatusBarGrid.Padding = new Thickness(horizPad, 0, horizPad, 0);

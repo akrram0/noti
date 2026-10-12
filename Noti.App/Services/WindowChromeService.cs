@@ -80,8 +80,9 @@ internal sealed class WindowChromeService
     }
 
     /// <summary>
-    /// Updates the native non-client caption drag rectangles and interactive passthrough regions
-    /// so DWM handles click-and-hold dragging and top-right Minimize/Maximize/Close buttons natively.
+    /// Marks the custom title bar area (left of the native Min/Max/Close caption buttons) as Passthrough
+    /// so all XAML controls (Update button, Zoom badge, Mode switcher, Sidebar toggle) receive direct hover/click
+    /// events at any window size while AppTitleBar handles 4px-threshold click-and-hold DWM dragging.
     /// </summary>
     public void UpdateTitleBarRegions(FrameworkElement titleBarContainer, params FrameworkElement[] interactiveControls)
     {
@@ -95,7 +96,7 @@ internal sealed class WindowChromeService
         var titleBar = _window.AppWindow.TitleBar;
         var rightCaptionInset = titleBar.RightInset > 0
             ? titleBar.RightInset
-            : (int)Math.Ceiling(144 * scale);
+            : (int)Math.Ceiling(140 * scale);
 
         var totalWidthPx  = (int)Math.Round(titleBarContainer.ActualWidth * scale);
         var totalHeightPx = (int)Math.Round(48 * scale);
@@ -104,41 +105,17 @@ internal sealed class WindowChromeService
         try
         {
             var nonClientSource = InputNonClientPointerSource.GetForWindowId(_window.AppWindow.Id);
+            nonClientSource.ClearRegionRects(NonClientRegionKind.Caption);
 
-            // 1. Mark the title bar area (left of native Min/Max/Close buttons) as native DWM Caption
             if (usableWidthPx > 0 && totalHeightPx > 0)
             {
-                var captionRect = new RectInt32(0, 0, usableWidthPx, totalHeightPx);
-                titleBar.SetDragRectangles([captionRect]);
-                nonClientSource.SetRegionRects(NonClientRegionKind.Caption, [captionRect]);
+                var clientTitleRect = new RectInt32(0, 0, usableWidthPx, totalHeightPx);
+                nonClientSource.SetRegionRects(NonClientRegionKind.Passthrough, [clientTitleRect]);
             }
-
-            // 2. Mark interactive XAML controls inside the title bar as Passthrough so clicks hit them directly
-            var passthroughRects = new List<RectInt32>();
-            foreach (var ctrl in interactiveControls)
-            {
-                if (ctrl is null || ctrl.Visibility != Visibility.Visible || ctrl.ActualWidth <= 0 || ctrl.ActualHeight <= 0)
-                    continue;
-
-                var transform = ctrl.TransformToVisual( null);
-                var bounds = transform.TransformBounds(new Rect(0, 0, ctrl.ActualWidth, ctrl.ActualHeight));
-                var x = Math.Max(0, (int)Math.Floor(bounds.X * scale));
-                var y = Math.Max(0, (int)Math.Floor(bounds.Y * scale));
-                var w = Math.Max(1, (int)Math.Ceiling(bounds.Width * scale));
-                var h = Math.Max(1, (int)Math.Ceiling(bounds.Height * scale));
-
-                if (x < usableWidthPx)
-                {
-                    var clampedW = Math.Min(w, usableWidthPx - x);
-                    if (clampedW > 0)
-                        passthroughRects.Add(new RectInt32(x, y, clampedW, h));
-                }
-            }
-
-            if (passthroughRects.Count > 0)
-                nonClientSource.SetRegionRects(NonClientRegionKind.Passthrough, [.. passthroughRects]);
             else
+            {
                 nonClientSource.ClearRegionRects(NonClientRegionKind.Passthrough);
+            }
         }
         catch
         {
