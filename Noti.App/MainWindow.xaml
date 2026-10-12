@@ -32,6 +32,12 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
+            <!-- Dedicated Native DWM TitleBar Drag Surface -->
+            <Border
+                x:Name="AppTitleBar"
+                Grid.ColumnSpan="3"
+                Background="Transparent" />
+
             <!-- Left: Animated Sidebar Toggle, Brand & Active Folder Pill -->
             <StackPanel
                 Grid.Column="0"

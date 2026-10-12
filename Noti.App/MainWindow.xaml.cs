@@ -1,6 +1,4 @@
 using System.ComponentModel;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Input;
@@ -49,12 +47,6 @@ public sealed partial class MainWindow : Window
     private DesktopAcrylicController? _acrylicController;
     private SystemBackdropConfiguration? _backdropConfig;
     private Storyboard? _sidebarContextStoryboard;
-    private SubclassProc? _windowSubclassProc;
-    private bool _isInWindowSizeMove;
-    private long _lastMoveUpdateTimestamp;
-    private int _pendingMoveX;
-    private int _pendingMoveY;
-    private bool _hasPendingMovePosition;
 
     private static readonly SolidColorBrush TransparentBrush = new(Colors.Transparent);
     private static readonly SolidColorBrush AccentBrush = new(ColorHelper.FromArgb(255, 10, 132, 255));
@@ -93,11 +85,7 @@ public sealed partial class MainWindow : Window
 
         InitializeComponent();
         ConfigureWindowChrome();
-        Closed += (_, _) =>
-        {
-            RemoveWindowDragSubclass();
-            DisposeAcrylicController();
-        };
+        Closed += (_, _) => DisposeAcrylicController();
 
         _liveSyncTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
         _liveSyncTimer.Tick += (_, _) => FlushSyncLiveBlocksToViewModel();
@@ -123,6 +111,7 @@ public sealed partial class MainWindow : Window
         {
             LiveCanvasRootGrid.MinHeight = Math.Max(0, LiveEditorScrollViewer.ActualHeight);
         };
+        TopTitleBarGrid.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
         SidebarToggleButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
         ViewSwitcherBorder.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
         UpdateTopBarButton.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
@@ -156,6 +145,9 @@ public sealed partial class MainWindow : Window
 
         ApplyWindowBackdrop();
 
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
+
         if (AppWindowTitleBar.IsCustomizationSupported())
         {
             var titleBar = AppWindow.TitleBar;
@@ -164,124 +156,7 @@ public sealed partial class MainWindow : Window
             titleBar.ButtonBackgroundColor = Colors.Transparent;
             titleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
             titleBar.ButtonForegroundColor = Colors.Gray;
-            SetTitleBar(TopTitleBarGrid);
         }
-
-        InstallWindowDragSubclass();
-    }
-
-    private delegate nint SubclassProc(nint hWnd, uint uMsg, nint wParam, nint lParam, nuint uIdSubclass, nuint dwRefData);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct WINDOWPOS
-    {
-        public nint hwnd;
-        public nint hwndInsertAfter;
-        public int x;
-        public int y;
-        public int cx;
-        public int cy;
-        public uint flags;
-    }
-
-    [DllImport("comctl32.dll")]
-    private static extern bool SetWindowSubclass(nint hWnd, SubclassProc pfnSubclass, nuint uIdSubclass, nuint dwRefData);
-
-    [DllImport("comctl32.dll")]
-    private static extern bool RemoveWindowSubclass(nint hWnd, SubclassProc pfnSubclass, nuint uIdSubclass);
-
-    [DllImport("comctl32.dll")]
-    private static extern nint DefSubclassProc(nint hWnd, uint uMsg, nint wParam, nint lParam);
-
-    [DllImport("user32.dll")]
-    private static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
-
-    private void InstallWindowDragSubclass()
-    {
-        try
-        {
-            var hwnd = WindowNative.GetWindowHandle(this);
-            if (hwnd == 0)
-                return;
-
-            _windowSubclassProc = WindowDragSubclassWndProc;
-            SetWindowSubclass(hwnd, _windowSubclassProc, 1, 0);
-        }
-        catch
-        {
-        }
-    }
-
-    private void RemoveWindowDragSubclass()
-    {
-        try
-        {
-            if (_windowSubclassProc is null)
-                return;
-
-            var hwnd = WindowNative.GetWindowHandle(this);
-            if (hwnd != 0)
-                RemoveWindowSubclass(hwnd, _windowSubclassProc, 1);
-            _windowSubclassProc = null;
-        }
-        catch
-        {
-        }
-    }
-
-    // shortcut: 120Hz move throttle during Blur backdrop drag prevents high-polling mouse DWM blur queue lag, remove if WinUI DesktopAcrylicController fixes DWM sync
-    private nint WindowDragSubclassWndProc(nint hWnd, uint uMsg, nint wParam, nint lParam, nuint uIdSubclass, nuint dwRefData)
-    {
-        const uint WM_WINDOWPOSCHANGING = 0x0046;
-        const uint WM_ENTERSIZEMOVE = 0x0231;
-        const uint WM_EXITSIZEMOVE = 0x0232;
-        const uint SWP_NOSIZE = 0x0001;
-        const uint SWP_NOMOVE = 0x0002;
-        const uint SWP_NOZORDER = 0x0004;
-        const uint SWP_NOACTIVATE = 0x0010;
-
-        if (uMsg == WM_ENTERSIZEMOVE)
-        {
-            _isInWindowSizeMove = true;
-            _hasPendingMovePosition = false;
-            _lastMoveUpdateTimestamp = 0;
-        }
-        else if (uMsg == WM_EXITSIZEMOVE)
-        {
-            _isInWindowSizeMove = false;
-            if (_hasPendingMovePosition)
-            {
-                _hasPendingMovePosition = false;
-                SetWindowPos(hWnd, 0, _pendingMoveX, _pendingMoveY, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-            }
-        }
-        else if (uMsg == WM_WINDOWPOSCHANGING &&
-                 _isInWindowSizeMove &&
-                 ViewModel.CurrentBackdropMode == BackdropMode.Blur &&
-                 lParam != 0)
-        {
-            var pos = Marshal.PtrToStructure<WINDOWPOS>(lParam);
-            if ((pos.flags & SWP_NOMOVE) == 0 && (pos.flags & SWP_NOSIZE) != 0)
-            {
-                var now = Stopwatch.GetTimestamp();
-                var minInterval = Stopwatch.Frequency / 120; // ~8.3ms (120Hz)
-                if (_lastMoveUpdateTimestamp != 0 && (now - _lastMoveUpdateTimestamp) < minInterval)
-                {
-                    _pendingMoveX = pos.x;
-                    _pendingMoveY = pos.y;
-                    _hasPendingMovePosition = true;
-                    pos.flags |= SWP_NOMOVE;
-                    Marshal.StructureToPtr(pos, lParam, false);
-                }
-                else
-                {
-                    _lastMoveUpdateTimestamp = now;
-                    _hasPendingMovePosition = false;
-                }
-            }
-        }
-
-        return DefSubclassProc(hWnd, uMsg, wParam, lParam);
     }
 
     private void ApplyWindowBackdrop()
@@ -4705,35 +4580,64 @@ public sealed partial class MainWindow : Window
 
     private void UpdateTitleBarPassthrough()
     {
-        if (RootGrid.XamlRoot is null)
+        if (RootGrid.XamlRoot is null || AppTitleBar.ActualWidth <= 0 || AppTitleBar.ActualHeight <= 0)
             return;
 
         try
         {
-            var nonClientSource = InputNonClientPointerSource.GetForWindowId(AppWindow.Id);
             var scale = RootGrid.XamlRoot.RasterizationScale;
-            var regions = new List<RectInt32>();
+            var passthroughRects = new List<RectInt32>(4);
 
-            void AddElementRect(FrameworkElement el)
+            void AddInteractiveRect(FrameworkElement el)
             {
-                if (el.ActualWidth <= 0 || el.ActualHeight <= 0)
+                if (el.Visibility != Visibility.Visible || el.ActualWidth <= 0 || el.ActualHeight <= 0)
                     return;
 
                 var transform = el.TransformToVisual(RootGrid);
                 var bounds = transform.TransformBounds(new Rect(0, 0, el.ActualWidth, el.ActualHeight));
-                regions.Add(new RectInt32(
+                passthroughRects.Add(new RectInt32(
                     (int)Math.Round(bounds.X * scale),
                     (int)Math.Round(bounds.Y * scale),
                     (int)Math.Round(bounds.Width * scale),
                     (int)Math.Round(bounds.Height * scale)));
             }
 
-            AddElementRect(SidebarToggleButton);
-            AddElementRect(ViewSwitcherBorder);
-            AddElementRect(UpdateTopBarButton);
-            AddElementRect(ZoomBadgeButton);
+            AddInteractiveRect(SidebarToggleButton);
+            AddInteractiveRect(ViewSwitcherBorder);
+            AddInteractiveRect(UpdateTopBarButton);
+            AddInteractiveRect(ZoomBadgeButton);
 
-            nonClientSource.SetRegionRects(NonClientRegionKind.Passthrough, regions.ToArray());
+            if (AppWindowTitleBar.IsCustomizationSupported())
+            {
+                var titleBar = AppWindow.TitleBar;
+                var totalWidthPx = (int)Math.Round(AppTitleBar.ActualWidth * scale);
+                var titleBarHeightPx = (int)Math.Round(AppTitleBar.ActualHeight * scale);
+                var leftInsetPx = Math.Max(0, titleBar.LeftInset);
+                var rightInsetPx = titleBar.RightInset > 0 ? titleBar.RightInset : (int)Math.Round(140 * scale);
+                var maxRightPx = Math.Max(leftInsetPx, totalWidthPx - rightInsetPx);
+
+                passthroughRects.Sort(static (a, b) => a.X.CompareTo(b.X));
+
+                var dragRects = new List<RectInt32>(5);
+                var cursorX = leftInsetPx;
+
+                foreach (var r in passthroughRects)
+                {
+                    var blockStart = Math.Clamp(r.X, leftInsetPx, maxRightPx);
+                    var blockEnd = Math.Clamp(r.X + r.Width, leftInsetPx, maxRightPx);
+                    if (blockStart > cursorX)
+                        dragRects.Add(new RectInt32(cursorX, 0, blockStart - cursorX, titleBarHeightPx));
+                    cursorX = Math.Max(cursorX, blockEnd);
+                }
+
+                if (cursorX < maxRightPx)
+                    dragRects.Add(new RectInt32(cursorX, 0, maxRightPx - cursorX, titleBarHeightPx));
+
+                titleBar.SetDragRectangles(dragRects.ToArray());
+            }
+
+            var nonClientSource = InputNonClientPointerSource.GetForWindowId(AppWindow.Id);
+            nonClientSource.SetRegionRects(NonClientRegionKind.Passthrough, passthroughRects.ToArray());
         }
         catch
         {
