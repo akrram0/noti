@@ -1850,6 +1850,96 @@ public sealed partial class MainWindow : Window
         sb.Begin();
     }
 
+    private void OnSidebarTogglePointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        var targetX = ViewModel.IsSidebarOpen ? -1.2 : -0.8;
+        AnimateDoubleProperty(SidebarIconTranslate, "X", SidebarIconTranslate.X, targetX, 140);
+        SidebarIconTranslate.X = targetX;
+    }
+
+    private void OnSidebarTogglePointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        var targetX = ViewModel.IsSidebarOpen ? 0.0 : -2.0;
+        AnimateDoubleProperty(SidebarIconTranslate, "X", SidebarIconTranslate.X, targetX, 140);
+        SidebarIconTranslate.X = targetX;
+    }
+
+    private void OnAddNotePointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        AnimateDoubleProperty(AddNoteIconScale, "ScaleX", AddNoteIconScale.ScaleX, 1.12, 150);
+        AnimateDoubleProperty(AddNoteIconScale, "ScaleY", AddNoteIconScale.ScaleY, 1.12, 150);
+        AnimateDoubleProperty(AddNoteIconRotate, "Angle", AddNoteIconRotate.Angle, 90.0, 180);
+        AddNoteIconScale.ScaleX = 1.12;
+        AddNoteIconScale.ScaleY = 1.12;
+        AddNoteIconRotate.Angle = 90.0;
+    }
+
+    private void OnAddNotePointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        AnimateDoubleProperty(AddNoteIconScale, "ScaleX", AddNoteIconScale.ScaleX, 1.0, 150);
+        AnimateDoubleProperty(AddNoteIconScale, "ScaleY", AddNoteIconScale.ScaleY, 1.0, 150);
+        AnimateDoubleProperty(AddNoteIconRotate, "Angle", AddNoteIconRotate.Angle, 0.0, 180);
+        AddNoteIconScale.ScaleX = 1.0;
+        AddNoteIconScale.ScaleY = 1.0;
+        AddNoteIconRotate.Angle = 0.0;
+    }
+
+    private void OnAddFolderPointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        AnimateDoubleProperty(AddFolderIconScale, "ScaleX", AddFolderIconScale.ScaleX, 1.08, 150);
+        AnimateDoubleProperty(AddFolderIconScale, "ScaleY", AddFolderIconScale.ScaleY, 1.08, 150);
+        AnimateDoubleProperty(AddFolderPlusScale, "ScaleX", AddFolderPlusScale.ScaleX, 1.2, 160);
+        AnimateDoubleProperty(AddFolderPlusScale, "ScaleY", AddFolderPlusScale.ScaleY, 1.2, 160);
+        AddFolderIconScale.ScaleX = 1.08;
+        AddFolderIconScale.ScaleY = 1.08;
+        AddFolderPlusScale.ScaleX = 1.2;
+        AddFolderPlusScale.ScaleY = 1.2;
+    }
+
+    private void OnAddFolderPointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        AnimateDoubleProperty(AddFolderIconScale, "ScaleX", AddFolderIconScale.ScaleX, 1.0, 150);
+        AnimateDoubleProperty(AddFolderIconScale, "ScaleY", AddFolderIconScale.ScaleY, 1.0, 150);
+        AnimateDoubleProperty(AddFolderPlusScale, "ScaleX", AddFolderPlusScale.ScaleX, 1.0, 160);
+        AnimateDoubleProperty(AddFolderPlusScale, "ScaleY", AddFolderPlusScale.ScaleY, 1.0, 160);
+        AddFolderIconScale.ScaleX = 1.0;
+        AddFolderIconScale.ScaleY = 1.0;
+        AddFolderPlusScale.ScaleX = 1.0;
+        AddFolderPlusScale.ScaleY = 1.0;
+    }
+
+    private void OnSettingsGearPointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        var baseAngle = ViewModel.IsSettingsOpen ? 180.0 : 0.0;
+        var targetAngle = baseAngle + 45.0;
+        AnimateDoubleProperty(SettingsGearRotate, "Angle", SettingsGearRotate.Angle, targetAngle, 180);
+        SettingsGearRotate.Angle = targetAngle;
+    }
+
+    private void OnSettingsGearPointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        var targetAngle = ViewModel.IsSettingsOpen ? 180.0 : 0.0;
+        AnimateDoubleProperty(SettingsGearRotate, "Angle", SettingsGearRotate.Angle, targetAngle, 180);
+        SettingsGearRotate.Angle = targetAngle;
+    }
+
+    private static void AnimateDoubleProperty(DependencyObject target, string propertyPath, double from, double to, int durationMs)
+    {
+        var sb = new Storyboard();
+        var anim = new DoubleAnimation
+        {
+            From = from,
+            To = to,
+            Duration = new Duration(TimeSpan.FromMilliseconds(durationMs)),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(anim, target);
+        Storyboard.SetTargetProperty(anim, propertyPath);
+        sb.Children.Add(anim);
+        sb.Begin();
+    }
+
     private void AnimateViewModeChange()
     {
         var sb = new Storyboard();

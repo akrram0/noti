@@ -185,12 +185,18 @@ public sealed class NoteItemViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(ChevronGlyph));
                 OnPropertyChanged(nameof(FolderIconGlyph));
+                OnPropertyChanged(nameof(FolderOpenFlapVisibility));
+                OnPropertyChanged(nameof(FolderClosedFlapVisibility));
+                OnPropertyChanged(nameof(ChevronRotationAngle));
             }
         }
     }
 
     public string ChevronGlyph => _isExpanded ? "\uE70D" : "\uE76C";
     public string FolderIconGlyph => _isExpanded ? "\uE838" : "\uE8B7";
+    public Visibility FolderOpenFlapVisibility => _isExpanded ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility FolderClosedFlapVisibility => _isExpanded ? Visibility.Collapsed : Visibility.Visible;
+    public double ChevronRotationAngle => _isExpanded ? 0.0 : -90.0;
     public string NoteLeadingIconGlyph => IsPinned ? "\uE840" : "\uE8A5";
 
     public int FolderNoteCount

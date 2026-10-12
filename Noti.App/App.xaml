@@ -21,6 +21,7 @@
                     <SolidColorBrush x:Key="SubtleDividerBrush" Color="#24FFFFFF" />
                     <SolidColorBrush x:Key="ControlBorderBrush" Color="#1EFFFFFF" />
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFF5F5F7" />
+                    <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FFF5F5F7" />
                     <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FFA1A1AA" />
                     <SolidColorBrush x:Key="TextMutedBrush" Color="#FFA1A1A6" />
                     <LinearGradientBrush x:Key="GlassFillBrush" StartPoint="0,0" EndPoint="1,1">
@@ -69,6 +70,7 @@
                     <SolidColorBrush x:Key="SubtleDividerBrush" Color="#24FFFFFF" />
                     <SolidColorBrush x:Key="ControlBorderBrush" Color="#1EFFFFFF" />
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFF5F5F7" />
+                    <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FFF5F5F7" />
                     <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FFA1A1AA" />
                     <SolidColorBrush x:Key="TextMutedBrush" Color="#FFA1A1A6" />
                     <LinearGradientBrush x:Key="GlassFillBrush" StartPoint="0,0" EndPoint="1,1">
@@ -117,6 +119,7 @@
                     <SolidColorBrush x:Key="SubtleDividerBrush" Color="#1A000000" />
                     <SolidColorBrush x:Key="ControlBorderBrush" Color="#14000000" />
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FF1C1C1E" />
+                    <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FF1C1C1E" />
                     <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FF3F3F46" />
                     <SolidColorBrush x:Key="TextMutedBrush" Color="#FF6C6C70" />
                     <LinearGradientBrush x:Key="GlassFillBrush" StartPoint="0,0" EndPoint="1,1">
@@ -224,7 +227,7 @@
                 <Setter Property="Padding" Value="0" />
                 <Setter Property="CornerRadius" Value="8" />
                 <Setter Property="Background" Value="{ThemeResource GlassFillBrush}" />
-                <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
                 <Setter Property="BorderBrush" Value="{ThemeResource GlassBorderBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="HorizontalContentAlignment" Value="Center" />
