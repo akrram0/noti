@@ -11,68 +11,6 @@ using Windows.UI.ViewManagement;
 
 namespace Noti.App.ViewModels;
 
-public enum EditorViewMode
-{
-    Live = 0,
-    Source = 1
-}
-
-public enum ThemeMode
-{
-    System = 0,
-    Dark = 1,
-    Light = 2
-}
-
-public enum BackdropMode
-{
-    Blur = 0,
-    Mica = 1
-}
-
-public enum SettingsSection
-{
-    Appearance = 0,
-    Profile = 1,
-    Vault = 2,
-    Shortcuts = 3
-}
-
-public sealed class CommandPaletteItem : ObservableObject
-{
-    private bool _isSelected;
-
-    public required string Title { get; init; }
-    public required string Subtitle { get; init; }
-    public required string IconGlyph { get; init; }
-    public required string ShortcutHint { get; init; }
-    public NoteItemViewModel? TargetNote { get; init; }
-    public Action? ExecuteAction { get; init; }
-
-    public bool IsSelected
-    {
-        get => _isSelected;
-        set
-        {
-            if (SetProperty(ref _isSelected, value))
-                OnPropertyChanged(nameof(SelectionOpacity));
-        }
-    }
-
-    public double SelectionOpacity => _isSelected ? 1.0 : 0.0;
-}
-
-public sealed class SlashCommandItem
-{
-    public required string Id { get; init; }
-    public required string Title { get; init; }
-    public required string Subtitle { get; init; }
-    public string BadgeText { get; init; } = string.Empty;
-    public string IconGlyph { get; init; } = string.Empty;
-    public Visibility BadgeTextVisibility => string.IsNullOrEmpty(BadgeText) ? Visibility.Collapsed : Visibility.Visible;
-    public Visibility IconVisibility => string.IsNullOrEmpty(IconGlyph) ? Visibility.Collapsed : Visibility.Visible;
-}
-
 public sealed class MainViewModel : ObservableObject
 {
     private readonly NoteService _noteService;

@@ -15,52 +15,6 @@ using Windows.UI.Core;
 
 namespace Noti.App;
 
-public enum LiveBlockKind
-{
-    Paragraph,
-    Heading1,
-    Heading2,
-    Heading3,
-    Checklist,
-    Bullet,
-    Quote,
-    CodeBlock,
-    TableBlock,
-    Divider,
-    ImageBlock,
-    HtmlWrapper
-}
-
-public sealed class LiveDocBlock
-{
-    public LiveBlockKind Kind { get; set; } = LiveBlockKind.Paragraph;
-    public string Content { get; set; } = string.Empty;
-    public bool IsChecked { get; set; }
-    public TextAlignment BlockAlignment { get; set; } = TextAlignment.Left;
-    public bool IsCentered
-    {
-        get => BlockAlignment == TextAlignment.Center;
-        set => BlockAlignment = value ? TextAlignment.Center : TextAlignment.Left;
-    }
-    public HorizontalAlignment HorizontalBlockAlignment => BlockAlignment switch
-    {
-        TextAlignment.Center => HorizontalAlignment.Center,
-        TextAlignment.Right => HorizontalAlignment.Right,
-        _ => HorizontalAlignment.Left
-    };
-    public bool IsBlockBold { get; set; }
-    public bool IsBlockItalic { get; set; }
-    public bool IsBlockStrikethrough { get; set; }
-    public bool IsBlockCode { get; set; }
-    public List<List<string>> TableMatrix { get; set; } = [];
-    public List<double> ColumnWidths { get; set; } = [];
-    public TextBox? PrimaryTextBox { get; set; }
-    public Border? RichDisplayHost { get; set; }
-    public Grid? CellHostGrid { get; set; }
-    public TextBlock? DisplayTextBlock { get; set; }
-    public FrameworkElement? RootElement { get; set; }
-}
-
 public static class MarkdownRenderer
 {
     private static readonly Dictionary<int, List<double>> TableColumnWidths = new();
