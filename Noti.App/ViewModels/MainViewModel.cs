@@ -157,8 +157,8 @@ public sealed class MainViewModel : ObservableObject
         if (!string.IsNullOrWhiteSpace(_settings.VaultDirectoryPath) && _noteService.Store is MarkdownNoteStore mdStore)
             mdStore.SetDirectoryPath(_settings.VaultDirectoryPath);
 
-        CreateNoteCommand = new AsyncRelayCommand(() => CreateNoteInFolderAsync(_activeFolderPath));
-        StartNewFolderCommand = new RelayCommand(() => StartNewSubfolder(_activeFolderPath));
+        CreateNoteCommand = new AsyncRelayCommand(() => CreateNoteInFolderAsync(string.Empty));
+        StartNewFolderCommand = new RelayCommand(() => StartNewSubfolder(string.Empty));
         ConfirmNewFolderCommand = new AsyncRelayCommand(ConfirmNewFolderAsync);
         CancelNewFolderCommand = new RelayCommand(() =>
         {
@@ -692,10 +692,10 @@ public sealed class MainViewModel : ObservableObject
             new()
             {
                 Title = "Create new note",
-                Subtitle = "Create a blank Markdown note in the current folder",
+                Subtitle = "Create a blank Markdown note",
                 IconGlyph = "\uE710",
                 ShortcutHint = "Ctrl+N",
-                ExecuteAction = () => _ = CreateNoteInFolderAsync(_activeFolderPath)
+                ExecuteAction = () => _ = CreateNoteInFolderAsync(string.Empty)
             },
             new()
             {
@@ -1001,7 +1001,6 @@ public sealed class MainViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(folderPath))
             return;
 
-        ActiveFolderPath = folderPath;
         if (!_collapsedFolders.Remove(folderPath))
             _collapsedFolders.Add(folderPath);
 
@@ -1074,7 +1073,7 @@ public sealed class MainViewModel : ObservableObject
 
     public async Task CreateNoteInFolderAsync(string? folderPath = null)
     {
-        var targetFolder = NoteService.NormalizeFolderPath(folderPath ?? _activeFolderPath);
+        var targetFolder = NoteService.NormalizeFolderPath(folderPath ?? string.Empty);
         if (!string.IsNullOrEmpty(targetFolder))
         {
             AddFolderHierarchy(targetFolder);
