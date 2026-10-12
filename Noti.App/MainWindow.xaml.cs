@@ -204,16 +204,16 @@ public sealed partial class MainWindow : Window
 
         var tintColor = isDark
             ? ColorHelper.FromArgb(255, 10, 10, 14)
-            : ColorHelper.FromArgb(255, 240, 240, 245);
+            : ColorHelper.FromArgb(255, 248, 248, 252);
 
         _acrylicController.TintColor = tintColor;
         _acrylicController.FallbackColor = tintColor;
         _acrylicController.TintOpacity = isDark
             ? Math.Clamp(t * 0.38f, 0.0f, 0.45f)
-            : Math.Clamp(t * 0.18f, 0.0f, 0.28f);
+            : Math.Clamp(0.36f + (t * 0.34f), 0.36f, 0.70f);
         _acrylicController.LuminosityOpacity = isDark
             ? Math.Clamp(0.03f + (t * 0.25f), 0.03f, 0.30f)
-            : Math.Clamp(0.02f + (t * 0.16f), 0.02f, 0.20f);
+            : Math.Clamp(0.50f + (t * 0.28f), 0.50f, 0.78f);
     }
 
     private void DisposeAcrylicController()
@@ -711,8 +711,8 @@ public sealed partial class MainWindow : Window
         {
             _cachedIsDarkMode = isDarkMode;
             _cachedPrimaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 245, 245, 247) : ColorHelper.FromArgb(255, 28, 28, 30));
-            _cachedSecondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 108, 108, 112));
-            _cachedSurfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(22, 0, 0, 0));
+            _cachedSecondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 63, 63, 70));
+            _cachedSurfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(135, 255, 255, 255));
             _cachedBorderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(38, 255, 255, 255) : ColorHelper.FromArgb(28, 0, 0, 0));
             _cachedInputBgBrush = TransparentBrush;
         }

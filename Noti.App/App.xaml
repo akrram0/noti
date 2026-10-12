@@ -96,27 +96,27 @@
                 </ResourceDictionary>
 
                 <ResourceDictionary x:Key="Light">
-                    <SolidColorBrush x:Key="CanvasBackgroundBrush" Color="#FFF5F5F7" />
-                    <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#88F5F5F7" />
-                    <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FFFFFFFF" TintOpacity="0.12" TintLuminosityOpacity="0.14" FallbackColor="#99F5F5F7" />
-                    <SolidColorBrush x:Key="SurfaceActiveBrush" Color="#1C000000" />
-                    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#0F000000" />
-                    <SolidColorBrush x:Key="InputBackgroundBrush" Color="#12000000" />
+                    <SolidColorBrush x:Key="CanvasBackgroundBrush" Color="#FFF8F8FC" />
+                    <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#D8F8F8FC" />
+                    <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FFFFFFFF" TintOpacity="0.45" TintLuminosityOpacity="0.62" FallbackColor="#E8F5F5F7" />
+                    <SolidColorBrush x:Key="SurfaceActiveBrush" Color="#88FFFFFF" />
+                    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#55FFFFFF" />
+                    <SolidColorBrush x:Key="InputBackgroundBrush" Color="#58FFFFFF" />
                     <SolidColorBrush x:Key="SettingsSurfaceBrush" Color="#FFFAFAFC" />
                     <SolidColorBrush x:Key="ModalBackdropBrush" Color="#70000000" />
                     <SolidColorBrush x:Key="SubtleDividerBrush" Color="#1E000000" />
                     <SolidColorBrush x:Key="ControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FF1C1C1E" />
-                    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FF52525B" />
-                    <SolidColorBrush x:Key="TextMutedBrush" Color="#FF8E8E93" />
+                    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FF3F3F46" />
+                    <SolidColorBrush x:Key="TextMutedBrush" Color="#FF6C6C70" />
                     <LinearGradientBrush x:Key="GlassFillBrush" StartPoint="0,0" EndPoint="1,1">
-                        <GradientStop Color="#12000000" Offset="0.0" />
-                        <GradientStop Color="#08000000" Offset="1.0" />
+                        <GradientStop Color="#66FFFFFF" Offset="0.0" />
+                        <GradientStop Color="#38FFFFFF" Offset="1.0" />
                     </LinearGradientBrush>
-                    <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#1C000000" />
-                    <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#26000000" />
+                    <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#80FFFFFF" />
+                    <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#44FFFFFF" />
                     <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
-                    <SolidColorBrush x:Key="ToggleTrackBrush" Color="#18000000" />
+                    <SolidColorBrush x:Key="ToggleTrackBrush" Color="#22000000" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#FFFFFFFF" />
                     <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
