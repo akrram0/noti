@@ -40,6 +40,7 @@ public sealed partial class MainWindow
 
     private void OnLiveEditorScrollViewerViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
     {
+        HideSmoothCaretOverlay();
         if (_liveMaterializedCount < _liveBlocks.Count &&
             LiveEditorScrollViewer.VerticalOffset + LiveEditorScrollViewer.ViewportHeight >= LiveEditorScrollViewer.ExtentHeight - 420)
         {

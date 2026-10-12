@@ -28,6 +28,8 @@ public sealed partial class MainWindow : Window
     public const string BranchIndent = "│   ";
 
     private Storyboard? _typingWordStoryboard;
+    private Storyboard? _smoothCaretStoryboard;
+    private bool _hasSmoothCaretPosition;
     private string? _pendingDeleteFolderPath;
     private bool _isCommandPaletteOpen;
     private int _activeMentionAtIndex = -1;
@@ -125,6 +127,8 @@ public sealed partial class MainWindow : Window
         RootGrid.PreviewKeyDown += OnRootPreviewKeyDown;
         EditorTextBox.PreviewKeyDown += OnEditorPreviewKeyDown;
         EditorTextBox.TextChanged += OnEditorTextChanged;
+        EditorTextBox.GotFocus += (_, _) => ScheduleSmoothCaretUpdate(EditorTextBox);
+        EditorTextBox.LostFocus += (_, _) => HideSmoothCaretOverlay();
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
     }
 
@@ -763,6 +767,7 @@ public sealed partial class MainWindow : Window
         UpdateSlashMenuAutocomplete();
         UpdateMentionAutocomplete();
         UpdateActiveMentionJumpPill();
+        ScheduleSmoothCaretUpdate(EditorTextBox);
 
         if (!ViewModel.IsFluidAnimationEnabled || EditorTextBox.FocusState == FocusState.Unfocused)
             return;
@@ -782,6 +787,7 @@ public sealed partial class MainWindow : Window
         UpdateSlashMenuAutocomplete();
         UpdateMentionAutocomplete();
         UpdateActiveMentionJumpPill();
+        ScheduleSmoothCaretUpdate(EditorTextBox);
     }
 
     private void OnEditorPointerReleased(object sender, PointerRoutedEventArgs e)
@@ -1705,12 +1711,205 @@ public sealed partial class MainWindow : Window
         wordSb.Begin();
     }
 
+    private void HideSmoothCaretOverlay()
+    {
+        _smoothCaretStoryboard?.Stop();
+        _hasSmoothCaretPosition = false;
+        if (SmoothCaretOverlayBorder.Visibility != Visibility.Collapsed)
+        {
+            SmoothCaretOverlayBorder.Opacity = 0.0;
+            SmoothCaretOverlayBorder.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void ScheduleSmoothCaretUpdate(TextBox? targetTb = null)
+    {
+        if (!ViewModel.IsFluidAnimationEnabled || ViewModel.IsSettingsOpen)
+        {
+            HideSmoothCaretOverlay();
+            return;
+        }
+
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            var tb = targetTb ?? GetActiveEditorTextBox();
+            if (!ViewModel.IsFluidAnimationEnabled ||
+                ViewModel.IsSettingsOpen ||
+                tb.FocusState == FocusState.Unfocused ||
+                tb.Visibility != Visibility.Visible ||
+                tb.SelectionLength > 0)
+            {
+                HideSmoothCaretOverlay();
+                return;
+            }
+
+            if (!TryComputeTargetCaretRect(tb, out var targetX, out var targetY, out var targetHeight))
+            {
+                HideSmoothCaretOverlay();
+                return;
+            }
+
+            SmoothCaretOverlayBorder.Height = targetHeight;
+
+            var fromX = SmoothCaretTranslate.X;
+            var fromY = SmoothCaretTranslate.Y;
+            var dx = Math.Abs(targetX - fromX);
+            var dy = Math.Abs(targetY - fromY);
+
+            if (!_hasSmoothCaretPosition ||
+                SmoothCaretOverlayBorder.Visibility != Visibility.Visible ||
+                dx > 360.0 ||
+                dy > 220.0)
+            {
+                _hasSmoothCaretPosition = true;
+                fromX = targetX;
+                fromY = targetY;
+                SmoothCaretTranslate.X = targetX;
+                SmoothCaretTranslate.Y = targetY;
+                SmoothCaretOverlayBorder.Visibility = Visibility.Visible;
+            }
+
+            _smoothCaretStoryboard?.Stop();
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            var sb = new Storyboard();
+
+            if (dx >= 0.4)
+            {
+                var moveX = new DoubleAnimation
+                {
+                    From = fromX,
+                    To = targetX,
+                    Duration = new Duration(TimeSpan.FromMilliseconds(85)),
+                    EasingFunction = ease,
+                    FillBehavior = FillBehavior.Stop
+                };
+                Storyboard.SetTarget(moveX, SmoothCaretTranslate);
+                Storyboard.SetTargetProperty(moveX, "X");
+                sb.Children.Add(moveX);
+            }
+
+            if (dy >= 0.4)
+            {
+                var moveY = new DoubleAnimation
+                {
+                    From = fromY,
+                    To = targetY,
+                    Duration = new Duration(TimeSpan.FromMilliseconds(85)),
+                    EasingFunction = ease,
+                    FillBehavior = FillBehavior.Stop
+                };
+                Storyboard.SetTarget(moveY, SmoothCaretTranslate);
+                Storyboard.SetTargetProperty(moveY, "Y");
+                sb.Children.Add(moveY);
+            }
+
+            var pulseFade = new DoubleAnimationUsingKeyFrames
+            {
+                FillBehavior = FillBehavior.Stop
+            };
+            pulseFade.KeyFrames.Add(new EasingDoubleKeyFrame
+            {
+                KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(0)),
+                Value = 0.95
+            });
+            pulseFade.KeyFrames.Add(new EasingDoubleKeyFrame
+            {
+                KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(180)),
+                Value = 0.95
+            });
+            pulseFade.KeyFrames.Add(new EasingDoubleKeyFrame
+            {
+                KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(360)),
+                Value = 0.0,
+                EasingFunction = ease
+            });
+            Storyboard.SetTarget(pulseFade, SmoothCaretOverlayBorder);
+            Storyboard.SetTargetProperty(pulseFade, "Opacity");
+            sb.Children.Add(pulseFade);
+
+            SmoothCaretTranslate.X = targetX;
+            SmoothCaretTranslate.Y = targetY;
+            SmoothCaretOverlayBorder.Opacity = 0.0;
+
+            _smoothCaretStoryboard = sb;
+            sb.Begin();
+        });
+    }
+
+    private bool TryComputeTargetCaretRect(TextBox tb, out double targetX, out double targetY, out double targetHeight)
+    {
+        targetX = 0;
+        targetY = 0;
+        targetHeight = 20;
+
+        if (!tb.IsLoaded || tb.ActualWidth <= 0 || tb.ActualHeight <= 0 || EditorPaneGrid.ActualWidth <= 0 || EditorPaneGrid.ActualHeight <= 0)
+            return false;
+
+        try
+        {
+            var text = tb.Text ?? string.Empty;
+            var caret = Math.Clamp(tb.SelectionStart, 0, text.Length);
+            double localX;
+            double localY;
+            var defaultLineHeight = Math.Clamp(Math.Round(tb.FontSize * 1.3), 15.0, 42.0);
+
+            if (text.Length == 0)
+            {
+                localY = tb.Padding.Top + Math.Max(0.0, (tb.ActualHeight - tb.Padding.Top - tb.Padding.Bottom - defaultLineHeight) * 0.5);
+                targetHeight = defaultLineHeight;
+                localX = tb.TextAlignment switch
+                {
+                    TextAlignment.Center => tb.ActualWidth * 0.5,
+                    TextAlignment.Right => Math.Max(tb.Padding.Left, tb.ActualWidth - tb.Padding.Right - 2.0),
+                    _ => tb.Padding.Left
+                };
+            }
+            else
+            {
+                Windows.Foundation.Rect charRect;
+                if (caret == 0)
+                    charRect = tb.GetRectFromCharacterIndex(0, trailingEdge: false);
+                else if (caret < text.Length && text[caret - 1] is '\r' or '\n')
+                    charRect = tb.GetRectFromCharacterIndex(caret, trailingEdge: false);
+                else
+                    charRect = tb.GetRectFromCharacterIndex(caret - 1, trailingEdge: true);
+
+                if (double.IsNaN(charRect.X) || double.IsNaN(charRect.Y) || (charRect.Height <= 0 && charRect.Width <= 0 && caret > 0))
+                    return false;
+
+                localX = charRect.X;
+                localY = charRect.Y;
+                if (tb.Padding.Left > 0 && localX < tb.Padding.Left - 1.0)
+                {
+                    localX += tb.Padding.Left;
+                    localY += tb.Padding.Top;
+                }
+
+                targetHeight = Math.Clamp(charRect.Height > 4.0 ? charRect.Height : defaultLineHeight, 15.0, 42.0);
+            }
+
+            var panePt = tb.TransformToVisual(EditorPaneGrid).TransformPoint(new Point(localX, localY));
+            targetX = panePt.X;
+            targetY = panePt.Y;
+
+            return targetX >= 0 &&
+                   targetY >= 0 &&
+                   targetX <= EditorPaneGrid.ActualWidth - 2 &&
+                   targetY + targetHeight <= EditorPaneGrid.ActualHeight;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         switch (e.PropertyName)
         {
             case nameof(MainViewModel.SelectedNote):
                 _liveSyncTimer.Stop();
+                HideSmoothCaretOverlay();
                 HideSidebarContextPopup();
                 HideMentionPopup();
                 HideSlashMenuPopup();
@@ -1742,6 +1941,7 @@ public sealed partial class MainWindow : Window
             case nameof(MainViewModel.CurrentViewMode):
                 if (_liveSyncTimer.IsEnabled)
                     FlushSyncLiveBlocksToViewModel();
+                HideSmoothCaretOverlay();
                 HideSidebarContextPopup();
                 HideMentionPopup();
                 HideSlashMenuPopup();
@@ -1759,10 +1959,16 @@ public sealed partial class MainWindow : Window
                 break;
 
             case nameof(MainViewModel.IsSettingsOpen):
+                HideSmoothCaretOverlay();
                 HideSidebarContextPopup();
                 if (_liveSyncTimer.IsEnabled)
                     FlushSyncLiveBlocksToViewModel();
                 AnimateSettingsModal(ViewModel.IsSettingsOpen);
+                break;
+
+            case nameof(MainViewModel.IsFluidAnimationEnabled):
+                if (!ViewModel.IsFluidAnimationEnabled)
+                    HideSmoothCaretOverlay();
                 break;
 
             case nameof(MainViewModel.CurrentSettingsSection):

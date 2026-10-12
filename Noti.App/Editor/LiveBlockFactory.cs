@@ -448,11 +448,13 @@ public sealed partial class MainWindow
                 if (block.DisplayTextBlock is { } dtb)
                     dtb.Visibility = Visibility.Collapsed;
                 tb.Visibility = Visibility.Visible;
+                ScheduleSmoothCaretUpdate(tb);
             }
         };
 
         tb.LostFocus += (_, _) =>
         {
+            HideSmoothCaretOverlay();
             if (_isSyncingLiveEditor || tb.Tag is not LiveDocBlock block)
                 return;
 
@@ -491,6 +493,7 @@ public sealed partial class MainWindow
             UpdateSlashMenuAutocomplete();
             UpdateMentionAutocomplete();
             UpdateActiveMentionJumpPill();
+            ScheduleSmoothCaretUpdate(tb);
 
             if (ViewModel.IsFluidAnimationEnabled && tb.FocusState != FocusState.Unfocused)
             {
@@ -511,6 +514,7 @@ public sealed partial class MainWindow
             UpdateSlashMenuAutocomplete();
             UpdateMentionAutocomplete();
             UpdateActiveMentionJumpPill();
+            ScheduleSmoothCaretUpdate(tb);
         };
 
         tb.PointerReleased += (_, _) =>

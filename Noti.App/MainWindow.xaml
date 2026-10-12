@@ -1015,6 +1015,24 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Non-Intrusive Smooth Gliding Caret Overlay (IsHitTestVisible="False") -->
+                        <Border
+                            x:Name="SmoothCaretOverlayBorder"
+                            IsHitTestVisible="False"
+                            UseLayoutRounding="False"
+                            Visibility="Collapsed"
+                            Opacity="0"
+                            Width="2"
+                            Height="20"
+                            CornerRadius="1"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            Background="{ThemeResource AccentPrimaryBrush}">
+                            <Border.RenderTransform>
+                                <TranslateTransform x:Name="SmoothCaretTranslate" X="0" Y="0" />
+                            </Border.RenderTransform>
+                        </Border>
+
                         <!-- Floating Word-Pop Animation Pill (Borderless, Crisp Opacity Fade) -->
                         <Border
                             x:Name="TypingWordPopupBorder"
