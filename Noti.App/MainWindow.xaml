@@ -25,28 +25,32 @@
             Opacity="{x:Bind ViewModel.SurfaceOpacity, Mode=OneWay}" />
 
         <!-- Borderless Top Title Bar -->
-        <Grid x:Name="TopTitleBarGrid" Grid.Row="0" Background="Transparent">
+        <Grid x:Name="TopTitleBarGrid" Grid.Row="0" Height="48" Background="{x:Null}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Dedicated Native DWM TitleBar Drag Surface -->
+            <!-- Dedicated Native DWM TitleBar Drag Surface (clears right 148px for Min/Max/Close caption buttons) -->
             <Border
                 x:Name="AppTitleBar"
                 Grid.ColumnSpan="3"
-                Margin="0,0,140,0"
+                Margin="0,0,148,0"
                 Background="Transparent"
                 PointerPressed="OnTitleBarPointerPressed"
+                PointerMoved="OnTitleBarPointerMoved"
+                PointerReleased="OnTitleBarPointerReleased"
+                PointerCanceled="OnTitleBarPointerReleased"
+                PointerCaptureLost="OnTitleBarPointerReleased"
                 DoubleTapped="OnTitleBarDoubleTapped" />
 
-            <!-- Left: Animated Sidebar Toggle, Brand & Active Folder Pill -->
+            <!-- Left: Symmetrical 32x32 Sidebar Toggle, Brand & Active Folder Pill -->
             <StackPanel
                 Grid.Column="0"
-                Margin="14,0,0,0"
+                Margin="12,0,0,0"
                 Orientation="Horizontal"
-                Spacing="10"
+                Spacing="8"
                 HorizontalAlignment="Left"
                 VerticalAlignment="Center">
                 <Button
@@ -54,27 +58,29 @@
                     Style="{StaticResource GlassIconButtonStyle}"
                     Command="{x:Bind ViewModel.ToggleSidebarCommand}"
                     ToolTipService.ToolTip="Toggle sidebar (Ctrl+\)">
-                    <Canvas Width="14" Height="12" UseLayoutRounding="True">
-                        <Rectangle
+                    <Grid Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center" UseLayoutRounding="True">
+                        <Border
                             Width="14"
                             Height="12"
-                            RadiusX="2"
-                            RadiusY="2"
-                            Stroke="{ThemeResource TextPrimaryBrush}"
-                            StrokeThickness="1.5" />
-                        <Line
-                            x:Name="SidebarIconDivider"
-                            X1="5"
-                            Y1="1"
-                            X2="5"
-                            Y2="11"
-                            Stroke="{ThemeResource TextPrimaryBrush}"
-                            StrokeThickness="1.5">
-                            <Line.RenderTransform>
-                                <TranslateTransform x:Name="SidebarIconTranslate" X="0" />
-                            </Line.RenderTransform>
-                        </Line>
-                    </Canvas>
+                            CornerRadius="2.5"
+                            BorderThickness="1.5"
+                            BorderBrush="{ThemeResource TextPrimaryBrush}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                            <Border
+                                x:Name="SidebarIconDivider"
+                                Width="1.5"
+                                Height="8"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center"
+                                Margin="3,0,0,0"
+                                Background="{ThemeResource TextPrimaryBrush}">
+                                <Border.RenderTransform>
+                                    <TranslateTransform x:Name="SidebarIconTranslate" X="0" />
+                                </Border.RenderTransform>
+                            </Border>
+                        </Border>
+                    </Grid>
                 </Button>
 
                 <TextBlock
@@ -87,10 +93,11 @@
 
                 <Border
                     Padding="8,3"
-                    CornerRadius="8"
+                    CornerRadius="6"
                     IsHitTestVisible="False"
                     Background="{ThemeResource InputBackgroundBrush}"
-                    BorderThickness="0"
+                    BorderBrush="{ThemeResource GlassBorderBrush}"
+                    BorderThickness="1"
                     VerticalAlignment="Center">
                     <TextBlock
                         Text="{x:Bind ViewModel.ActiveFolderBadgeText, Mode=OneWay}"
@@ -99,27 +106,29 @@
                 </Border>
             </StackPanel>
 
-            <!-- Center: Borderless Live | Source Mode Switcher -->
+            <!-- Center: Frosted Glass Live | Source Mode Switcher -->
             <Border
                 x:Name="ViewSwitcherBorder"
                 Grid.Column="1"
-                Width="124"
-                Height="30"
+                Width="126"
+                Height="32"
                 Padding="2"
-                CornerRadius="15"
+                CornerRadius="8"
                 Background="{ThemeResource InputBackgroundBrush}"
-                BorderThickness="0"
+                BorderBrush="{ThemeResource GlassBorderBrush}"
+                BorderThickness="1"
                 VerticalAlignment="Center">
                 <Grid>
                     <Border
                         x:Name="ModeIndicatorBorder"
                         Width="60"
                         Height="26"
-                        CornerRadius="13"
+                        CornerRadius="6"
                         HorizontalAlignment="Left"
                         VerticalAlignment="Center"
                         Background="{ThemeResource SurfaceActiveBrush}"
-                        BorderThickness="0">
+                        BorderBrush="{ThemeResource GlassBorderBrush}"
+                        BorderThickness="1">
                         <Border.RenderTransform>
                             <TranslateTransform x:Name="ModeIndicatorTranslate" X="0" />
                         </Border.RenderTransform>
@@ -158,7 +167,7 @@
                 <Button
                     x:Name="ZoomBadgeButton"
                     Content="{x:Bind ViewModel.ZoomPercentText, Mode=OneWay}"
-                    Height="26"
+                    Height="32"
                     Padding="10,0"
                     Style="{StaticResource GlassPillButtonStyle}"
                     Command="{x:Bind ViewModel.ResetZoomCommand}"
@@ -173,7 +182,7 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Borderless Elevated Sidebar with Rounded Card Corners, Nested File Tree & User Profile -->
+            <!-- Frosted Glass Sidebar with Symmetrical 8px/4px Grid Metrics -->
             <Grid
                 x:Name="SidebarContainer"
                 Grid.Column="0"
@@ -182,7 +191,7 @@
                 Background="Transparent">
                 <Grid
                     Margin="8,0,0,8"
-                    CornerRadius="16"
+                    CornerRadius="12"
                     Background="Transparent">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -191,28 +200,31 @@
                         <RowDefinition Height="56" />
                     </Grid.RowDefinitions>
 
-                    <!-- Dynamic Sidebar Tint Layer (allows Mica Alt to shine through while keeping text 100% crisp) -->
+                    <!-- Dynamic Sidebar Tint Layer with Subtle 1px Glass Border -->
                     <Border
                         Grid.RowSpan="4"
-                        CornerRadius="16"
+                        CornerRadius="12"
                         IsHitTestVisible="False"
                         Background="{ThemeResource SidebarBackgroundBrush}"
+                        BorderBrush="{ThemeResource GlassBorderBrush}"
+                        BorderThickness="1"
                         Opacity="{x:Bind ViewModel.SidebarSurfaceOpacity, Mode=OneWay}" />
 
-                <!-- Search, New Note & New Folder -->
-                <Grid Grid.Row="0" Padding="14,12,14,8">
+                <!-- Search, New Note & New Folder (32px height, 8px column spacing) -->
+                <Grid Grid.Row="0" Padding="12,12,12,8" ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <Grid Grid.Column="0" Height="34">
-                        <Rectangle
-                            RadiusX="17"
-                            RadiusY="17"
-                            Fill="{ThemeResource InputBackgroundBrush}"
-                            IsHitTestVisible="False" />
+                    <Border
+                        Grid.Column="0"
+                        Height="32"
+                        CornerRadius="8"
+                        Background="{ThemeResource InputBackgroundBrush}"
+                        BorderBrush="{ThemeResource GlassBorderBrush}"
+                        BorderThickness="1">
                         <TextBox
                             x:Name="SidebarSearchBox"
                             Style="{StaticResource BorderlessTextBoxStyle}"
@@ -220,44 +232,43 @@
                             Text="{x:Bind ViewModel.SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                             FontSize="13"
                             MinHeight="0"
-                            Height="34"
-                            Padding="14,8,14,8"
+                            Height="30"
+                            Padding="10,5,10,5"
                             IsSpellCheckEnabled="False"
                             Foreground="{ThemeResource TextPrimaryBrush}"
                             Background="Transparent"
                             BorderThickness="0"
                             VerticalAlignment="Center" />
-                    </Grid>
+                    </Border>
 
                     <Button
                         Grid.Column="1"
-                        Margin="6,0,0,0"
                         Style="{StaticResource GlassIconButtonStyle}"
                         Command="{x:Bind ViewModel.CreateNoteCommand}"
                         ToolTipService.ToolTip="New note (Ctrl+N)">
-                        <FontIcon Glyph="&#xE710;" FontSize="13" />
+                        <FontIcon Glyph="&#xE710;" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Button>
 
                     <Button
                         Grid.Column="2"
-                        Margin="6,0,0,0"
                         Style="{StaticResource GlassIconButtonStyle}"
                         Command="{x:Bind ViewModel.StartNewFolderCommand}"
                         ToolTipService.ToolTip="New folder (Ctrl+Shift+N)">
-                        <FontIcon Glyph="&#xE8F4;" FontSize="13" />
+                        <FontIcon Glyph="&#xE8F4;" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Button>
                 </Grid>
 
                 <!-- Inline New Folder Input Bar -->
                 <Border
                     Grid.Row="1"
-                    Margin="14,0,14,8"
-                    Padding="10,6"
-                    CornerRadius="12"
+                    Margin="12,0,12,8"
+                    Padding="8,4"
+                    CornerRadius="8"
                     Background="{ThemeResource InputBackgroundBrush}"
-                    BorderThickness="0"
+                    BorderBrush="{ThemeResource GlassBorderBrush}"
+                    BorderThickness="1"
                     Visibility="{x:Bind ViewModel.NewFolderBoxVisibility, Mode=OneWay}">
-                    <Grid>
+                    <Grid ColumnSpacing="4">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
@@ -266,10 +277,11 @@
                         </Grid.ColumnDefinitions>
                         <Border
                             Grid.Column="0"
-                            Margin="0,0,6,0"
-                            Padding="7,2"
+                            Padding="6,2"
                             CornerRadius="6"
                             Background="{ThemeResource SurfaceActiveBrush}"
+                            BorderBrush="{ThemeResource GlassBorderBrush}"
+                            BorderThickness="1"
                             VerticalAlignment="Center"
                             Visibility="{x:Bind ViewModel.NewFolderParentBadgeVisibility, Mode=OneWay}">
                             <TextBlock
@@ -287,8 +299,8 @@
                             KeyDown="OnNewFolderTextBoxKeyDown"
                             FontSize="12"
                             MinHeight="0"
-                            Height="26"
-                            Padding="4,4,4,4"
+                            Height="28"
+                            Padding="6,4,6,4"
                             Foreground="{ThemeResource TextPrimaryBrush}"
                             Background="Transparent"
                             BorderThickness="0"
@@ -298,14 +310,14 @@
                             Style="{StaticResource SubtleIconButtonStyle}"
                             Command="{x:Bind ViewModel.ConfirmNewFolderCommand}"
                             ToolTipService.ToolTip="Create folder">
-                            <FontIcon Glyph="&#xE73E;" FontSize="11" />
+                            <FontIcon Glyph="&#xE73E;" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                         <Button
                             Grid.Column="3"
                             Style="{StaticResource SubtleIconButtonStyle}"
                             Command="{x:Bind ViewModel.CancelNewFolderCommand}"
                             ToolTipService.ToolTip="Cancel">
-                            <FontIcon Glyph="&#xE711;" FontSize="11" />
+                            <FontIcon Glyph="&#xE711;" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </Grid>
                 </Border>
@@ -328,6 +340,7 @@
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="vm:NoteItemViewModel">
                             <Grid
+                                MinHeight="36"
                                 Margin="{x:Bind IndentMargin, Mode=OneWay}"
                                 Background="Transparent"
                                 RightTapped="OnSidebarRowRightTapped"
@@ -361,7 +374,7 @@
                                     Background="{ThemeResource SubtleDividerBrush}"
                                     Visibility="{x:Bind TreeGuideVisibility, Mode=OneWay}" />
 
-                                <!-- Folder Row (Padding="12,8,12,8", CornerRadius="8", 24px leading icon slot) -->
+                                <!-- Folder Row (Padding="12,8,12,8", CornerRadius="8", 24px leading icon slot, Title X=44px) -->
                                 <Border
                                     Visibility="{x:Bind FolderVisibility, Mode=OneWay}"
                                     Padding="12,8,12,8"
@@ -377,6 +390,7 @@
                                         <Grid
                                             Grid.Column="0"
                                             Width="24"
+                                            Height="20"
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center">
                                             <FontIcon
@@ -425,7 +439,7 @@
                                     </Grid>
                                 </Border>
 
-                                <!-- Note Card Row (Padding="12,8,12,8", CornerRadius="8", 24px leading icon slot) -->
+                                <!-- Note Card Row (Padding="12,8,12,8", CornerRadius="8", 24px leading icon slot, Title X=44px) -->
                                 <Border
                                     Visibility="{x:Bind NoteVisibility, Mode=OneWay}"
                                     Padding="12,8,12,8"
@@ -440,17 +454,18 @@
                                         <Grid
                                             Grid.Column="0"
                                             Width="24"
+                                            Height="20"
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center">
                                             <FontIcon
                                                 Glyph="{x:Bind NoteLeadingIconGlyph, Mode=OneWay}"
-                                                FontSize="12"
+                                                FontSize="13"
                                                 HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
                                                 Foreground="{ThemeResource TextSecondaryBrush}" />
                                             <FontIcon
                                                 Glyph="{x:Bind NoteLeadingIconGlyph, Mode=OneWay}"
-                                                FontSize="12"
+                                                FontSize="13"
                                                 HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
                                                 Foreground="{x:Bind AccentColorBrush, Mode=OneWay}"
@@ -471,6 +486,7 @@
                                                 TextTrimming="CharacterEllipsis" />
                                             <TextBlock
                                                 Text="{x:Bind Snippet, Mode=OneWay}"
+                                                Visibility="{x:Bind SnippetVisibility, Mode=OneWay}"
                                                 FontSize="12"
                                                 Foreground="{ThemeResource TextSecondaryBrush}"
                                                 MaxLines="1"
@@ -483,8 +499,8 @@
                     </ListView.ItemTemplate>
                 </ListView>
 
-                <!-- Sidebar Footer: User Profile (Avatar + Name + Note Count) & Animated Settings Gear -->
-                <Grid Grid.Row="3" Padding="14,0">
+                <!-- Sidebar Footer: User Profile (Avatar + Name + Note Count) & Symmetrical 32x32 Settings Gear -->
+                <Grid Grid.Row="3" Padding="12,0" ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -492,12 +508,12 @@
 
                     <Button
                         Grid.Column="0"
-                        Height="42"
+                        Height="40"
                         Padding="8,4"
-                        Margin="0,0,6,0"
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Left"
                         Background="Transparent"
+                        BorderBrush="Transparent"
                         Style="{StaticResource GlassPillButtonStyle}"
                         Command="{x:Bind ViewModel.OpenProfileSettingsCommand}"
                         ToolTipService.ToolTip="Profile &amp; Settings">
@@ -506,7 +522,9 @@
                                 <Ellipse
                                     Width="32"
                                     Height="32"
-                                    Fill="{ThemeResource SurfaceActiveBrush}" />
+                                    Fill="{ThemeResource SurfaceActiveBrush}"
+                                    Stroke="{ThemeResource GlassBorderBrush}"
+                                    StrokeThickness="1" />
                                 <TextBlock
                                     Text="{x:Bind ViewModel.UserInitials, Mode=OneWay}"
                                     Visibility="{x:Bind ViewModel.UserInitialsVisibility, Mode=OneWay}"
@@ -519,6 +537,8 @@
                                     Width="32"
                                     Height="32"
                                     CornerRadius="16"
+                                    BorderBrush="{ThemeResource GlassBorderBrush}"
+                                    BorderThickness="1"
                                     Visibility="{x:Bind ViewModel.UserAvatarVisibility, Mode=OneWay}">
                                     <Image
                                         Source="{x:Bind ViewModel.UserAvatarSource, Mode=OneWay}"
@@ -550,6 +570,8 @@
                         <FontIcon
                             Glyph="&#xE713;"
                             FontSize="14"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
                             RenderTransformOrigin="0.5,0.5">
                             <FontIcon.RenderTransform>
                                 <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
@@ -962,7 +984,7 @@
                                         Style="{StaticResource GlassIconButtonStyle}"
                                         Command="{x:Bind ViewModel.CloseSettingsCommand}"
                                         ToolTipService.ToolTip="Back to notes (Esc)">
-                                        <FontIcon Glyph="&#xE72B;" FontSize="13" />
+                                        <FontIcon Glyph="&#xE72B;" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Button>
                                     <StackPanel Spacing="1" VerticalAlignment="Center">
                                         <TextBlock
@@ -987,22 +1009,24 @@
 
                             <!-- Segmented Category Tabs: Appearance | Profile | Vault | Shortcuts -->
                             <Border
-                                Width="404"
-                                Height="34"
+                                Width="406"
+                                Height="36"
                                 Padding="2"
-                                CornerRadius="17"
+                                CornerRadius="8"
                                 HorizontalAlignment="Left"
                                 Background="{ThemeResource InputBackgroundBrush}"
-                                BorderThickness="0">
+                                BorderBrush="{ThemeResource GlassBorderBrush}"
+                                BorderThickness="1">
                                 <Grid>
                                     <Border
                                         Width="100"
                                         Height="30"
-                                        CornerRadius="15"
+                                        CornerRadius="6"
                                         HorizontalAlignment="Left"
                                         VerticalAlignment="Center"
                                         Background="{ThemeResource SurfaceActiveBrush}"
-                                        BorderThickness="0">
+                                        BorderBrush="{ThemeResource GlassBorderBrush}"
+                                        BorderThickness="1">
                                         <Border.RenderTransform>
                                             <TranslateTransform x:Name="SettingsTabIndicatorTranslate" X="0" />
                                         </Border.RenderTransform>
@@ -1041,9 +1065,10 @@
                                 x:Name="SettingsProfileCard"
                                 Visibility="{x:Bind ViewModel.ProfileSettingsVisibility, Mode=OneWay}"
                                 Padding="20"
-                                CornerRadius="16"
+                                CornerRadius="12"
                                 Background="{ThemeResource InputBackgroundBrush}"
-                                BorderThickness="0">
+                                BorderBrush="{ThemeResource GlassBorderBrush}"
+                                BorderThickness="1">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
@@ -1063,7 +1088,9 @@
                                             <Ellipse
                                                 Width="64"
                                                 Height="64"
-                                                Fill="{ThemeResource SurfaceActiveBrush}" />
+                                                Fill="{ThemeResource SurfaceActiveBrush}"
+                                                Stroke="{ThemeResource GlassBorderBrush}"
+                                                StrokeThickness="1" />
                                             <TextBlock
                                                 Text="{x:Bind ViewModel.UserInitials, Mode=OneWay}"
                                                 Visibility="{x:Bind ViewModel.UserInitialsVisibility, Mode=OneWay}"
@@ -1076,6 +1103,8 @@
                                                 Width="64"
                                                 Height="64"
                                                 CornerRadius="32"
+                                                BorderBrush="{ThemeResource GlassBorderBrush}"
+                                                BorderThickness="1"
                                                 Visibility="{x:Bind ViewModel.UserAvatarVisibility, Mode=OneWay}">
                                                 <Image
                                                     Source="{x:Bind ViewModel.UserAvatarSource, Mode=OneWay}"
@@ -1093,9 +1122,10 @@
                                             Foreground="{ThemeResource TextSecondaryBrush}" />
 
                                         <Border
-                                            CornerRadius="12"
+                                            CornerRadius="8"
                                             Background="{ThemeResource SurfaceActiveBrush}"
-                                            BorderThickness="0">
+                                            BorderBrush="{ThemeResource GlassBorderBrush}"
+                                            BorderThickness="1">
                                             <TextBox
                                                 Style="{StaticResource BorderlessTextBoxStyle}"
                                                 PlaceholderText="Your display name"
@@ -1104,7 +1134,7 @@
                                                 FontSize="14"
                                                 FontWeight="SemiBold"
                                                 MinHeight="0"
-                                                Padding="14,8"
+                                                Padding="12,8"
                                                 Foreground="{ThemeResource TextPrimaryBrush}"
                                                 Background="Transparent"
                                                 BorderThickness="0"
@@ -1131,9 +1161,10 @@
                                 x:Name="SettingsAppearanceCard"
                                 Visibility="{x:Bind ViewModel.AppearanceSettingsVisibility, Mode=OneWay}"
                                 Padding="20"
-                                CornerRadius="16"
+                                CornerRadius="12"
                                 Background="{ThemeResource InputBackgroundBrush}"
-                                BorderThickness="0">
+                                BorderBrush="{ThemeResource GlassBorderBrush}"
+                                BorderThickness="1">
                                 <StackPanel Spacing="16">
                                     <TextBlock
                                         Text="APPEARANCE, SMART THEME &amp; ZOOM"
@@ -1162,23 +1193,25 @@
 
                                         <Border
                                             Grid.Column="1"
-                                            Width="184"
-                                            Height="30"
+                                            Width="186"
+                                            Height="32"
                                             Padding="2"
-                                            CornerRadius="15"
+                                            CornerRadius="8"
                                             HorizontalAlignment="Right"
                                             VerticalAlignment="Center"
                                             Background="{ThemeResource InputBackgroundBrush}"
-                                            BorderThickness="0">
+                                            BorderBrush="{ThemeResource GlassBorderBrush}"
+                                            BorderThickness="1">
                                             <Grid>
                                                 <Border
                                                     Width="60"
                                                     Height="26"
-                                                    CornerRadius="13"
+                                                    CornerRadius="6"
                                                     HorizontalAlignment="Left"
                                                     VerticalAlignment="Center"
                                                     Background="{ThemeResource SurfaceActiveBrush}"
-                                                    BorderThickness="0">
+                                                    BorderBrush="{ThemeResource GlassBorderBrush}"
+                                                    BorderThickness="1">
                                                     <Border.RenderTransform>
                                                         <TranslateTransform x:Name="ThemeIndicatorTranslate" X="0" />
                                                     </Border.RenderTransform>
@@ -1222,23 +1255,25 @@
 
                                         <Border
                                             Grid.Column="1"
-                                            Width="124"
-                                            Height="30"
+                                            Width="126"
+                                            Height="32"
                                             Padding="2"
-                                            CornerRadius="15"
+                                            CornerRadius="8"
                                             HorizontalAlignment="Right"
                                             VerticalAlignment="Center"
                                             Background="{ThemeResource InputBackgroundBrush}"
-                                            BorderThickness="0">
+                                            BorderBrush="{ThemeResource GlassBorderBrush}"
+                                            BorderThickness="1">
                                             <Grid>
                                                 <Border
                                                     Width="60"
                                                     Height="26"
-                                                    CornerRadius="13"
+                                                    CornerRadius="6"
                                                     HorizontalAlignment="Left"
                                                     VerticalAlignment="Center"
                                                     Background="{ThemeResource SurfaceActiveBrush}"
-                                                    BorderThickness="0">
+                                                    BorderBrush="{ThemeResource GlassBorderBrush}"
+                                                    BorderThickness="1">
                                                     <Border.RenderTransform>
                                                         <TranslateTransform x:Name="BackdropIndicatorTranslate" X="0" />
                                                     </Border.RenderTransform>
@@ -1294,6 +1329,8 @@
                                                 Padding="8,4"
                                                 CornerRadius="8"
                                                 Background="{ThemeResource SurfaceActiveBrush}"
+                                                BorderBrush="{ThemeResource GlassBorderBrush}"
+                                                BorderThickness="1"
                                                 VerticalAlignment="Center">
                                                 <TextBlock
                                                     Text="{x:Bind ViewModel.SurfaceOpacityText, Mode=OneWay}"
@@ -1383,7 +1420,8 @@
                                                 Height="26"
                                                 CornerRadius="13"
                                                 Background="{ThemeResource ToggleTrackBrush}"
-                                                BorderThickness="0"
+                                                BorderBrush="{ThemeResource GlassBorderBrush}"
+                                                BorderThickness="1"
                                                 Padding="3,0">
                                                 <Ellipse
                                                     Width="20"
@@ -1426,7 +1464,8 @@
                                                 Height="26"
                                                 CornerRadius="13"
                                                 Background="{ThemeResource ToggleTrackBrush}"
-                                                BorderThickness="0"
+                                                BorderBrush="{ThemeResource GlassBorderBrush}"
+                                                BorderThickness="1"
                                                 Padding="3,0">
                                                 <Ellipse
                                                     Width="20"
@@ -1447,9 +1486,10 @@
                                 Spacing="16">
                                 <Border
                                     Padding="20"
-                                    CornerRadius="16"
+                                    CornerRadius="12"
                                     Background="{ThemeResource InputBackgroundBrush}"
-                                    BorderThickness="0">
+                                    BorderBrush="{ThemeResource GlassBorderBrush}"
+                                    BorderThickness="1">
                                     <StackPanel Spacing="12">
                                         <TextBlock
                                             Text="MARKDOWN FILES &amp; VAULT STORAGE"
@@ -1504,9 +1544,10 @@
 
                                 <Border
                                     Padding="20"
-                                    CornerRadius="16"
+                                    CornerRadius="12"
                                     Background="{ThemeResource InputBackgroundBrush}"
-                                    BorderThickness="0">
+                                    BorderBrush="{ThemeResource GlassBorderBrush}"
+                                    BorderThickness="1">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
@@ -1540,9 +1581,10 @@
                                 x:Name="SettingsShortcutsCard"
                                 Visibility="{x:Bind ViewModel.ShortcutsSettingsVisibility, Mode=OneWay}"
                                 Padding="20"
-                                CornerRadius="16"
+                                CornerRadius="12"
                                 Background="{ThemeResource InputBackgroundBrush}"
-                                BorderThickness="0">
+                                BorderBrush="{ThemeResource GlassBorderBrush}"
+                                BorderThickness="1">
                                 <StackPanel Spacing="8">
                                     <TextBlock
                                         Text="KEYBOARD SHORTCUTS"
@@ -1622,12 +1664,13 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Top"
                 PointerPressed="OnCommandPaletteCardPointerPressed">
-                <!-- Background-Only Surface with ScaleTransform so DirectWrite Text Remains 100% Crisp -->
+                <!-- Frosted Acrylic Surface with ScaleTransform so DirectWrite Text Remains 100% Crisp -->
                 <Border
                     x:Name="CommandPaletteSurfaceBorder"
                     CornerRadius="16"
-                    Background="{ThemeResource SidebarBackgroundBrush}"
-                    BorderThickness="0"
+                    Background="{ThemeResource PopupAcrylicBrush}"
+                    BorderBrush="{ThemeResource SubtleDividerBrush}"
+                    BorderThickness="1"
                     RenderTransformOrigin="0.5,0.5">
                     <Border.RenderTransform>
                         <ScaleTransform x:Name="CommandPaletteScale" ScaleX="1" ScaleY="1" />
@@ -1645,9 +1688,10 @@
                         Grid.Row="0"
                         Margin="0,0,0,10"
                         Padding="12,4"
-                        CornerRadius="12"
+                        CornerRadius="8"
                         Background="{ThemeResource InputBackgroundBrush}"
-                        BorderThickness="0">
+                        BorderBrush="{ThemeResource GlassBorderBrush}"
+                        BorderThickness="1">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -1670,7 +1714,7 @@
                                 IsSpellCheckEnabled="False"
                                 FontSize="14"
                                 MinHeight="0"
-                                Height="34"
+                                Height="32"
                                 Padding="10,6"
                                 Foreground="{ThemeResource TextPrimaryBrush}"
                                 Background="Transparent"
@@ -1681,6 +1725,8 @@
                                 Padding="6,2"
                                 CornerRadius="6"
                                 Background="{ThemeResource SurfaceActiveBrush}"
+                                BorderBrush="{ThemeResource GlassBorderBrush}"
+                                BorderThickness="1"
                                 VerticalAlignment="Center">
                                 <TextBlock
                                     Text="ESC"
@@ -1704,7 +1750,7 @@
                         ItemContainerStyle="{StaticResource CommandPaletteItemStyle}">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="vm:CommandPaletteItem">
-                                <Grid Padding="12,9">
+                                <Grid Padding="12,8">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
@@ -1718,6 +1764,8 @@
                                         Margin="0,0,12,0"
                                         CornerRadius="8"
                                         Background="{ThemeResource InputBackgroundBrush}"
+                                        BorderBrush="{ThemeResource GlassBorderBrush}"
+                                        BorderThickness="1"
                                         VerticalAlignment="Center">
                                         <FontIcon
                                             Glyph="{x:Bind IconGlyph}"
@@ -1749,6 +1797,8 @@
                                         Padding="8,3"
                                         CornerRadius="6"
                                         Background="{ThemeResource InputBackgroundBrush}"
+                                        BorderBrush="{ThemeResource GlassBorderBrush}"
+                                        BorderThickness="1"
                                         VerticalAlignment="Center">
                                         <TextBlock
                                             Text="{x:Bind ShortcutHint}"
@@ -1764,7 +1814,7 @@
             </Grid>
         </Grid>
 
-        <!-- Custom Borderless Apple/macOS Folder Deletion Confirmation Card -->
+        <!-- Frosted Glass Folder Deletion Confirmation Card -->
         <Grid
             x:Name="DeleteFolderConfirmOverlay"
             Grid.RowSpan="2"
@@ -1777,8 +1827,9 @@
                 CornerRadius="16"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
-                Background="{ThemeResource SidebarBackgroundBrush}"
-                BorderThickness="0">
+                Background="{ThemeResource PopupAcrylicBrush}"
+                BorderBrush="{ThemeResource SubtleDividerBrush}"
+                BorderThickness="1">
                 <StackPanel Spacing="18">
                     <StackPanel Spacing="6">
                         <TextBlock

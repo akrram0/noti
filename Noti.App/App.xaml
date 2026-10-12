@@ -12,24 +12,24 @@
                 <ResourceDictionary x:Key="Default">
                     <SolidColorBrush x:Key="CanvasBackgroundBrush" Color="#FF09090B" />
                     <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#CC121216" />
-                    <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FF121216" TintOpacity="0.18" TintLuminosityOpacity="0.18" FallbackColor="#B8121216" />
+                    <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FF14141B" TintOpacity="0.54" TintLuminosityOpacity="0.72" FallbackColor="#E014141B" />
                     <SolidColorBrush x:Key="SurfaceActiveBrush" Color="#1AFFFFFF" />
-                    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#0DFFFFFF" />
+                    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#10FFFFFF" />
                     <SolidColorBrush x:Key="InputBackgroundBrush" Color="#14FFFFFF" />
                     <SolidColorBrush x:Key="SettingsSurfaceBrush" Color="#FF050507" />
                     <SolidColorBrush x:Key="ModalBackdropBrush" Color="#B8000000" />
-                    <SolidColorBrush x:Key="SubtleDividerBrush" Color="#1EFFFFFF" />
-                    <SolidColorBrush x:Key="ControlBorderBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="SubtleDividerBrush" Color="#24FFFFFF" />
+                    <SolidColorBrush x:Key="ControlBorderBrush" Color="#1EFFFFFF" />
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFF5F5F7" />
                     <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FFA1A1AA" />
                     <SolidColorBrush x:Key="TextMutedBrush" Color="#FFA1A1A6" />
                     <LinearGradientBrush x:Key="GlassFillBrush" StartPoint="0,0" EndPoint="1,1">
-                        <GradientStop Color="#18FFFFFF" Offset="0.0" />
-                        <GradientStop Color="#0DFFFFFF" Offset="1.0" />
+                        <GradientStop Color="#16FFFFFF" Offset="0.0" />
+                        <GradientStop Color="#0CFFFFFF" Offset="1.0" />
                     </LinearGradientBrush>
                     <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#24FFFFFF" />
-                    <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#12FFFFFF" />
-                    <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#14FFFFFF" />
+                    <SolidColorBrush x:Key="GlassBorderBrush" Color="#22FFFFFF" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#26FFFFFF" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#F0FFFFFF" />
                     <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
@@ -55,24 +55,24 @@
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="CanvasBackgroundBrush" Color="#FF09090B" />
                     <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#CC121216" />
-                    <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FF121216" TintOpacity="0.18" TintLuminosityOpacity="0.18" FallbackColor="#B8121216" />
+                    <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FF14141B" TintOpacity="0.54" TintLuminosityOpacity="0.72" FallbackColor="#E014141B" />
                     <SolidColorBrush x:Key="SurfaceActiveBrush" Color="#1AFFFFFF" />
-                    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#0DFFFFFF" />
+                    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#10FFFFFF" />
                     <SolidColorBrush x:Key="InputBackgroundBrush" Color="#14FFFFFF" />
                     <SolidColorBrush x:Key="SettingsSurfaceBrush" Color="#FF050507" />
                     <SolidColorBrush x:Key="ModalBackdropBrush" Color="#B8000000" />
-                    <SolidColorBrush x:Key="SubtleDividerBrush" Color="#1EFFFFFF" />
-                    <SolidColorBrush x:Key="ControlBorderBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="SubtleDividerBrush" Color="#24FFFFFF" />
+                    <SolidColorBrush x:Key="ControlBorderBrush" Color="#1EFFFFFF" />
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFF5F5F7" />
                     <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FFA1A1AA" />
                     <SolidColorBrush x:Key="TextMutedBrush" Color="#FFA1A1A6" />
                     <LinearGradientBrush x:Key="GlassFillBrush" StartPoint="0,0" EndPoint="1,1">
-                        <GradientStop Color="#18FFFFFF" Offset="0.0" />
-                        <GradientStop Color="#0DFFFFFF" Offset="1.0" />
+                        <GradientStop Color="#16FFFFFF" Offset="0.0" />
+                        <GradientStop Color="#0CFFFFFF" Offset="1.0" />
                     </LinearGradientBrush>
                     <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#24FFFFFF" />
-                    <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#12FFFFFF" />
-                    <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#14FFFFFF" />
+                    <SolidColorBrush x:Key="GlassBorderBrush" Color="#22FFFFFF" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#26FFFFFF" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#F0FFFFFF" />
                     <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
@@ -98,14 +98,14 @@
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="CanvasBackgroundBrush" Color="#FFF8F8FC" />
                     <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#98F6F6FB" />
-                    <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FFFFFFFF" TintOpacity="0.45" TintLuminosityOpacity="0.62" FallbackColor="#E8F5F5F7" />
+                    <AcrylicBrush x:Key="PopupAcrylicBrush" TintColor="#FFFFFFFF" TintOpacity="0.58" TintLuminosityOpacity="0.82" FallbackColor="#EBFFFFFF" />
                     <SolidColorBrush x:Key="SurfaceActiveBrush" Color="#12000000" />
-                    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#0A000000" />
+                    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#0C000000" />
                     <SolidColorBrush x:Key="InputBackgroundBrush" Color="#0E000000" />
                     <SolidColorBrush x:Key="SettingsSurfaceBrush" Color="#FFFAFAFC" />
                     <SolidColorBrush x:Key="ModalBackdropBrush" Color="#70000000" />
-                    <SolidColorBrush x:Key="SubtleDividerBrush" Color="#16000000" />
-                    <SolidColorBrush x:Key="ControlBorderBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="SubtleDividerBrush" Color="#1A000000" />
+                    <SolidColorBrush x:Key="ControlBorderBrush" Color="#14000000" />
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FF1C1C1E" />
                     <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FF3F3F46" />
                     <SolidColorBrush x:Key="TextMutedBrush" Color="#FF6C6C70" />
@@ -115,7 +115,7 @@
                     </LinearGradientBrush>
                     <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#18000000" />
                     <SolidColorBrush x:Key="GlassFillPressedBrush" Color="#22000000" />
-                    <SolidColorBrush x:Key="GlassBorderBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="GlassBorderBrush" Color="#18000000" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#22000000" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#FFFFFFFF" />
                     <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
@@ -202,63 +202,62 @@
             </Style>
             <Style TargetType="TextBox" BasedOn="{StaticResource BorderlessTextBoxStyle}" />
 
-            <!-- Borderless Circular 34x34 Liquid Glass Icon Button (scales background surface only, keeping glyphs crisp) -->
+            <!-- Mathematically Symmetrical 32x32 Frosted Glass Icon Button (CornerRadius=8, centered glyph, zero clipping) -->
             <Style x:Key="GlassIconButtonStyle" TargetType="Button">
-                <Setter Property="Width" Value="34" />
-                <Setter Property="Height" Value="34" />
+                <Setter Property="Width" Value="32" />
+                <Setter Property="Height" Value="32" />
                 <Setter Property="Padding" Value="0" />
+                <Setter Property="CornerRadius" Value="8" />
                 <Setter Property="Background" Value="{ThemeResource GlassFillBrush}" />
                 <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
-                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="BorderBrush" Value="{ThemeResource GlassBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="UseSystemFocusVisuals" Value="False" />
                 <Setter Property="UseLayoutRounding" Value="True" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <Grid Width="34" Height="34" Background="Transparent" UseLayoutRounding="True">
+                            <Grid Width="32" Height="32" Background="Transparent" UseLayoutRounding="True">
                                 <VisualStateManager.VisualStateGroups>
                                     <VisualStateGroup x:Name="CommonStates">
-                                        <VisualState x:Name="Normal">
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="SurfaceScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.14" FillBehavior="Stop" />
-                                                <DoubleAnimation Storyboard.TargetName="SurfaceScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.14" FillBehavior="Stop" />
-                                            </Storyboard>
-                                        </VisualState>
+                                        <VisualState x:Name="Normal" />
                                         <VisualState x:Name="PointerOver">
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="SurfaceScale" Storyboard.TargetProperty="ScaleX" To="1.08" Duration="0:0:0.12" />
-                                                <DoubleAnimation Storyboard.TargetName="SurfaceScale" Storyboard.TargetProperty="ScaleY" To="1.08" Duration="0:0:0.12" />
-                                            </Storyboard>
                                             <VisualState.Setters>
-                                                <Setter Target="GlassSurface.Fill" Value="{ThemeResource GlassFillHoverBrush}" />
+                                                <Setter Target="GlassSurface.Background" Value="{ThemeResource GlassFillHoverBrush}" />
+                                                <Setter Target="GlassSurface.BorderBrush" Value="{ThemeResource SubtleDividerBrush}" />
                                             </VisualState.Setters>
                                         </VisualState>
                                         <VisualState x:Name="Pressed">
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="SurfaceScale" Storyboard.TargetProperty="ScaleX" To="0.90" Duration="0:0:0.08" />
-                                                <DoubleAnimation Storyboard.TargetName="SurfaceScale" Storyboard.TargetProperty="ScaleY" To="0.90" Duration="0:0:0.08" />
-                                            </Storyboard>
                                             <VisualState.Setters>
-                                                <Setter Target="GlassSurface.Fill" Value="{ThemeResource GlassFillPressedBrush}" />
+                                                <Setter Target="GlassSurface.Background" Value="{ThemeResource GlassFillPressedBrush}" />
+                                                <Setter Target="Presenter.Opacity" Value="0.75" />
                                             </VisualState.Setters>
                                         </VisualState>
                                     </VisualStateGroup>
                                 </VisualStateManager.VisualStateGroups>
-                                <Ellipse
+                                <Border
                                     x:Name="GlassSurface"
-                                    Width="34"
-                                    Height="34"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    Fill="{TemplateBinding Background}"
-                                    StrokeThickness="0"
-                                    RenderTransformOrigin="0.5,0.5">
-                                    <Ellipse.RenderTransform>
-                                        <ScaleTransform x:Name="SurfaceScale" ScaleX="1" ScaleY="1" />
-                                    </Ellipse.RenderTransform>
-                                </Ellipse>
+                                    Width="32"
+                                    Height="32"
+                                    CornerRadius="8"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    UseLayoutRounding="True">
+                                    <Border.BackgroundTransition>
+                                        <BrushTransition Duration="0:0:0.12" />
+                                    </Border.BackgroundTransition>
+                                </Border>
                                 <ContentPresenter
+                                    x:Name="Presenter"
+                                    Width="16"
+                                    Height="16"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
+                                    HorizontalContentAlignment="Center"
+                                    VerticalContentAlignment="Center"
                                     Foreground="{TemplateBinding Foreground}" />
                             </Grid>
                         </ControlTemplate>
@@ -266,25 +265,31 @@
                 </Setter>
             </Style>
 
-            <!-- Compact 26x26 Subtle Action Icon Button -->
+            <!-- Compact 28x28 Symmetrical Subtle Action Icon Button -->
             <Style x:Key="SubtleIconButtonStyle" TargetType="Button">
-                <Setter Property="Width" Value="26" />
-                <Setter Property="Height" Value="26" />
+                <Setter Property="Width" Value="28" />
+                <Setter Property="Height" Value="28" />
                 <Setter Property="Padding" Value="0" />
+                <Setter Property="CornerRadius" Value="6" />
                 <Setter Property="Background" Value="Transparent" />
                 <Setter Property="Foreground" Value="{ThemeResource TextSecondaryBrush}" />
-                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="UseSystemFocusVisuals" Value="False" />
                 <Setter Property="UseLayoutRounding" Value="True" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <Grid Width="26" Height="26" Background="Transparent" UseLayoutRounding="True">
+                            <Grid Width="28" Height="28" Background="Transparent" UseLayoutRounding="True">
                                 <VisualStateManager.VisualStateGroups>
                                     <VisualStateGroup x:Name="CommonStates">
                                         <VisualState x:Name="Normal" />
                                         <VisualState x:Name="PointerOver">
                                             <VisualState.Setters>
                                                 <Setter Target="BtnBorder.Background" Value="{ThemeResource GlassFillHoverBrush}" />
+                                                <Setter Target="BtnBorder.BorderBrush" Value="{ThemeResource GlassBorderBrush}" />
                                                 <Setter Target="Presenter.Foreground" Value="{ThemeResource TextPrimaryBrush}" />
                                             </VisualState.Setters>
                                         </VisualState>
@@ -298,14 +303,21 @@
                                 </VisualStateManager.VisualStateGroups>
                                 <Border
                                     x:Name="BtnBorder"
-                                    Width="26"
-                                    Height="26"
-                                    CornerRadius="8"
-                                    Background="{TemplateBinding Background}" />
+                                    Width="28"
+                                    Height="28"
+                                    CornerRadius="6"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    UseLayoutRounding="True" />
                                 <ContentPresenter
                                     x:Name="Presenter"
+                                    Width="16"
+                                    Height="16"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
+                                    HorizontalContentAlignment="Center"
+                                    VerticalContentAlignment="Center"
                                     Foreground="{TemplateBinding Foreground}" />
                             </Grid>
                         </ControlTemplate>
@@ -313,15 +325,18 @@
                 </Setter>
             </Style>
 
-            <!-- Borderless Liquid Glass Pill Action Button (no ScaleTransform on text so DirectWrite stays 100% sharp) -->
+            <!-- Frosted Glass Pill Action Button (Height=32, CornerRadius=8, 1px GlassBorderBrush) -->
             <Style x:Key="GlassPillButtonStyle" TargetType="Button">
                 <Setter Property="Height" Value="32" />
-                <Setter Property="Padding" Value="14,0" />
+                <Setter Property="Padding" Value="12,0" />
+                <Setter Property="CornerRadius" Value="8" />
                 <Setter Property="Background" Value="{ThemeResource GlassFillBrush}" />
                 <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
-                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="BorderBrush" Value="{ThemeResource GlassBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="FontSize" Value="12" />
                 <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="UseSystemFocusVisuals" Value="False" />
                 <Setter Property="UseLayoutRounding" Value="True" />
                 <Setter Property="Template">
                     <Setter.Value>
@@ -331,16 +346,21 @@
                                 Height="{TemplateBinding Height}"
                                 Padding="{TemplateBinding Padding}"
                                 HorizontalAlignment="{TemplateBinding HorizontalAlignment}"
-                                CornerRadius="10"
+                                CornerRadius="{TemplateBinding CornerRadius}"
                                 Background="{TemplateBinding Background}"
-                                BorderThickness="0"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
                                 UseLayoutRounding="True">
+                                <Border.BackgroundTransition>
+                                    <BrushTransition Duration="0:0:0.12" />
+                                </Border.BackgroundTransition>
                                 <VisualStateManager.VisualStateGroups>
                                     <VisualStateGroup x:Name="CommonStates">
                                         <VisualState x:Name="Normal" />
                                         <VisualState x:Name="PointerOver">
                                             <VisualState.Setters>
                                                 <Setter Target="PillBorder.Background" Value="{ThemeResource GlassFillHoverBrush}" />
+                                                <Setter Target="PillBorder.BorderBrush" Value="{ThemeResource SubtleDividerBrush}" />
                                             </VisualState.Setters>
                                         </VisualState>
                                         <VisualState x:Name="Pressed">

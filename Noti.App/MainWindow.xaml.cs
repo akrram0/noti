@@ -87,6 +87,7 @@ public sealed partial class MainWindow : Window
             foreach (var n in ViewModel.FilteredNotes)
                 n.NotifyVisualStateChanged();
             ApplyResponsiveLayout();
+            UpdateTitleBarChromeRegions();
             LiveCanvasRootGrid.MinHeight = Math.Max(0, LiveEditorScrollViewer.ActualHeight);
             ThemeIndicatorTranslate.X = ViewModel.ThemeIndicatorOffsetX;
             BackdropIndicatorTranslate.X = ViewModel.BackdropIndicatorOffsetX;
@@ -95,7 +96,11 @@ public sealed partial class MainWindow : Window
             ApplyEditorTextBoxTheme();
             RebuildLiveEditor(reparse: true);
         };
-        RootGrid.SizeChanged += (_, _) => ApplyResponsiveLayout();
+        RootGrid.SizeChanged += (_, _) =>
+        {
+            ApplyResponsiveLayout();
+            UpdateTitleBarChromeRegions();
+        };
         LiveEditorScrollViewer.SizeChanged += (_, _) =>
         {
             LiveCanvasRootGrid.MinHeight = Math.Max(0, LiveEditorScrollViewer.ActualHeight);
@@ -2459,14 +2464,28 @@ public sealed partial class MainWindow : Window
         return text.Length;
     }
 
+    private void UpdateTitleBarChromeRegions() =>
+        _chromeService.UpdateTitleBarRegions(
+            TopTitleBarGrid,
+            SidebarToggleButton,
+            ViewSwitcherBorder,
+            UpdateTopBarButton,
+            ZoomBadgeButton);
+
     private void OnTitleBarPointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (sender is UIElement el && e.GetCurrentPoint(el).Properties.IsLeftButtonPressed)
-        {
-            e.Handled = true;
-            _chromeService.BeginDrag();
-        }
+        if (sender is UIElement el)
+            _chromeService.OnDragSurfacePointerPressed(el, e);
     }
+
+    private void OnTitleBarPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is UIElement el)
+            _chromeService.OnDragSurfacePointerMoved(el, e);
+    }
+
+    private void OnTitleBarPointerReleased(object sender, PointerRoutedEventArgs e) =>
+        _chromeService.OnDragSurfacePointerReleased();
 
     private void OnTitleBarDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {

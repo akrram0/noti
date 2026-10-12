@@ -152,7 +152,14 @@ public sealed class NoteItemViewModel : ObservableObject
                 return new SolidColorBrush(ColorHelper.FromArgb(borderAlpha, baseColor.R, baseColor.G, baseColor.B));
             }
 
-            return new SolidColorBrush(Colors.Transparent);
+            if (IsLightTheme)
+            {
+                byte lightBorderAlpha = _isSelected ? (byte)28 : (byte)18;
+                return new SolidColorBrush(ColorHelper.FromArgb(lightBorderAlpha, 0, 0, 0));
+            }
+
+            byte darkBorderAlpha = _isSelected ? (byte)42 : (byte)26;
+            return new SolidColorBrush(ColorHelper.FromArgb(darkBorderAlpha, 255, 255, 255));
         }
     }
 
@@ -167,6 +174,7 @@ public sealed class NoteItemViewModel : ObservableObject
 
     public Visibility FolderVisibility => IsFolder ? Visibility.Visible : Visibility.Collapsed;
     public Visibility NoteVisibility => IsFolder ? Visibility.Collapsed : Visibility.Visible;
+    public Visibility SnippetVisibility => (!IsFolder && !string.IsNullOrWhiteSpace(Snippet)) ? Visibility.Visible : Visibility.Collapsed;
 
     public bool IsExpanded
     {
@@ -230,6 +238,7 @@ public sealed class NoteItemViewModel : ObservableObject
             OnPropertyChanged();
             OnPropertyChanged(nameof(Title));
             OnPropertyChanged(nameof(Snippet));
+            OnPropertyChanged(nameof(SnippetVisibility));
         }
     }
 
