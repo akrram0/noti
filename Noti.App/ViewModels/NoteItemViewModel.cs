@@ -12,10 +12,13 @@ public sealed class NoteItemViewModel : ObservableObject
 {
     private readonly string _folderDisplayName = string.Empty;
     private bool _isSelected;
+    private bool _isHovered;
     private bool _isExpanded = true;
     private int _depth;
     private int _folderNoteCount;
     private string _colorHex = string.Empty;
+
+    public static bool IsLightTheme { get; set; }
 
     public NoteItemViewModel(Note model, int depth = 0, string colorHex = "")
     {
@@ -72,9 +75,9 @@ public sealed class NoteItemViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(HasCustomColor));
                 OnPropertyChanged(nameof(AccentColorBrush));
-                OnPropertyChanged(nameof(CustomRowTintBrush));
                 OnPropertyChanged(nameof(ColorDotVisibility));
                 OnPropertyChanged(nameof(ColorDotRestingOpacity));
+                NotifyVisualStateChanged();
             }
         }
     }
@@ -88,10 +91,95 @@ public sealed class NoteItemViewModel : ObservableObject
             ? new SolidColorBrush(c)
             : new SolidColorBrush(ColorHelper.FromArgb(150, 142, 142, 147));
 
-    public SolidColorBrush CustomRowTintBrush =>
-        TryParseHexColor(_colorHex, 30, out var c)
+    public SolidColorBrush RowBackgroundBrush
+    {
+        get
+        {
+            if (TryParseHexColor(_colorHex, 255, out var baseColor))
+            {
+                // Unselected: 9% (23), Hover: 16% (41), Selected: 22% (56), Selected+Hover: 28% (71)
+                byte alpha = (_isSelected, _isHovered) switch
+                {
+                    (true, true) => 71,
+                    (true, false) => 56,
+                    (false, true) => 41,
+                    _ => 23
+                };
+                return new SolidColorBrush(ColorHelper.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
+            }
+
+            if (!_isSelected && !_isHovered)
+                return new SolidColorBrush(Colors.Transparent);
+
+            if (IsLightTheme)
+            {
+                byte lightAlpha = (_isSelected, _isHovered) switch
+                {
+                    (true, true) => 38,
+                    (true, false) => 28,
+                    _ => 18
+                };
+                return new SolidColorBrush(ColorHelper.FromArgb(lightAlpha, 0, 0, 0));
+            }
+
+            byte darkAlpha = (_isSelected, _isHovered) switch
+            {
+                (true, true) => 52,
+                (true, false) => 38,
+                _ => 24
+            };
+            return new SolidColorBrush(ColorHelper.FromArgb(darkAlpha, 255, 255, 255));
+        }
+    }
+
+    public SolidColorBrush RowBorderBrush
+    {
+        get
+        {
+            if (!_isSelected && !_isHovered)
+                return new SolidColorBrush(Colors.Transparent);
+
+            if (TryParseHexColor(_colorHex, 255, out var baseColor))
+            {
+                byte borderAlpha = (_isSelected, _isHovered) switch
+                {
+                    (true, true) => 138,
+                    (true, false) => 110,
+                    _ => 72
+                };
+                return new SolidColorBrush(ColorHelper.FromArgb(borderAlpha, baseColor.R, baseColor.G, baseColor.B));
+            }
+
+            if (IsLightTheme)
+            {
+                byte lightBorderAlpha = (_isSelected, _isHovered) switch
+                {
+                    (true, true) => 54,
+                    (true, false) => 40,
+                    _ => 24
+                };
+                return new SolidColorBrush(ColorHelper.FromArgb(lightBorderAlpha, 0, 0, 0));
+            }
+
+            byte darkBorderAlpha = (_isSelected, _isHovered) switch
+            {
+                (true, true) => 72,
+                (true, false) => 54,
+                _ => 34
+            };
+            return new SolidColorBrush(ColorHelper.FromArgb(darkBorderAlpha, 255, 255, 255));
+        }
+    }
+
+    public Visibility LeftAccentVisibility =>
+        (HasCustomColor || (!IsFolder && _isSelected)) ? Visibility.Visible : Visibility.Collapsed;
+
+    public double LeftAccentWidth => _isSelected ? 3.0 : (HasCustomColor ? 2.0 : 0.0);
+
+    public SolidColorBrush LeftAccentBrush =>
+        TryParseHexColor(_colorHex, 255, out var c)
             ? new SolidColorBrush(c)
-            : new SolidColorBrush(Colors.Transparent);
+            : new SolidColorBrush(ColorHelper.FromArgb(255, 10, 132, 255));
 
     public Visibility FolderVisibility => IsFolder ? Visibility.Visible : Visibility.Collapsed;
     public Visibility NoteVisibility => IsFolder ? Visibility.Collapsed : Visibility.Visible;
@@ -165,11 +253,33 @@ public sealed class NoteItemViewModel : ObservableObject
         set
         {
             if (SetProperty(ref _isSelected, value))
+            {
                 OnPropertyChanged(nameof(SelectionOpacity));
+                NotifyVisualStateChanged();
+            }
+        }
+    }
+
+    public bool IsHovered
+    {
+        get => _isHovered;
+        set
+        {
+            if (SetProperty(ref _isHovered, value))
+                NotifyVisualStateChanged();
         }
     }
 
     public double SelectionOpacity => _isSelected ? 1.0 : 0.0;
+
+    public void NotifyVisualStateChanged()
+    {
+        OnPropertyChanged(nameof(RowBackgroundBrush));
+        OnPropertyChanged(nameof(RowBorderBrush));
+        OnPropertyChanged(nameof(LeftAccentVisibility));
+        OnPropertyChanged(nameof(LeftAccentWidth));
+        OnPropertyChanged(nameof(LeftAccentBrush));
+    }
 
     public static Color ParseHexColor(string? hex, Color fallback) =>
         TryParseHexColor(hex, 255, out var c) ? c : fallback;

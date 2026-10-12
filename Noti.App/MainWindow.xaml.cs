@@ -92,6 +92,9 @@ public sealed partial class MainWindow : Window
 
         RootGrid.Loaded += (_, _) =>
         {
+            NoteItemViewModel.IsLightTheme = !ViewModel.IsDarkMode;
+            foreach (var n in ViewModel.FilteredNotes)
+                n.NotifyVisualStateChanged();
             ApplyResponsiveLayout();
             LiveCanvasRootGrid.MinHeight = Math.Max(0, LiveEditorScrollViewer.ActualHeight);
             ThemeIndicatorTranslate.X = ViewModel.ThemeIndicatorOffsetX;
@@ -3341,6 +3344,9 @@ public sealed partial class MainWindow : Window
                 break;
 
             case nameof(MainViewModel.IsDarkMode):
+                NoteItemViewModel.IsLightTheme = !ViewModel.IsDarkMode;
+                foreach (var n in ViewModel.FilteredNotes)
+                    n.NotifyVisualStateChanged();
                 UpdateAcrylicControllerProperties();
                 RecycleAllLiveBlocksToPool();
                 _liveTextBoxPool.Clear();
@@ -3770,17 +3776,14 @@ public sealed partial class MainWindow : Window
 
     private void OnSidebarRowPointerEntered(object sender, PointerRoutedEventArgs e)
     {
-        if (sender is Grid { Children.Count: > 0 } grid && grid.Children[0] is Border hoverBorder)
-        {
-            var isAlreadySelected = grid.DataContext is NoteItemViewModel { IsFolder: false, IsSelected: true };
-            hoverBorder.Opacity = isAlreadySelected ? 0.0 : 1.0;
-        }
+        if (sender is FrameworkElement { DataContext: NoteItemViewModel item })
+            item.IsHovered = true;
     }
 
     private void OnSidebarRowPointerExited(object sender, PointerRoutedEventArgs e)
     {
-        if (sender is Grid { Children.Count: > 0 } grid && grid.Children[0] is Border hoverBorder)
-            hoverBorder.Opacity = 0.0;
+        if (sender is FrameworkElement { DataContext: NoteItemViewModel item })
+            item.IsHovered = false;
     }
 
     private void OnSidebarRowRightTapped(object sender, RightTappedRoutedEventArgs e)
@@ -3852,9 +3855,12 @@ public sealed partial class MainWindow : Window
         var swatchRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            Padding = new Thickness(10, 4, 10, 6)
+            Spacing = 3,
+            Padding = new Thickness(6, 4, 6, 6)
         };
+
+        Application.Current.Resources.TryGetValue("ColorSwatchButtonStyle", out var swatchStyleObj);
+        var swatchStyle = swatchStyleObj as Style;
 
         foreach (var (name, hex) in PaletteColors)
         {
@@ -3863,14 +3869,22 @@ public sealed partial class MainWindow : Window
 
             var swatchBtn = new Button
             {
-                Width = 20,
-                Height = 20,
-                Padding = new Thickness(0),
-                CornerRadius = new CornerRadius(10),
                 Background = new SolidColorBrush(color),
-                BorderThickness = new Thickness(isCurrent ? 2 : 0),
-                BorderBrush = new SolidColorBrush(Colors.White)
+                Foreground = new SolidColorBrush(Colors.White)
             };
+            if (swatchStyle is not null)
+                swatchBtn.Style = swatchStyle;
+
+            if (isCurrent)
+            {
+                swatchBtn.Content = new FontIcon
+                {
+                    Glyph = "\uE73E",
+                    FontSize = 10,
+                    Foreground = new SolidColorBrush(Colors.White)
+                };
+            }
+
             ToolTipService.SetToolTip(swatchBtn, name);
 
             var capturedHex = hex;
@@ -3887,19 +3901,18 @@ public sealed partial class MainWindow : Window
         {
             var clearBtn = new Button
             {
-                Width = 20,
-                Height = 20,
-                Padding = new Thickness(0),
-                CornerRadius = new CornerRadius(10),
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(44, 142, 142, 147)),
-                BorderThickness = new Thickness(0),
+                Foreground = _cachedPrimaryBrush,
                 Content = new FontIcon
                 {
                     Glyph = "\uE711",
-                    FontSize = 8,
+                    FontSize = 9,
                     Foreground = _cachedPrimaryBrush
                 }
             };
+            if (swatchStyle is not null)
+                clearBtn.Style = swatchStyle;
+
             ToolTipService.SetToolTip(clearBtn, "Reset color");
             clearBtn.Click += (_, _) =>
             {

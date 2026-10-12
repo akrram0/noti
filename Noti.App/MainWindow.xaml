@@ -331,13 +331,23 @@
                                 PointerEntered="OnSidebarRowPointerEntered"
                                 PointerExited="OnSidebarRowPointerExited">
                                 <Border
-                                    Background="{ThemeResource SurfaceHoverBrush}"
-                                    CornerRadius="12"
-                                    Opacity="0" />
+                                    Background="{x:Bind RowBackgroundBrush, Mode=OneWay}"
+                                    BorderBrush="{x:Bind RowBorderBrush, Mode=OneWay}"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    IsHitTestVisible="False">
+                                    <Border.BackgroundTransition>
+                                        <BrushTransition Duration="0:0:0.14" />
+                                    </Border.BackgroundTransition>
+                                </Border>
                                 <Border
-                                    Background="{x:Bind CustomRowTintBrush, Mode=OneWay}"
-                                    CornerRadius="12"
-                                    IsHitTestVisible="False" />
+                                    Width="{x:Bind LeftAccentWidth, Mode=OneWay}"
+                                    Margin="0,5,0,5"
+                                    CornerRadius="1.5"
+                                    HorizontalAlignment="Left"
+                                    IsHitTestVisible="False"
+                                    Background="{x:Bind LeftAccentBrush, Mode=OneWay}"
+                                    Visibility="{x:Bind LeftAccentVisibility, Mode=OneWay}" />
                                 <Border
                                     Width="1.5"
                                     Margin="-8,4,0,4"
@@ -350,7 +360,7 @@
                                 <Border
                                     Visibility="{x:Bind FolderVisibility, Mode=OneWay}"
                                     Padding="10,7"
-                                    CornerRadius="12"
+                                    CornerRadius="10"
                                     Background="Transparent">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -402,10 +412,6 @@
 
                                 <!-- Note Card Row (Right-click for color, pin, export, delete) -->
                                 <Grid Visibility="{x:Bind NoteVisibility, Mode=OneWay}">
-                                    <Border
-                                        Background="{ThemeResource SurfaceActiveBrush}"
-                                        CornerRadius="12"
-                                        Opacity="{x:Bind SelectionOpacity, Mode=OneWay}" />
                                     <StackPanel Padding="12,9" Spacing="3">
                                         <StackPanel Orientation="Horizontal" Spacing="6">
                                             <FontIcon
@@ -1534,7 +1540,7 @@
             <Border
                 x:Name="SidebarContextPopupBorder"
                 UseLayoutRounding="True"
-                Width="228"
+                Width="248"
                 HorizontalAlignment="Left"
                 VerticalAlignment="Top"
                 Padding="10"
