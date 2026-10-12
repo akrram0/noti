@@ -454,9 +454,14 @@ public sealed class MainViewModel : ObservableObject
         get => _isDarkMode;
         private set
         {
+            NoteItemViewModel.IsLightTheme = !value;
             if (SetProperty(ref _isDarkMode, value))
             {
                 _settings.IsDarkMode = value;
+                foreach (var n in _allNotes)
+                    n.NotifyVisualStateChanged();
+                foreach (var f in _folderViewModels.Values)
+                    f.NotifyVisualStateChanged();
                 OnPropertyChanged(nameof(CurrentElementTheme));
                 OnPropertyChanged(nameof(ToggleThumbAlignment));
                 OnPropertyChanged(nameof(SurfaceOpacity));

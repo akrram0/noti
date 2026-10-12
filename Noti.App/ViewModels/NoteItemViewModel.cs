@@ -108,27 +108,29 @@ public sealed class NoteItemViewModel : ObservableObject
                 return new SolidColorBrush(ColorHelper.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
             }
 
-            if (!_isSelected && !_isHovered)
+            if (IsFolder && !_isSelected && !_isHovered)
                 return new SolidColorBrush(Colors.Transparent);
 
             if (IsLightTheme)
             {
-                // Light mode: Hover rgba(0,0,0, 0.04) = 10, Active rgba(0,0,0, 0.07) = 18
+                // Light mode default gray card: Unselected ~5% (13), Hover ~8.6% (22), Selected ~15% (38), Selected+Hover ~18% (46)
                 byte lightAlpha = (_isSelected, _isHovered) switch
                 {
-                    (true, true) => 22,
-                    (true, false) => 18,
-                    _ => 10
+                    (true, true) => 46,
+                    (true, false) => 38,
+                    (false, true) => 22,
+                    _ => 13
                 };
                 return new SolidColorBrush(ColorHelper.FromArgb(lightAlpha, 0, 0, 0));
             }
 
-            // Dark mode: Hover rgba(255,255,255, 0.05) = 13, Active rgba(255,255,255, 0.10) = 26
+            // Dark mode default gray card: Unselected ~6.3% (16), Hover ~11% (28), Selected ~18% (46), Selected+Hover ~22% (56)
             byte darkAlpha = (_isSelected, _isHovered) switch
             {
-                (true, true) => 32,
-                (true, false) => 26,
-                _ => 13
+                (true, true) => 56,
+                (true, false) => 46,
+                (false, true) => 28,
+                _ => 16
             };
             return new SolidColorBrush(ColorHelper.FromArgb(darkAlpha, 255, 255, 255));
         }
@@ -138,27 +140,40 @@ public sealed class NoteItemViewModel : ObservableObject
     {
         get
         {
-            if (!_isSelected && !_isHovered)
-                return new SolidColorBrush(Colors.Transparent);
-
             if (TryParseHexColor(_colorHex, 255, out var baseColor))
             {
                 byte borderAlpha = (_isSelected, _isHovered) switch
                 {
                     (true, true) => 76,
                     (true, false) => 56,
-                    _ => 36
+                    (false, true) => 36,
+                    _ => 22
                 };
                 return new SolidColorBrush(ColorHelper.FromArgb(borderAlpha, baseColor.R, baseColor.G, baseColor.B));
             }
 
+            if (IsFolder && !_isSelected && !_isHovered)
+                return new SolidColorBrush(Colors.Transparent);
+
             if (IsLightTheme)
             {
-                byte lightBorderAlpha = _isSelected ? (byte)28 : (byte)18;
+                byte lightBorderAlpha = (_isSelected, _isHovered) switch
+                {
+                    (true, true) => 54,
+                    (true, false) => 44,
+                    (false, true) => 22,
+                    _ => 12
+                };
                 return new SolidColorBrush(ColorHelper.FromArgb(lightBorderAlpha, 0, 0, 0));
             }
 
-            byte darkBorderAlpha = _isSelected ? (byte)42 : (byte)26;
+            byte darkBorderAlpha = (_isSelected, _isHovered) switch
+            {
+                (true, true) => 68,
+                (true, false) => 56,
+                (false, true) => 28,
+                _ => 14
+            };
             return new SolidColorBrush(ColorHelper.FromArgb(darkBorderAlpha, 255, 255, 255));
         }
     }
