@@ -956,7 +956,7 @@ public sealed class MainViewModel : ObservableObject
     private void OnSystemColorValuesChanged(UISettings sender, object args)
     {
         if (_currentThemeMode == ThemeMode.System)
-            EnqueueUi(ApplyThemeMode);
+            _dispatcherQueue?.TryEnqueue(ApplyThemeMode);
     }
 
     private async Task InstallUpdateAsync()

@@ -1027,7 +1027,7 @@
                             CornerRadius="1"
                             HorizontalAlignment="Left"
                             VerticalAlignment="Top"
-                            Background="{ThemeResource AccentPrimaryBrush}">
+                            Background="{ThemeResource TextFillColorPrimaryBrush}">
                             <Border.RenderTransform>
                                 <TranslateTransform x:Name="SmoothCaretTranslate" X="0" Y="0" />
                             </Border.RenderTransform>
