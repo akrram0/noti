@@ -234,7 +234,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
-                        <RowDefinition Height="56" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <!-- Dynamic Sidebar Tint Layer with Symmetrical Rounded Corners -->
@@ -587,96 +587,127 @@
                     </ListView.ItemTemplate>
                 </ListView>
 
-                <!-- Sidebar Footer: User Profile (Avatar + Name + Note Count) & Symmetrical 32x32 Settings Gear -->
-                <Grid Grid.Row="3" Padding="12,0" ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
+                <!-- Sidebar Footer: Cohesive User Profile (36x36 Avatar + Name + Note Count) & 36x36 Settings Gear Card -->
+                <Border
+                    Grid.Row="3"
+                    Margin="12,4,12,12"
+                    Padding="6"
+                    CornerRadius="12"
+                    Background="{ThemeResource GlassFillBrush}"
+                    BorderBrush="{ThemeResource GlassBorderBrush}"
+                    BorderThickness="1"
+                    UseLayoutRounding="True">
+                    <Grid ColumnSpacing="8" VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
 
-                    <Button
-                        Grid.Column="0"
-                        Height="40"
-                        Padding="8,4"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Background="Transparent"
-                        BorderBrush="Transparent"
-                        Style="{StaticResource GlassPillButtonStyle}"
-                        Command="{x:Bind ViewModel.OpenProfileSettingsCommand}"
-                        ToolTipService.ToolTip="Profile &amp; Settings">
-                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                            <Grid Width="32" Height="32">
-                                <Ellipse
-                                    Width="32"
-                                    Height="32"
-                                    Fill="{ThemeResource SurfaceActiveBrush}"
-                                    Stroke="{ThemeResource GlassBorderBrush}"
-                                    StrokeThickness="1" />
-                                <TextBlock
-                                    Text="{x:Bind ViewModel.UserInitials, Mode=OneWay}"
-                                    Visibility="{x:Bind ViewModel.UserInitialsVisibility, Mode=OneWay}"
-                                    FontSize="12"
-                                    FontWeight="SemiBold"
-                                    Foreground="{ThemeResource TextPrimaryBrush}"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center" />
-                                <Border
-                                    Width="32"
-                                    Height="32"
-                                    CornerRadius="16"
-                                    BorderBrush="{ThemeResource GlassBorderBrush}"
-                                    BorderThickness="1"
-                                    Visibility="{x:Bind ViewModel.UserAvatarVisibility, Mode=OneWay}">
-                                    <Image
-                                        Source="{x:Bind ViewModel.UserAvatarSource, Mode=OneWay}"
-                                        Stretch="UniformToFill" />
-                                </Border>
+                        <Button
+                            Grid.Column="0"
+                            Height="48"
+                            Padding="6,4"
+                            CornerRadius="8"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"
+                            Background="Transparent"
+                            BorderBrush="Transparent"
+                            Style="{StaticResource GlassPillButtonStyle}"
+                            Command="{x:Bind ViewModel.OpenProfileSettingsCommand}"
+                            ToolTipService.ToolTip="Profile &amp; Settings">
+                            <Grid ColumnSpacing="10" VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Grid Grid.Column="0" Width="36" Height="36" VerticalAlignment="Center" UseLayoutRounding="True">
+                                    <Ellipse
+                                        Width="36"
+                                        Height="36"
+                                        Fill="{ThemeResource SurfaceActiveBrush}"
+                                        Stroke="{ThemeResource GlassBorderBrush}"
+                                        StrokeThickness="1" />
+                                    <TextBlock
+                                        Text="{x:Bind ViewModel.UserInitials, Mode=OneWay}"
+                                        Visibility="{x:Bind ViewModel.UserInitialsVisibility, Mode=OneWay}"
+                                        FontSize="13"
+                                        FontWeight="SemiBold"
+                                        Foreground="{ThemeResource TextPrimaryBrush}"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center" />
+                                    <Border
+                                        Width="36"
+                                        Height="36"
+                                        CornerRadius="18"
+                                        BorderBrush="{ThemeResource GlassBorderBrush}"
+                                        BorderThickness="1"
+                                        Visibility="{x:Bind ViewModel.UserAvatarVisibility, Mode=OneWay}">
+                                        <Image
+                                            Width="34"
+                                            Height="34"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Source="{x:Bind ViewModel.UserAvatarSource, Mode=OneWay}"
+                                            Stretch="UniformToFill" />
+                                    </Border>
+                                </Grid>
+
+                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock
+                                        Text="{x:Bind ViewModel.DisplayUserName, Mode=OneWay}"
+                                        FontSize="14"
+                                        FontWeight="SemiBold"
+                                        Foreground="{ThemeResource TextPrimaryBrush}"
+                                        MaxLines="1"
+                                        TextTrimming="CharacterEllipsis" />
+                                    <TextBlock
+                                        Text="{x:Bind ViewModel.NoteCountText, Mode=OneWay}"
+                                        FontSize="12"
+                                        Foreground="{ThemeResource TextSecondaryBrush}"
+                                        MaxLines="1"
+                                        TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
                             </Grid>
+                        </Button>
 
-                            <StackPanel Spacing="1" VerticalAlignment="Center">
-                                <TextBlock
-                                    Text="{x:Bind ViewModel.DisplayUserName, Mode=OneWay}"
-                                    FontSize="13"
-                                    FontWeight="SemiBold"
-                                    Foreground="{ThemeResource TextPrimaryBrush}"
-                                    MaxLines="1"
-                                    TextTrimming="CharacterEllipsis" />
-                                <TextBlock
-                                    Text="{x:Bind ViewModel.NoteCountText, Mode=OneWay}"
-                                    FontSize="11"
-                                    Foreground="{ThemeResource TextSecondaryBrush}" />
-                            </StackPanel>
-                        </StackPanel>
-                    </Button>
-
-                    <Button
-                        Grid.Column="1"
-                        Style="{StaticResource GlassIconButtonStyle}"
-                        Command="{x:Bind ViewModel.ToggleSettingsCommand}"
-                        PointerEntered="OnSettingsGearPointerEntered"
-                        PointerExited="OnSettingsGearPointerExited"
-                        ToolTipService.ToolTip="Settings (Ctrl+,)">
-                        <Grid
-                            Width="16"
-                            Height="16"
-                            HorizontalAlignment="Center"
+                        <Button
+                            Grid.Column="1"
+                            Width="36"
+                            Height="36"
+                            Padding="0"
+                            CornerRadius="8"
+                            HorizontalAlignment="Stretch"
                             VerticalAlignment="Center"
-                            RenderTransformOrigin="0.5,0.5"
-                            UseLayoutRounding="True">
-                            <Grid.RenderTransform>
-                                <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
-                            </Grid.RenderTransform>
-                            <Path
-                                Data="M 7.0,1.7 L 9.0,1.7 L 9.3,3.3 L 10.5,3.8 L 11.8,2.8 L 13.2,4.2 L 12.2,5.5 L 12.7,6.7 L 14.3,7.0 L 14.3,9.0 L 12.7,9.3 L 12.2,10.5 L 13.2,11.8 L 11.8,13.2 L 10.5,12.2 L 9.3,12.7 L 9.0,14.3 L 7.0,14.3 L 6.7,12.7 L 5.5,12.2 L 4.2,13.2 L 2.8,11.8 L 3.8,10.5 L 3.3,9.3 L 1.7,9.0 L 1.7,7.0 L 3.3,6.7 L 3.8,5.5 L 2.8,4.2 L 4.2,2.8 L 5.5,3.8 L 6.7,3.3 Z M 8,5.9 A 2.1,2.1 0 1 1 7.99,5.9 Z"
-                                Stroke="{ThemeResource TextFillColorPrimaryBrush}"
-                                StrokeThickness="1.35"
-                                StrokeStartLineCap="Round"
-                                StrokeEndLineCap="Round"
-                                StrokeLineJoin="Round" />
-                        </Grid>
-                    </Button>
-                </Grid>
+                            HorizontalContentAlignment="Center"
+                            Style="{StaticResource GlassPillButtonStyle}"
+                            Command="{x:Bind ViewModel.ToggleSettingsCommand}"
+                            PointerEntered="OnSettingsGearPointerEntered"
+                            PointerExited="OnSettingsGearPointerExited"
+                            ToolTipService.ToolTip="Settings (Ctrl+,)">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid
+                                    Width="16"
+                                    Height="16"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    RenderTransformOrigin="0.5,0.5"
+                                    UseLayoutRounding="True">
+                                    <Grid.RenderTransform>
+                                        <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
+                                    </Grid.RenderTransform>
+                                    <Path
+                                        Data="M 7.0,1.7 L 9.0,1.7 L 9.3,3.3 L 10.5,3.8 L 11.8,2.8 L 13.2,4.2 L 12.2,5.5 L 12.7,6.7 L 14.3,7.0 L 14.3,9.0 L 12.7,9.3 L 12.2,10.5 L 13.2,11.8 L 11.8,13.2 L 10.5,12.2 L 9.3,12.7 L 9.0,14.3 L 7.0,14.3 L 6.7,12.7 L 5.5,12.2 L 4.2,13.2 L 2.8,11.8 L 3.8,10.5 L 3.3,9.3 L 1.7,9.0 L 1.7,7.0 L 3.3,6.7 L 3.8,5.5 L 2.8,4.2 L 4.2,2.8 L 5.5,3.8 L 6.7,3.3 Z M 8,5.9 A 2.1,2.1 0 1 1 7.99,5.9 Z"
+                                        Stroke="{ThemeResource TextFillColorPrimaryBrush}"
+                                        StrokeThickness="1.35"
+                                        StrokeStartLineCap="Round"
+                                        StrokeEndLineCap="Round"
+                                        StrokeLineJoin="Round" />
+                                </Grid>
+                            </Viewbox>
+                        </Button>
+                    </Grid>
+                </Border>
                 </Grid>
             </Grid>
 
