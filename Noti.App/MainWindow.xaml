@@ -668,9 +668,9 @@
                                 <RotateTransform x:Name="SettingsGearRotate" Angle="0" />
                             </Grid.RenderTransform>
                             <Path
-                                Data="M 8,5.6 A 2.4,2.4 0 1 1 7.99,5.6 Z M 8,1.5 V 3.3 M 8,12.7 V 14.5 M 1.5,8 H 3.3 M 12.7,8 H 14.5 M 3.4,3.4 L 4.7,4.7 M 11.3,11.3 L 12.6,12.6 M 12.6,3.4 L 11.3,4.7 M 4.7,11.3 L 3.4,12.6"
+                                Data="M 7.0,1.7 L 9.0,1.7 L 9.3,3.3 L 10.5,3.8 L 11.8,2.8 L 13.2,4.2 L 12.2,5.5 L 12.7,6.7 L 14.3,7.0 L 14.3,9.0 L 12.7,9.3 L 12.2,10.5 L 13.2,11.8 L 11.8,13.2 L 10.5,12.2 L 9.3,12.7 L 9.0,14.3 L 7.0,14.3 L 6.7,12.7 L 5.5,12.2 L 4.2,13.2 L 2.8,11.8 L 3.8,10.5 L 3.3,9.3 L 1.7,9.0 L 1.7,7.0 L 3.3,6.7 L 3.8,5.5 L 2.8,4.2 L 4.2,2.8 L 5.5,3.8 L 6.7,3.3 Z M 8,5.9 A 2.1,2.1 0 1 1 7.99,5.9 Z"
                                 Stroke="{ThemeResource TextFillColorPrimaryBrush}"
-                                StrokeThickness="1.4"
+                                StrokeThickness="1.35"
                                 StrokeStartLineCap="Round"
                                 StrokeEndLineCap="Round"
                                 StrokeLineJoin="Round" />
@@ -1169,33 +1169,81 @@
                                         Width="NaN"
                                         Height="30"
                                         HorizontalAlignment="Stretch"
-                                        Content="Appearance"
                                         Style="{StaticResource SegmentTabButtonStyle}"
-                                        Command="{x:Bind ViewModel.SetAppearanceSettingsCommand}" />
+                                        Command="{x:Bind ViewModel.SetAppearanceSettingsCommand}">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <Grid Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center" UseLayoutRounding="True">
+                                                <Path
+                                                    Data="M 2.5,3 H 13.5 A 1.5,1.5 0 0 1 15,4.5 V 10.5 A 1.5,1.5 0 0 1 13.5,12 H 2.5 A 1.5,1.5 0 0 1 1,10.5 V 4.5 A 1.5,1.5 0 0 1 2.5,3 Z M 8,12 V 14.2 M 5.2,14.2 H 10.8"
+                                                    Stroke="{ThemeResource TextFillColorPrimaryBrush}"
+                                                    StrokeThickness="1.35"
+                                                    StrokeStartLineCap="Round"
+                                                    StrokeEndLineCap="Round"
+                                                    StrokeLineJoin="Round" />
+                                            </Grid>
+                                            <TextBlock Text="Appearance" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
                                     <Button
                                         Grid.Column="1"
                                         Width="NaN"
                                         Height="30"
                                         HorizontalAlignment="Stretch"
-                                        Content="Profile"
                                         Style="{StaticResource SegmentTabButtonStyle}"
-                                        Command="{x:Bind ViewModel.SetProfileSettingsCommand}" />
+                                        Command="{x:Bind ViewModel.SetProfileSettingsCommand}">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <Grid Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center" UseLayoutRounding="True">
+                                                <Path
+                                                    Data="M 8,2.5 A 2.6,2.6 0 1 1 7.99,2.5 Z M 3,13.8 C 3,11.0 5.1,9.5 8,9.5 C 10.9,9.5 13,11.0 13,13.8"
+                                                    Stroke="{ThemeResource TextFillColorPrimaryBrush}"
+                                                    StrokeThickness="1.35"
+                                                    StrokeStartLineCap="Round"
+                                                    StrokeEndLineCap="Round"
+                                                    StrokeLineJoin="Round" />
+                                            </Grid>
+                                            <TextBlock Text="Profile" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
                                     <Button
                                         Grid.Column="2"
                                         Width="NaN"
                                         Height="30"
                                         HorizontalAlignment="Stretch"
-                                        Content="Vault"
                                         Style="{StaticResource SegmentTabButtonStyle}"
-                                        Command="{x:Bind ViewModel.SetVaultSettingsCommand}" />
+                                        Command="{x:Bind ViewModel.SetVaultSettingsCommand}">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <Grid Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center" UseLayoutRounding="True">
+                                                <Path
+                                                    Data="M 4,7.5 H 12 A 1.5,1.5 0 0 1 13.5,9 V 13 A 1.5,1.5 0 0 1 12,14.5 H 4 A 1.5,1.5 0 0 1 2.5,13 V 9 A 1.5,1.5 0 0 1 4,7.5 Z M 5.3,7.5 V 5.2 A 2.7,2.7 0 0 1 10.7,5.2 V 7.5 M 8,10.3 V 11.8"
+                                                    Stroke="{ThemeResource TextFillColorPrimaryBrush}"
+                                                    StrokeThickness="1.35"
+                                                    StrokeStartLineCap="Round"
+                                                    StrokeEndLineCap="Round"
+                                                    StrokeLineJoin="Round" />
+                                            </Grid>
+                                            <TextBlock Text="Vault" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
                                     <Button
                                         Grid.Column="3"
                                         Width="NaN"
                                         Height="30"
                                         HorizontalAlignment="Stretch"
-                                        Content="Shortcuts"
                                         Style="{StaticResource SegmentTabButtonStyle}"
-                                        Command="{x:Bind ViewModel.SetShortcutsSettingsCommand}" />
+                                        Command="{x:Bind ViewModel.SetShortcutsSettingsCommand}">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <Grid Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center" UseLayoutRounding="True">
+                                                <Path
+                                                    Data="M 2.5,4 H 13.5 A 1.5,1.5 0 0 1 15,5.5 V 11.5 A 1.5,1.5 0 0 1 13.5,13 H 2.5 A 1.5,1.5 0 0 1 1,11.5 V 5.5 A 1.5,1.5 0 0 1 2.5,4 Z M 4,7 H 5 M 7.5,7 H 8.5 M 11,7 H 12 M 5,10 H 11"
+                                                    Stroke="{ThemeResource TextFillColorPrimaryBrush}"
+                                                    StrokeThickness="1.35"
+                                                    StrokeStartLineCap="Round"
+                                                    StrokeEndLineCap="Round"
+                                                    StrokeLineJoin="Round" />
+                                            </Grid>
+                                            <TextBlock Text="Shortcuts" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
                                 </Grid>
                             </Border>
 
