@@ -124,8 +124,27 @@ public sealed class MarkdownNoteStore : INoteStore
             Directory.CreateDirectory(parentDir);
 
         var normalized = (note.Content ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", Environment.NewLine);
-        await File.WriteAllTextAsync(filePath, normalized, cancellationToken).ConfigureAwait(false);
-        File.SetLastWriteTimeUtc(filePath, note.UpdatedAt.UtcDateTime);
+        var tempFilePath = $"{filePath}.{Guid.NewGuid():N}.tmp";
+
+        try
+        {
+            await File.WriteAllTextAsync(tempFilePath, normalized, cancellationToken).ConfigureAwait(false);
+            File.Move(tempFilePath, filePath, overwrite: true);
+            File.SetLastWriteTimeUtc(filePath, note.UpdatedAt.UtcDateTime);
+        }
+        finally
+        {
+            if (File.Exists(tempFilePath))
+            {
+                try
+                {
+                    File.Delete(tempFilePath);
+                }
+                catch
+                {
+                }
+            }
+        }
     }
 
     public Task DeleteAsync(string id, CancellationToken cancellationToken = default)

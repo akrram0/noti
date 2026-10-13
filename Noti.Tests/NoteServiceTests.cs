@@ -119,6 +119,37 @@ public sealed class NoteServiceTests
         }
     }
 
+    [Fact]
+    public async Task MarkdownNoteStore_SaveAsync_WritesAtomicallyWithoutLeavingTempFiles()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"noti-atomic-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new MarkdownNoteStore(tempDir);
+            var note = new Note
+            {
+                Id = "TestNote",
+                Content = "# Atomic Write\nZero data loss.",
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+
+            await store.SaveAsync(note);
+
+            var filePath = store.GetFilePath("TestNote");
+            Assert.True(File.Exists(filePath));
+            var savedContent = await File.ReadAllTextAsync(filePath);
+            Assert.Contains("Zero data loss.", savedContent);
+
+            var tempFiles = Directory.EnumerateFiles(tempDir, "*.tmp", SearchOption.AllDirectories);
+            Assert.Empty(tempFiles);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
     private sealed class InMemoryNoteStore : INoteStore
     {
         private readonly Dictionary<string, Note> _notes = new();

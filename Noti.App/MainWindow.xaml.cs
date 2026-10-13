@@ -151,7 +151,13 @@ public sealed partial class MainWindow : Window
             _liveSyncTimer.Stop();
             if (ViewModel.SelectedNote?.Model is not null)
             {
-                _ = ViewModel.ForceSaveAsync();
+                try
+                {
+                    Task.Run(async () => await ViewModel.ForceSaveAsync()).Wait(TimeSpan.FromSeconds(2));
+                }
+                catch
+                {
+                }
             }
             ViewModel.Shutdown();
         }

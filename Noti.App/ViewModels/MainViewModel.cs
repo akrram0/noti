@@ -930,11 +930,20 @@ public sealed class MainViewModel : ObservableObject
 
     private async Task CheckForUpdatesAsync(bool silent)
     {
+        if (silent && _settings.LastUpdateCheckUtc.HasValue)
+        {
+            var elapsed = DateTimeOffset.UtcNow - _settings.LastUpdateCheckUtc.Value;
+            if (elapsed < TimeSpan.FromHours(4))
+                return;
+        }
+
         if (!silent)
             SetUpdateStatus("Checking GitHub Releases...");
 
         var (available, latestVer, url) = await AppUpdater.CheckForUpdateAsync();
         _latestUpdateUrl = url;
+        _settings.LastUpdateCheckUtc = DateTimeOffset.UtcNow;
+        _settings.Save();
 
         EnqueueUi(() =>
         {

@@ -19,6 +19,7 @@ public sealed class AppSettings
     public List<string> PinnedNoteIds { get; set; } = new();
     public List<string> CollapsedFolders { get; set; } = new();
     public Dictionary<string, string> ItemColors { get; set; } = new();
+    public DateTimeOffset? LastUpdateCheckUtc { get; set; }
 
     public static string AppDataDirectory
     {
@@ -53,6 +54,7 @@ public sealed class AppSettings
 
     public void Save()
     {
+        string? tempPath = null;
         try
         {
             var path = SettingsFilePath;
@@ -60,7 +62,7 @@ public sealed class AppSettings
             if (!string.IsNullOrEmpty(dir))
                 Directory.CreateDirectory(dir);
 
-            var tempPath = $"{path}.tmp";
+            tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
             var json = JsonSerializer.Serialize(this, JsonOptions);
             File.WriteAllText(tempPath, json);
             File.Move(tempPath, path, overwrite: true);
@@ -68,6 +70,19 @@ public sealed class AppSettings
         catch
         {
             // Ignore transient IO failures during rapid UI toggles
+        }
+        finally
+        {
+            if (tempPath != null && File.Exists(tempPath))
+            {
+                try
+                {
+                    File.Delete(tempPath);
+                }
+                catch
+                {
+                }
+            }
         }
     }
 }
