@@ -103,7 +103,7 @@ public sealed partial class MainWindow
             parentBorder.Child = null;
 
         block.PrimaryTextBox = null;
-        if (!tb.AcceptsReturn && _liveTextBoxPool.Count < 160)
+        if (_liveTextBoxPool.Count < 160)
             _liveTextBoxPool.Push(tb);
     }
 
@@ -124,6 +124,7 @@ public sealed partial class MainWindow
             else if (pooledTb.Parent is Border parentBorder)
                 parentBorder.Child = null;
 
+            pooledTb.AcceptsReturn = true;
             pooledTb.FontFamily = BodyFontFamily;
             pooledTb.FontWeight = FontWeights.Normal;
             pooledTb.FontStyle = Windows.UI.Text.FontStyle.Normal;
@@ -139,7 +140,7 @@ public sealed partial class MainWindow
 
         var tb = new TextBox
         {
-            AcceptsReturn = false,
+            AcceptsReturn = true,
             IsSpellCheckEnabled = false,
             IsReadOnly = ViewModel.IsActiveNoteLocked,
             FontFamily = BodyFontFamily,
@@ -475,23 +476,24 @@ public sealed partial class MainWindow
         targetTb.Focus(FocusState.Programmatic);
         targetTb.SelectionStart = initialClamped;
         targetTb.SelectionLength = 0;
+        ScheduleSmoothCaretUpdate(targetTb);
 
         DispatcherQueue.TryEnqueue(() =>
         {
             if (ViewModel.CurrentViewMode != EditorViewMode.Live ||
-                ViewModel.IsSettingsOpen ||
-                !ReferenceEquals(_activeLiveBlock, targetBlock) ||
-                !ReferenceEquals(targetTb.Tag, targetBlock))
+                ViewModel.IsSettingsOpen)
             {
                 return;
             }
 
+            _activeLiveBlock = targetBlock;
             targetTb.Visibility = Visibility.Visible;
             LiveEditorPanel.UpdateLayout();
             targetTb.Focus(FocusState.Programmatic);
             var clamped = Math.Clamp(caret, 0, (targetTb.Text ?? string.Empty).Length);
             targetTb.SelectionStart = clamped;
             targetTb.SelectionLength = 0;
+            ScheduleSmoothCaretUpdate(targetTb);
 
             if (savedOffset > 4.0 && LiveEditorScrollViewer.VerticalOffset < 1.0 && index > 1)
                 LiveEditorScrollViewer.ChangeView(null, savedOffset, null, true);

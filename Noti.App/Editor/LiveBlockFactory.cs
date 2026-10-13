@@ -656,11 +656,44 @@ public sealed partial class MainWindow
         return true;
     }
 
+    private static bool IsStartOfLineCheckboxTrigger(string text, out bool isChecked)
+    {
+        isChecked = false;
+        if (string.IsNullOrEmpty(text))
+            return false;
+
+        // Strictly matches: ^- \[[ xX]?\] $ or ^\[[ xX]?\] $ (at index 0, entire text is the trigger + trailing space)
+        if (text is "- [ ] " or "- [] " or "[ ] " or "[] ")
+        {
+            isChecked = false;
+            return true;
+        }
+
+        if (text is "- [x] " or "- [X] " or "[x] " or "[X] ")
+        {
+            isChecked = true;
+            return true;
+        }
+
+        return false;
+    }
+
     private bool TryAutoConvertLiveBlock(LiveDocBlock block, TextBox tb)
     {
         var idx = _liveBlocks.IndexOf(block);
         if (idx < 0)
-            return false;
+        {
+            idx = _liveBlocks.FindIndex(b => ReferenceEquals(b.PrimaryTextBox, tb));
+            if (idx >= 0)
+            {
+                block = _liveBlocks[idx];
+                tb.Tag = block;
+            }
+            else
+            {
+                return false;
+            }
+        }
 
         var text = tb.Text ?? string.Empty;
 
@@ -690,22 +723,11 @@ public sealed partial class MainWindow
                 RefreshLiveBlockAt(idx, 0);
                 return true;
             }
-            if (text.StartsWith("- [ ] ", StringComparison.OrdinalIgnoreCase) ||
-                text.StartsWith("[] ", StringComparison.OrdinalIgnoreCase))
-            {
-                var prefixLen = text.StartsWith("[] ", StringComparison.OrdinalIgnoreCase) ? 3 : 6;
-                block.Kind = LiveBlockKind.Checklist;
-                block.IsChecked = false;
-                block.Content = text[prefixLen..];
-                FlushSyncLiveBlocksToViewModel();
-                RefreshLiveBlockAt(idx, 0);
-                return true;
-            }
-            if (text.StartsWith("- [x] ", StringComparison.OrdinalIgnoreCase))
+            if (IsStartOfLineCheckboxTrigger(text, out var isChecked))
             {
                 block.Kind = LiveBlockKind.Checklist;
-                block.IsChecked = true;
-                block.Content = text[6..];
+                block.IsChecked = isChecked;
+                block.Content = string.Empty;
                 FlushSyncLiveBlocksToViewModel();
                 RefreshLiveBlockAt(idx, 0);
                 return true;
@@ -754,6 +776,16 @@ public sealed partial class MainWindow
                 FlushSyncLiveBlocksToViewModel();
                 return true;
             }
+        }
+
+        if (block.Kind == LiveBlockKind.Bullet && (text is "[ ] " or "[] " or "[x] " or "[X] "))
+        {
+            block.Kind = LiveBlockKind.Checklist;
+            block.IsChecked = text.Contains('x', StringComparison.OrdinalIgnoreCase);
+            block.Content = string.Empty;
+            FlushSyncLiveBlocksToViewModel();
+            RefreshLiveBlockAt(idx, 0);
+            return true;
         }
 
         if (block.Kind != LiveBlockKind.CodeBlock && block.Kind != LiveBlockKind.TableBlock)
@@ -859,7 +891,18 @@ public sealed partial class MainWindow
 
         var blockIdx = _liveBlocks.IndexOf(block);
         if (blockIdx < 0)
-            return;
+        {
+            blockIdx = _liveBlocks.FindIndex(b => ReferenceEquals(b.PrimaryTextBox, tb));
+            if (blockIdx >= 0)
+            {
+                block = _liveBlocks[blockIdx];
+                tb.Tag = block;
+            }
+            else
+            {
+                return;
+            }
+        }
 
         if (ctrlDown && e.Key == VirtualKey.L)
         {
@@ -971,6 +1014,22 @@ public sealed partial class MainWindow
             e.Handled = true;
             _activeEditorAlignment = block.BlockAlignment;
 
+            if (shiftDown)
+            {
+                // Shift+Enter: soft newline inside the current block without splitting
+                var curText = tb.Text ?? string.Empty;
+                var curCaret = Math.Clamp(tb.SelectionStart, 0, curText.Length);
+                var curSelLen = Math.Clamp(tb.SelectionLength, 0, curText.Length - curCaret);
+                var updated = curText[..curCaret] + "\n" + curText[(curCaret + curSelLen)..];
+                block.Content = updated;
+                tb.Text = updated;
+                tb.SelectionStart = curCaret + 1;
+                tb.SelectionLength = 0;
+                ScheduleSmoothCaretUpdate(tb);
+                QueueSyncLiveBlocksToViewModel();
+                return;
+            }
+
             if (block.Kind == LiveBlockKind.Paragraph &&
                 MarkdownRenderer.TryParseImageLine(text.Trim(), out _, out _, out _, out _))
             {
@@ -986,72 +1045,99 @@ public sealed partial class MainWindow
                 return;
             }
 
-            if (shiftDown && ViewModel.IsTreeShortcutEnabled)
+            // 2. Checklist Behavior & Enter Continuation:
+            if (block.Kind == LiveBlockKind.Checklist)
             {
-                if (TryParseTreeLine(text, out var treeIndent, out var isMid, out var treeBody))
+                // If empty checkbox: revert to normal paragraph (exit checklist mode)
+                if (string.IsNullOrWhiteSpace(text))
                 {
-                    if (string.IsNullOrWhiteSpace(treeBody))
-                    {
-                        block.Content = string.Empty;
-                        RefreshLiveBlockAt(blockIdx, 0);
-                        FlushSyncLiveBlocksToViewModel();
-                        return;
-                    }
-
-                    if (!isMid)
-                    {
-                        var prefixOffset = treeIndent.Length;
-                        block.Content = treeIndent + BranchMid + text[(prefixOffset + BranchEnd.Length)..];
-                        tb.Text = block.Content;
-                    }
-
-                    var nextTreeLine = treeIndent + BranchEnd;
-                    InsertLiveBlockAt(blockIdx + 1, new LiveDocBlock
-                    {
-                        Kind = LiveBlockKind.Paragraph,
-                        BlockAlignment = block.BlockAlignment,
-                        Content = nextTreeLine
-                    }, focusCaret: nextTreeLine.Length);
+                    block.Kind = LiveBlockKind.Paragraph;
+                    block.IsChecked = false;
+                    block.Content = string.Empty;
+                    RefreshLiveBlockAt(blockIdx, 0);
                     FlushSyncLiveBlocksToViewModel();
                     return;
                 }
 
-                InsertLiveBlockAt(blockIdx + 1, new LiveDocBlock
+                // If has text: split into headText and tailText, and create a NEW checklist block item below
+                var head = text[..caret];
+                var selLen = Math.Clamp(tb.SelectionLength, 0, text.Length - caret);
+                var tail = (caret + selLen < text.Length) ? text[(caret + selLen)..] : string.Empty;
+
+                block.Content = head;
+                if (tb.Text != head)
+                    tb.Text = head;
+
+                var newChecklist = new LiveDocBlock
                 {
-                    Kind = LiveBlockKind.Paragraph,
+                    Kind = LiveBlockKind.Checklist,
+                    IsChecked = false,
                     BlockAlignment = block.BlockAlignment,
-                    Content = BranchEnd
-                }, focusCaret: BranchEnd.Length);
+                    Content = tail
+                };
+                InsertLiveBlockAt(blockIdx + 1, newChecklist, focusCaret: 0);
                 FlushSyncLiveBlocksToViewModel();
                 return;
             }
 
-            if (block.Kind is LiveBlockKind.Checklist or LiveBlockKind.Bullet or LiveBlockKind.Quote &&
-                string.IsNullOrWhiteSpace(text))
+            // Bullet continuation or exit if empty:
+            if (block.Kind == LiveBlockKind.Bullet)
+            {
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    block.Kind = LiveBlockKind.Paragraph;
+                    block.Content = string.Empty;
+                    RefreshLiveBlockAt(blockIdx, 0);
+                    FlushSyncLiveBlocksToViewModel();
+                    return;
+                }
+
+                var head = text[..caret];
+                var selLen = Math.Clamp(tb.SelectionLength, 0, text.Length - caret);
+                var tail = (caret + selLen < text.Length) ? text[(caret + selLen)..] : string.Empty;
+
+                block.Content = head;
+                if (tb.Text != head)
+                    tb.Text = head;
+
+                var newBullet = new LiveDocBlock
+                {
+                    Kind = LiveBlockKind.Bullet,
+                    BlockAlignment = block.BlockAlignment,
+                    Content = tail
+                };
+                InsertLiveBlockAt(blockIdx + 1, newBullet, focusCaret: 0);
+                FlushSyncLiveBlocksToViewModel();
+                return;
+            }
+
+            // Quote exit if empty:
+            if (block.Kind == LiveBlockKind.Quote && string.IsNullOrWhiteSpace(text))
             {
                 block.Kind = LiveBlockKind.Paragraph;
-                block.IsChecked = false;
+                block.Content = string.Empty;
                 RefreshLiveBlockAt(blockIdx, 0);
                 FlushSyncLiveBlocksToViewModel();
                 return;
             }
 
-            var before = text[..caret];
-            var after = text[caret..];
-            block.Content = before;
-            if (tb.Text != before)
-                tb.Text = before;
+            // 1. Robust Block Splitting (Paragraphs, Headings, Quotes with content):
+            var headText = text[..caret];
+            var selectionLength = Math.Clamp(tb.SelectionLength, 0, text.Length - caret);
+            var tailText = (caret + selectionLength < text.Length) ? text[(caret + selectionLength)..] : string.Empty;
 
-            var nextKind = block.Kind is LiveBlockKind.Checklist or LiveBlockKind.Bullet
-                ? block.Kind
-                : LiveBlockKind.Paragraph;
+            block.Content = headText;
+            if (tb.Text != headText)
+                tb.Text = headText;
 
-            InsertLiveBlockAt(blockIdx + 1, new LiveDocBlock
+            var newParagraphBlock = new LiveDocBlock
             {
-                Kind = nextKind,
+                Kind = LiveBlockKind.Paragraph,
                 BlockAlignment = block.BlockAlignment,
-                Content = after
-            }, focusCaret: 0);
+                Content = tailText
+            };
+
+            InsertLiveBlockAt(blockIdx + 1, newParagraphBlock, focusCaret: 0);
             FlushSyncLiveBlocksToViewModel();
             return;
         }
