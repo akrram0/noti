@@ -53,6 +53,8 @@ public sealed partial class MainWindow
         EnsureLiveRenderResources();
         EditorTextBox.RequestedTheme = ViewModel.CurrentElementTheme;
         EditorTextBox.Background = _cachedInputBgBrush;
+        EditorTextBox.Foreground = _cachedPrimaryBrush;
+        SmoothCaretOverlayBorder.Background = _cachedPrimaryBrush;
         EditorTextBox.ContextFlyout = null;
         EditorTextBox.SelectionFlyout = null;
     }
@@ -67,7 +69,9 @@ public sealed partial class MainWindow
             _cachedSecondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 63, 63, 70));
             _cachedSurfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(135, 255, 255, 255));
             _cachedBorderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(38, 255, 255, 255) : ColorHelper.FromArgb(28, 0, 0, 0));
-            _cachedInputBgBrush = TransparentBrush;
+            _cachedInputBgBrush = isDarkMode
+                ? TransparentBrush
+                : new SolidColorBrush(ColorHelper.FromArgb(255, 248, 248, 252));
         }
 
         if (_cachedBorderlessStyle is null &&
@@ -120,6 +124,7 @@ public sealed partial class MainWindow
                 parentBorder.Child = null;
 
             pooledTb.Background = _cachedInputBgBrush;
+            pooledTb.Foreground = _cachedPrimaryBrush;
             pooledTb.RequestedTheme = ViewModel.CurrentElementTheme;
             pooledTb.ContextFlyout = null;
             pooledTb.SelectionFlyout = null;
@@ -132,6 +137,7 @@ public sealed partial class MainWindow
             AcceptsReturn = false,
             IsSpellCheckEnabled = false,
             Background = _cachedInputBgBrush,
+            Foreground = _cachedPrimaryBrush,
             RequestedTheme = ViewModel.CurrentElementTheme,
             SelectionHighlightColor = AccentBrush,
             SelectionHighlightColorWhenNotFocused = SelectionUnfocusedBrush,

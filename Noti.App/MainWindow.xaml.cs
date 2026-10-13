@@ -1756,6 +1756,7 @@ public sealed partial class MainWindow : Window
             }
 
             SmoothCaretOverlayBorder.Height = targetHeight;
+            SmoothCaretOverlayBorder.Background = _cachedPrimaryBrush;
 
             var fromX = SmoothCaretTranslate.X;
             var fromY = SmoothCaretTranslate.Y;
@@ -1983,6 +1984,7 @@ public sealed partial class MainWindow : Window
 
             case nameof(MainViewModel.CurrentThemeMode):
                 AnimateThemeModePill();
+                ApplyEditorTextBoxTheme();
                 break;
 
             case nameof(MainViewModel.CurrentBackdropMode):

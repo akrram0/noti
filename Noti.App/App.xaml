@@ -136,10 +136,10 @@
                     <SolidColorBrush x:Key="SidebarShadowStep4Brush" Color="#03000000" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#22000000" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#FFFFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
-                    <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackground" Color="#FFF8F8FC" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FFF8F8FC" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FFF8F8FC" />
+                    <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="#FFF8F8FC" />
                     <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
@@ -159,7 +159,7 @@
 
             <!-- Clean Borderless TextBox Style (eliminates WinUI Fluent bottom underline / elevation border artifact) -->
             <Style x:Key="BorderlessTextBoxStyle" TargetType="TextBox">
-                <Setter Property="Foreground" Value="{ThemeResource TextPrimaryBrush}" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
                 <Setter Property="Background" Value="{ThemeResource TextControlBackground}" />
                 <Setter Property="BorderBrush" Value="Transparent" />
                 <Setter Property="BorderThickness" Value="0" />
@@ -177,7 +177,7 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="TextBox">
-                            <Grid Background="Transparent">
+                            <Grid Background="{TemplateBinding Background}">
                                 <VisualStateManager.VisualStateGroups>
                                     <VisualStateGroup x:Name="CommonStates">
                                         <VisualState x:Name="Normal" />
@@ -189,7 +189,7 @@
                                 </VisualStateManager.VisualStateGroups>
                                 <Border
                                     x:Name="BorderElement"
-                                    Background="Transparent"
+                                    Background="{TemplateBinding Background}"
                                     BorderBrush="Transparent"
                                     BorderThickness="0" />
                                 <TextBlock
@@ -203,7 +203,7 @@
                                 <ScrollViewer
                                     x:Name="ContentElement"
                                     Foreground="{TemplateBinding Foreground}"
-                                    Background="Transparent"
+                                    Background="{TemplateBinding Background}"
                                     Padding="{TemplateBinding Padding}"
                                     HorizontalScrollMode="{TemplateBinding ScrollViewer.HorizontalScrollMode}"
                                     VerticalScrollMode="{TemplateBinding ScrollViewer.VerticalScrollMode}"

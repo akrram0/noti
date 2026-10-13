@@ -761,7 +761,8 @@
                             SelectionChanged="OnEditorSelectionChanged"
                             PointerReleased="OnEditorPointerReleased"
                             FontSize="{x:Bind ViewModel.EditorFontSize, Mode=OneWay}"
-                            Foreground="{ThemeResource TextPrimaryBrush}"
+                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                            Background="{ThemeResource TextControlBackground}"
                             BorderThickness="0"
                             Padding="40,28,40,16"
                             ScrollViewer.VerticalScrollBarVisibility="Auto" />
