@@ -3191,8 +3191,8 @@ public sealed partial class MainWindow : Window
         if (isLocked)
         {
             HideSelectionToolbar();
-            CloseSlashMenu();
-            CloseMentionMenu();
+            HideSlashMenuPopup();
+            HideMentionPopup();
         }
     }
 

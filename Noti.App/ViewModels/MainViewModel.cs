@@ -256,10 +256,10 @@ public sealed class MainViewModel : ObservableObject
 
     public void ToggleActiveNoteLock()
     {
-        if (_selectedNote is null || string.IsNullOrWhiteSpace(_selectedNote.FilePath))
+        if (_selectedNote is null || _selectedNote.IsFolder || string.IsNullOrWhiteSpace(_selectedNote.Id))
             return;
 
-        var path = _selectedNote.FilePath.Trim();
+        var path = _selectedNote.Id.Trim();
         var isCurrentlyLocked = _settings.LockedNotePaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
         if (isCurrentlyLocked)
         {
@@ -278,13 +278,13 @@ public sealed class MainViewModel : ObservableObject
 
     private void UpdateLockStateForSelectedNote(NoteItemViewModel? note)
     {
-        if (note is null || string.IsNullOrWhiteSpace(note.FilePath))
+        if (note is null || note.IsFolder || string.IsNullOrWhiteSpace(note.Id))
         {
             IsActiveNoteLocked = false;
             return;
         }
 
-        var normalized = note.FilePath.Trim();
+        var normalized = note.Id.Trim();
         var isLocked = _settings.LockedNotePaths.Any(p => string.Equals(p, normalized, StringComparison.OrdinalIgnoreCase));
         IsActiveNoteLocked = isLocked;
 

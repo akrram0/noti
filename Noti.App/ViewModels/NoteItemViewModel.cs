@@ -47,6 +47,7 @@ public sealed class NoteItemViewModel : ObservableObject
     public string FolderPath { get; }
 
     public string Id => IsFolder ? $"folder:{FolderPath}" : Model!.Id;
+    public string FilePath => IsFolder ? FolderPath : (Model?.Id ?? string.Empty);
     public string Title => IsFolder ? _folderDisplayName : Model!.Title;
     public string Snippet => IsFolder ? string.Empty : Model!.Snippet;
 
