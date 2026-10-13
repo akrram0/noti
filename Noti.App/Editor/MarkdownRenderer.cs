@@ -1750,6 +1750,10 @@ public static class MarkdownRenderer
             block.BlockAlignment = parsedAlign.Value;
 
         var align = block.HorizontalBlockAlignment;
+        var src = items.Count > 0 ? items[0].Src : block.Content;
+        var alt = items.Count > 0 ? items[0].Alt : string.Empty;
+        var width = items.Count > 0 ? items[0].Width : null;
+        var height = items.Count > 0 ? items[0].Height : null;
 
         if (items.Count == 0)
         {
@@ -1876,11 +1880,6 @@ public static class MarkdownRenderer
 
             return badgeHost;
         }
-
-        var src = items[0].Src;
-        var alt = items[0].Alt;
-        var width = items[0].Width;
-        var height = items[0].Height;
 
         string BuildImageMarkup(double? currentWidth)
         {
