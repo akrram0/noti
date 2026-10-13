@@ -15,8 +15,23 @@ using Windows.UI.Core;
 
 namespace Noti.App;
 
+public sealed class MarkdownImageItem
+{
+    public string Src { get; set; } = string.Empty;
+    public string Alt { get; set; } = string.Empty;
+    public string? LinkUrl { get; set; }
+    public double? Width { get; set; }
+    public double? Height { get; set; }
+    public TextAlignment? Alignment { get; set; }
+}
+
 public static class MarkdownRenderer
 {
+    private static readonly SolidColorBrush TransparentBrush = new(Colors.Transparent);
+    public static readonly FontFamily BodyFontFamily = new("Segoe UI Variable Text, Segoe UI, -apple-system, SF Pro Text, Inter, sans-serif");
+    public static readonly FontFamily HeadingFontFamily = new("Segoe UI Variable Display, Segoe UI, -apple-system, SF Pro Display, Inter, sans-serif");
+    public static readonly FontFamily MonoFontFamily = new("Cascadia Mono, Consolas, Courier New, monospace");
+
     private static readonly Dictionary<int, List<double>> TableColumnWidths = new();
 
     public static void Render(
@@ -37,7 +52,7 @@ public static class MarkdownRenderer
         var surfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(22, 0, 0, 0));
         var borderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(38, 255, 255, 255) : ColorHelper.FromArgb(28, 0, 0, 0));
         var accentBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 10, 132, 255));
-        var monoFont = new FontFamily("Cascadia Mono, Consolas, Courier New");
+        var monoFont = MonoFontFamily;
         var sortedTitles = noteTitles?
             .Where(t => !string.IsNullOrWhiteSpace(t))
             .OrderByDescending(t => t.Length)
@@ -1251,6 +1266,12 @@ public static class MarkdownRenderer
 
     public static bool TryParseImageLine(
         string? line,
+        out List<MarkdownImageItem> items,
+        out TextAlignment? alignment) =>
+        TryParseAllImageItems(line, out items, out alignment);
+
+    public static bool TryParseImageLine(
+        string? line,
         out string src,
         out string alt,
         out double? width,
@@ -1271,70 +1292,288 @@ public static class MarkdownRenderer
         height = null;
         alignment = null;
 
-        if (string.IsNullOrWhiteSpace(line))
-            return false;
-
-        var trimmed = line.Trim();
-
-        // Standard Markdown: ![alt](path_or_url)
-        if (trimmed.StartsWith("![", StringComparison.Ordinal) && trimmed.EndsWith(')'))
+        if (TryParseAllImageItems(line, out var items, out alignment) && items.Count > 0)
         {
-            var closeBracket = trimmed.IndexOf("](", 2, StringComparison.Ordinal);
-            if (closeBracket >= 2 && closeBracket + 2 < trimmed.Length - 1)
-            {
-                alt = trimmed[2..closeBracket].Trim();
-                var rawTarget = trimmed[(closeBracket + 2)..^1].Trim();
-                if (rawTarget.EndsWith('"') || rawTarget.EndsWith('\''))
-                {
-                    var quoteChar = rawTarget[^1];
-                    var openQuote = rawTarget.LastIndexOf(quoteChar, rawTarget.Length - 2);
-                    if (openQuote > 0 && char.IsWhiteSpace(rawTarget[openQuote - 1]))
-                        rawTarget = rawTarget[..(openQuote - 1)].Trim();
-                }
-
-                if (rawTarget.Length >= 2 && rawTarget.StartsWith('<') && rawTarget.EndsWith('>'))
-                    rawTarget = rawTarget[1..^1].Trim();
-
-                if (!string.IsNullOrWhiteSpace(rawTarget))
-                {
-                    src = rawTarget;
-                    return true;
-                }
-            }
-        }
-
-        // HTML syntax: <img src="path_or_url" ... />
-        if (trimmed.StartsWith("<img", StringComparison.OrdinalIgnoreCase) &&
-            trimmed.EndsWith('>') &&
-            (trimmed.Length == 4 || char.IsWhiteSpace(trimmed[4])))
-        {
-            var extractedSrc = ExtractHtmlAttribute(trimmed, "src");
-            if (!string.IsNullOrWhiteSpace(extractedSrc))
-            {
-                src = extractedSrc;
-                alt = ExtractHtmlAttribute(trimmed, "alt") ?? string.Empty;
-
-                if (double.TryParse(ExtractHtmlAttribute(trimmed, "width"), out var w) && w > 0)
-                    width = w;
-                if (double.TryParse(ExtractHtmlAttribute(trimmed, "height"), out var h) && h > 0)
-                    height = h;
-
-                var alignVal = ExtractHtmlAttribute(trimmed, "align");
-                if (!string.IsNullOrWhiteSpace(alignVal))
-                {
-                    if (alignVal.Equals("center", StringComparison.OrdinalIgnoreCase))
-                        alignment = TextAlignment.Center;
-                    else if (alignVal.Equals("right", StringComparison.OrdinalIgnoreCase))
-                        alignment = TextAlignment.Right;
-                    else if (alignVal.Equals("left", StringComparison.OrdinalIgnoreCase))
-                        alignment = TextAlignment.Left;
-                }
-
-                return true;
-            }
+            var first = items[0];
+            src = first.Src;
+            alt = first.Alt;
+            width = first.Width;
+            height = first.Height;
+            if (first.Alignment.HasValue)
+                alignment = first.Alignment;
+            return true;
         }
 
         return false;
+    }
+
+    public static bool TryParseAllImageItems(
+        string? line,
+        out List<MarkdownImageItem> items,
+        out TextAlignment? alignment)
+    {
+        items = [];
+        alignment = null;
+
+        if (string.IsNullOrWhiteSpace(line))
+            return false;
+
+        var content = line.Trim();
+
+        // 1. Check for optional outer <div align="..."> or <p align="...">
+        if (content.StartsWith("<div", StringComparison.OrdinalIgnoreCase) && content.EndsWith("</div>", StringComparison.OrdinalIgnoreCase))
+        {
+            var openEnd = content.IndexOf('>');
+            if (openEnd > 4)
+            {
+                var openTag = content[..openEnd];
+                if (openTag.Contains("right", StringComparison.OrdinalIgnoreCase)) alignment = TextAlignment.Right;
+                else if (openTag.Contains("center", StringComparison.OrdinalIgnoreCase)) alignment = TextAlignment.Center;
+                else if (openTag.Contains("left", StringComparison.OrdinalIgnoreCase)) alignment = TextAlignment.Left;
+                content = content[(openEnd + 1)..^6].Trim();
+            }
+        }
+        else if (content.StartsWith("<p", StringComparison.OrdinalIgnoreCase) && content.EndsWith("</p>", StringComparison.OrdinalIgnoreCase))
+        {
+            var openEnd = content.IndexOf('>');
+            if (openEnd > 2)
+            {
+                var openTag = content[..openEnd];
+                if (openTag.Contains("right", StringComparison.OrdinalIgnoreCase)) alignment = TextAlignment.Right;
+                else if (openTag.Contains("center", StringComparison.OrdinalIgnoreCase)) alignment = TextAlignment.Center;
+                else if (openTag.Contains("left", StringComparison.OrdinalIgnoreCase)) alignment = TextAlignment.Left;
+                content = content[(openEnd + 1)..^4].Trim();
+            }
+        }
+
+        // 2. Sequential scan from left to right for image tokens
+        var idx = 0;
+        var nonImageChars = 0;
+        while (idx < content.Length)
+        {
+            // Skip leading whitespace / common separator characters between badges
+            if (char.IsWhiteSpace(content[idx]) || content[idx] is '|' or '&' or '·' or '•')
+            {
+                idx++;
+                continue;
+            }
+
+            // Linked Markdown Image: [![alt](src)](link)
+            if (idx + 4 < content.Length && content[idx] == '[' && content[idx + 1] == '!' && content[idx + 2] == '[')
+            {
+                var altClose = content.IndexOf("](", idx + 3, StringComparison.Ordinal);
+                if (altClose > idx + 3)
+                {
+                    var imgParenClose = content.IndexOf(")](", altClose + 2, StringComparison.Ordinal);
+                    if (imgParenClose > altClose + 2)
+                    {
+                        var linkParenClose = content.IndexOf(')', imgParenClose + 3);
+                        if (linkParenClose > imgParenClose + 3)
+                        {
+                            var alt = content[(idx + 3)..altClose].Trim();
+                            var rawSrc = content[(altClose + 2)..imgParenClose].Trim();
+                            var link = content[(imgParenClose + 3)..linkParenClose].Trim();
+                            var cleanSrc = CleanImageSrc(rawSrc);
+                            if (!string.IsNullOrWhiteSpace(cleanSrc))
+                            {
+                                items.Add(new MarkdownImageItem
+                                {
+                                    Src = cleanSrc,
+                                    Alt = alt,
+                                    LinkUrl = link
+                                });
+                                idx = linkParenClose + 1;
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Standard Markdown Image: ![alt](src)
+            if (idx + 3 < content.Length && content[idx] == '!' && content[idx + 1] == '[')
+            {
+                var closeBracket = content.IndexOf("](", idx + 2, StringComparison.Ordinal);
+                if (closeBracket > idx + 2)
+                {
+                    var closeParen = content.IndexOf(')', closeBracket + 2);
+                    if (closeParen > closeBracket + 2)
+                    {
+                        var alt = content[(idx + 2)..closeBracket].Trim();
+                        var rawSrc = content[(closeBracket + 2)..closeParen].Trim();
+                        var cleanSrc = CleanImageSrc(rawSrc);
+                        if (!string.IsNullOrWhiteSpace(cleanSrc))
+                        {
+                            items.Add(new MarkdownImageItem
+                            {
+                                Src = cleanSrc,
+                                Alt = alt
+                            });
+                            idx = closeParen + 1;
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            // Linked HTML Image: <a ... href="link"><img ... src="src" ... /></a>
+            if (idx + 3 < content.Length && content.Substring(idx).StartsWith("<a", StringComparison.OrdinalIgnoreCase))
+            {
+                var aClose = content.IndexOf("</a>", idx, StringComparison.OrdinalIgnoreCase);
+                if (aClose > idx)
+                {
+                    var aBlock = content[idx..(aClose + 4)];
+                    var linkUrl = ExtractHtmlAttribute(aBlock, "href");
+                    var imgIdx = aBlock.IndexOf("<img", StringComparison.OrdinalIgnoreCase);
+                    if (imgIdx >= 0)
+                    {
+                        var imgTagClose = aBlock.IndexOf('>', imgIdx);
+                        if (imgTagClose > imgIdx)
+                        {
+                            var imgTag = aBlock[imgIdx..(imgTagClose + 1)];
+                            var imgSrc = ExtractHtmlAttribute(imgTag, "src");
+                            if (!string.IsNullOrWhiteSpace(imgSrc))
+                            {
+                                var alt = ExtractHtmlAttribute(imgTag, "alt") ?? string.Empty;
+                                double? w = double.TryParse(ExtractHtmlAttribute(imgTag, "width"), out var pw) && pw > 0 ? pw : null;
+                                double? h = double.TryParse(ExtractHtmlAttribute(imgTag, "height"), out var ph) && ph > 0 ? ph : null;
+                                items.Add(new MarkdownImageItem
+                                {
+                                    Src = imgSrc,
+                                    Alt = alt,
+                                    LinkUrl = linkUrl,
+                                    Width = w,
+                                    Height = h
+                                });
+                                idx = aClose + 4;
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Standalone HTML Image: <img ... src="src" ... />
+            if (idx + 4 < content.Length && content.Substring(idx).StartsWith("<img", StringComparison.OrdinalIgnoreCase))
+            {
+                var tagClose = content.IndexOf('>', idx);
+                if (tagClose > idx)
+                {
+                    var imgTag = content[idx..(tagClose + 1)];
+                    var imgSrc = ExtractHtmlAttribute(imgTag, "src");
+                    if (!string.IsNullOrWhiteSpace(imgSrc))
+                    {
+                        var alt = ExtractHtmlAttribute(imgTag, "alt") ?? string.Empty;
+                        double? w = double.TryParse(ExtractHtmlAttribute(imgTag, "width"), out var pw) && pw > 0 ? pw : null;
+                        double? h = double.TryParse(ExtractHtmlAttribute(imgTag, "height"), out var ph) && ph > 0 ? ph : null;
+                        TextAlignment? align = null;
+                        var alignVal = ExtractHtmlAttribute(imgTag, "align");
+                        if (!string.IsNullOrWhiteSpace(alignVal))
+                        {
+                            if (alignVal.Equals("center", StringComparison.OrdinalIgnoreCase)) align = TextAlignment.Center;
+                            else if (alignVal.Equals("right", StringComparison.OrdinalIgnoreCase)) align = TextAlignment.Right;
+                            else if (alignVal.Equals("left", StringComparison.OrdinalIgnoreCase)) align = TextAlignment.Left;
+                        }
+
+                        items.Add(new MarkdownImageItem
+                        {
+                            Src = imgSrc,
+                            Alt = alt,
+                            Width = w,
+                            Height = h,
+                            Alignment = align
+                        });
+                        idx = tagClose + 1;
+                        continue;
+                    }
+                }
+            }
+
+            nonImageChars++;
+            idx++;
+        }
+
+        if (items.Count > 0 && (nonImageChars <= 10 || nonImageChars * 4 < content.Length))
+            return true;
+
+        return false;
+    }
+
+    private static string CleanImageSrc(string rawTarget)
+    {
+        if (string.IsNullOrWhiteSpace(rawTarget))
+            return string.Empty;
+
+        var clean = rawTarget.Trim();
+        if (clean.EndsWith('"') || clean.EndsWith('\''))
+        {
+            var quoteChar = clean[^1];
+            var openQuote = clean.LastIndexOf(quoteChar, clean.Length - 2);
+            if (openQuote > 0 && char.IsWhiteSpace(clean[openQuote - 1]))
+                clean = clean[..(openQuote - 1)].Trim();
+        }
+
+        if (clean.Length >= 2 && clean.StartsWith('<') && clean.EndsWith('>'))
+            clean = clean[1..^1].Trim();
+
+        return clean;
+    }
+
+    public static bool IsBadgeItem(MarkdownImageItem item)
+    {
+        if (string.IsNullOrWhiteSpace(item.Src))
+            return false;
+
+        var src = item.Src.ToLowerInvariant();
+        return src.Contains("shields.io") ||
+               src.Contains("badge") ||
+               src.Contains("badgen.net") ||
+               src.EndsWith(".svg") ||
+               src.Contains(".svg?") ||
+               (item.Height.HasValue && item.Height.Value <= 40);
+    }
+
+    public static bool IsSvgUri(Uri? uri)
+    {
+        if (uri is null)
+            return false;
+
+        var abs = uri.AbsoluteUri;
+        if (abs.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (abs.Contains(".svg?", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (uri.Host.Contains("shields.io", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (uri.Host.Contains("badgen.net", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (uri.Query.Contains("format=svg", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
+    }
+
+    private static FrameworkElement CreateBadgeTextChip(string? label, Brush fgBrush, bool isDarkMode)
+    {
+        var text = string.IsNullOrWhiteSpace(label) ? "Badge" : label;
+        return new Border
+        {
+            Background = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(40, 255, 255, 255) : ColorHelper.FromArgb(20, 0, 0, 0)),
+            BorderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(50, 255, 255, 255) : ColorHelper.FromArgb(30, 0, 0, 0)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(8, 3, 8, 3),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = text,
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                FontFamily = BodyFontFamily,
+                Foreground = fgBrush,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
     }
 
     private static string? ExtractHtmlAttribute(string tag, string attributeName)
@@ -1495,9 +1734,143 @@ public static class MarkdownRenderer
         var badgeBgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(215, 20, 20, 24) : ColorHelper.FromArgb(225, 245, 245, 247));
         var badgeFgBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(245, 245, 245, 247) : ColorHelper.FromArgb(245, 28, 28, 30));
 
-        TryParseImageLine(block.Content, out var src, out var alt, out var width, out var height, out var parsedAlign);
+        TryParseAllImageItems(block.Content, out var items, out var parsedAlign);
         if (parsedAlign.HasValue && block.BlockAlignment == TextAlignment.Left)
             block.BlockAlignment = parsedAlign.Value;
+
+        var align = block.HorizontalBlockAlignment;
+
+        if (items.Count == 0)
+        {
+            var hostBorderFallback = new Border
+            {
+                CornerRadius = new CornerRadius(8),
+                MaxWidth = 680,
+                HorizontalAlignment = align,
+                Margin = new Thickness(0, 6, 0, 8),
+                Background = TransparentBrush,
+                Child = CreateFallbackPlaceholder()
+            };
+            return hostBorderFallback;
+        }
+
+        var isBadgeRow = items.Count > 1 || (items.Count == 1 && IsBadgeItem(items[0]));
+        if (isBadgeRow)
+        {
+            var rowPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                HorizontalAlignment = align,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            foreach (var item in items)
+            {
+                var badgeBorder = new Border
+                {
+                    CornerRadius = new CornerRadius(6),
+                    Background = TransparentBrush,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+
+                if (TryResolveImageUri(item.Src, noteFolderPath, vaultRootPath, out var resolvedBadgeUri) && resolvedBadgeUri is not null)
+                {
+                    var img = new Image
+                    {
+                        Stretch = Stretch.Uniform,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+
+                    if (item.Height is > 0)
+                        img.Height = item.Height.Value;
+                    else
+                        img.MaxHeight = 28;
+
+                    if (item.Width is > 0)
+                        img.Width = item.Width.Value;
+
+                    if (IsSvgUri(resolvedBadgeUri))
+                    {
+                        var svgSrc = new SvgImageSource { UriSource = resolvedBadgeUri };
+                        img.Source = svgSrc;
+                        svgSrc.OpenFailed += (_, _) =>
+                        {
+                            badgeBorder.Child = CreateBadgeTextChip(item.Alt, secondaryBrush, isDarkMode);
+                        };
+                    }
+                    else
+                    {
+                        var bmp = new BitmapImage(resolvedBadgeUri);
+                        img.Source = bmp;
+                        bmp.ImageFailed += (_, _) =>
+                        {
+                            badgeBorder.Child = CreateBadgeTextChip(item.Alt, secondaryBrush, isDarkMode);
+                        };
+                    }
+
+                    badgeBorder.Child = img;
+                }
+                else
+                {
+                    badgeBorder.Child = CreateBadgeTextChip(item.Alt, secondaryBrush, isDarkMode);
+                }
+
+                if (!string.IsNullOrWhiteSpace(item.Alt))
+                {
+                    var tip = string.IsNullOrWhiteSpace(item.LinkUrl)
+                        ? item.Alt
+                        : $"{item.Alt}\n{item.LinkUrl}";
+                    ToolTipService.SetToolTip(badgeBorder, tip);
+                }
+
+                if (!string.IsNullOrWhiteSpace(item.LinkUrl) && Uri.TryCreate(item.LinkUrl, UriKind.Absolute, out var badgeLinkUri))
+                {
+                    badgeBorder.Cursor = InputSystemCursor.Create(InputSystemCursorShape.Hand);
+                    badgeBorder.PointerPressed += async (_, e) =>
+                    {
+                        e.Handled = true;
+                        try
+                        {
+                            await Launcher.LaunchUriAsync(badgeLinkUri);
+                        }
+                        catch
+                        {
+                        }
+                    };
+                }
+
+                rowPanel.Children.Add(badgeBorder);
+            }
+
+            var badgeHost = new Border
+            {
+                CornerRadius = new CornerRadius(8),
+                HorizontalAlignment = align,
+                Margin = new Thickness(0, 4, 0, 8),
+                Background = TransparentBrush,
+                Child = rowPanel
+            };
+
+            badgeHost.PointerPressed += (_, e) =>
+            {
+                if (e.GetCurrentPoint(badgeHost).Properties.IsRightButtonPressed)
+                    return;
+
+                if (onRequestClickBelow is not null)
+                {
+                    e.Handled = true;
+                    onRequestClickBelow();
+                }
+            };
+
+            return badgeHost;
+        }
+
+        var src = items[0].Src;
+        var alt = items[0].Alt;
+        var width = items[0].Width;
+        var height = items[0].Height;
 
         string BuildImageMarkup(double? currentWidth)
         {
@@ -1556,7 +1929,6 @@ public static class MarkdownRenderer
             };
         }
 
-        var align = block.HorizontalBlockAlignment;
         var hostBorder = new Border
         {
             CornerRadius = new CornerRadius(8),
@@ -1570,10 +1942,12 @@ public static class MarkdownRenderer
         {
             try
             {
-                var bitmap = new BitmapImage(resolvedUri);
+                ImageSource imageSource = IsSvgUri(resolvedUri)
+                    ? new SvgImageSource { UriSource = resolvedUri }
+                    : new BitmapImage(resolvedUri);
                 var img = new Image
                 {
-                    Source = bitmap,
+                    Source = imageSource,
                     Stretch = Stretch.Uniform,
                     MaxWidth = 680,
                     MinWidth = 80,
@@ -2067,6 +2441,7 @@ public static class MarkdownRenderer
                         PlaceholderText = isHeader ? $"Column {c + 1}" : string.Empty,
                         FontSize = cellFontSize,
                         FontWeight = cellWeight,
+                        FontFamily = isHeader ? HeadingFontFamily : BodyFontFamily,
                         Foreground = primaryBrush,
                         Background = caretBgBrush,
                         SelectionHighlightColor = accentBrush,
@@ -2364,9 +2739,10 @@ public static class MarkdownRenderer
         {
             FontSize = fontSize,
             FontWeight = fontWeight,
+            FontFamily = (fontWeight.Weight >= 600) ? HeadingFontFamily : BodyFontFamily,
             Foreground = foreground,
             TextWrapping = TextWrapping.Wrap,
-            LineHeight = fontSize * 1.65,
+            LineHeight = Math.Round(fontSize * 1.6),
             Margin = margin,
             IsTextSelectionEnabled = true,
             ContextFlyout = null,

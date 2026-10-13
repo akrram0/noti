@@ -194,6 +194,7 @@ public sealed partial class MainWindow
             out var fontSize,
             out var fontWeight,
             out var fontStyle,
+            out var fontFamily,
             out var isTreeLine,
             out var textForeground,
             out var placeholder);
@@ -202,7 +203,7 @@ public sealed partial class MainWindow
         tb.Text = block.Content ?? string.Empty;
         tb.PlaceholderText = placeholder;
         tb.TextWrapping = isTreeLine ? TextWrapping.NoWrap : TextWrapping.Wrap;
-        tb.FontFamily = (block.IsBlockCode || isTreeLine) ? MonoFontFamily : DefaultFontFamily;
+        tb.FontFamily = fontFamily;
         tb.FontSize = fontSize;
         tb.FontWeight = fontWeight;
         tb.FontStyle = fontStyle;
@@ -211,7 +212,7 @@ public sealed partial class MainWindow
         tb.RequestedTheme = ViewModel.CurrentElementTheme;
         tb.TextAlignment = block.BlockAlignment;
         tb.MinWidth = 0;
-        tb.MinHeight = Math.Max(26, Math.Round(fontSize * 1.45));
+        tb.MinHeight = Math.Max(26, Math.Round(fontSize * 1.6));
         tb.Opacity = 1.0;
         tb.Visibility = Visibility.Visible;
         tb.IsHitTestVisible = true;
@@ -231,7 +232,7 @@ public sealed partial class MainWindow
             tb.FontWeight = FontWeights.Bold;
         if (block.InlineSpans.Any(s => s.IsItalic) || block.IsBlockItalic)
             tb.FontStyle = Windows.UI.Text.FontStyle.Italic;
-        if (block.InlineSpans.Any(s => s.IsCode) || block.IsBlockCode)
+        if (block.IsBlockCode)
             tb.FontFamily = MonoFontFamily;
 
         if (block.IsBlockStrikethrough)
@@ -334,6 +335,7 @@ public sealed partial class MainWindow
                 var dot = new TextBlock
                 {
                     Text = "•",
+                    FontFamily = BodyFontFamily,
                     FontSize = baseFontSize,
                     Foreground = secondaryBrush,
                     Margin = new Thickness(4, 2, 0, 0),

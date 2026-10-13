@@ -51,8 +51,10 @@ public sealed partial class MainWindow : Window
     private static readonly SolidColorBrush TransparentBrush = new(Colors.Transparent);
     private static readonly SolidColorBrush AccentBrush = new(ColorHelper.FromArgb(255, 10, 132, 255));
     private static readonly SolidColorBrush SelectionUnfocusedBrush = new(ColorHelper.FromArgb(140, 10, 132, 255));
-    private static readonly FontFamily MonoFontFamily = new("Cascadia Mono, Consolas, Courier New");
-    private static readonly FontFamily DefaultFontFamily = FontFamily.XamlAutoFontFamily;
+    public static readonly FontFamily BodyFontFamily = new("Segoe UI Variable Text, Segoe UI, -apple-system, SF Pro Text, Inter, sans-serif");
+    public static readonly FontFamily HeadingFontFamily = new("Segoe UI Variable Display, Segoe UI, -apple-system, SF Pro Display, Inter, sans-serif");
+    public static readonly FontFamily MonoFontFamily = new("Cascadia Mono, Consolas, Courier New, monospace");
+    private static readonly FontFamily DefaultFontFamily = BodyFontFamily;
 
     private bool? _cachedIsDarkMode;
     private SolidColorBrush _cachedPrimaryBrush = new(ColorHelper.FromArgb(255, 245, 245, 247));
@@ -718,7 +720,7 @@ public sealed partial class MainWindow : Window
         if (toggleBlockItalic)
             tb.FontStyle = (block.IsBlockItalic || block.InlineSpans.Any(s => s.IsItalic)) ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal;
         if (toggleBlockCode)
-            tb.FontFamily = (block.IsBlockCode || block.InlineSpans.Any(s => s.IsCode)) ? MonoFontFamily : DefaultFontFamily;
+            tb.FontFamily = block.IsBlockCode ? MonoFontFamily : BodyFontFamily;
 
         FlushSyncLiveBlocksToViewModel();
 

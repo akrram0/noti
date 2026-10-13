@@ -124,6 +124,9 @@ public sealed partial class MainWindow
             else if (pooledTb.Parent is Border parentBorder)
                 parentBorder.Child = null;
 
+            pooledTb.FontFamily = BodyFontFamily;
+            pooledTb.FontWeight = FontWeights.Normal;
+            pooledTb.FontStyle = Windows.UI.Text.FontStyle.Normal;
             pooledTb.Background = _cachedInputBgBrush;
             pooledTb.Foreground = _cachedPrimaryBrush;
             pooledTb.RequestedTheme = ViewModel.CurrentElementTheme;
@@ -137,6 +140,9 @@ public sealed partial class MainWindow
         {
             AcceptsReturn = false,
             IsSpellCheckEnabled = false,
+            FontFamily = BodyFontFamily,
+            FontWeight = FontWeights.Normal,
+            FontStyle = Windows.UI.Text.FontStyle.Normal,
             Background = _cachedInputBgBrush,
             Foreground = _cachedPrimaryBrush,
             RequestedTheme = ViewModel.CurrentElementTheme,
@@ -164,12 +170,14 @@ public sealed partial class MainWindow
         out double fontSize,
         out Windows.UI.Text.FontWeight fontWeight,
         out Windows.UI.Text.FontStyle fontStyle,
+        out FontFamily fontFamily,
         out bool isTreeLine,
         out Brush textForeground,
         out string placeholder)
     {
         EnsureLiveRenderResources();
         var baseFontSize = ViewModel.EditorFontSize;
+        var isHeading = block.Kind is LiveBlockKind.Heading1 or LiveBlockKind.Heading2 or LiveBlockKind.Heading3;
 
         fontSize = block.Kind switch
         {
@@ -179,7 +187,7 @@ public sealed partial class MainWindow
             _ => block.IsBlockCode ? Math.Max(13, baseFontSize - 1) : baseFontSize
         };
 
-        fontWeight = block.Kind is LiveBlockKind.Heading1 or LiveBlockKind.Heading2 or LiveBlockKind.Heading3
+        fontWeight = isHeading
             ? FontWeights.SemiBold
             : (block.IsBlockBold ? FontWeights.Bold : FontWeights.Normal);
 
@@ -191,6 +199,10 @@ public sealed partial class MainWindow
         isTreeLine = content.Contains("├─", StringComparison.Ordinal) ||
                      content.Contains("└─", StringComparison.Ordinal) ||
                      content.TrimStart().StartsWith('│');
+
+        fontFamily = isHeading
+            ? HeadingFontFamily
+            : ((block.Kind == LiveBlockKind.CodeBlock || block.IsBlockCode || isTreeLine) ? MonoFontFamily : BodyFontFamily);
 
         textForeground = (block.Kind == LiveBlockKind.Checklist && block.IsChecked) || block.Kind == LiveBlockKind.Quote || block.IsBlockStrikethrough
             ? _cachedSecondaryBrush
