@@ -210,6 +210,7 @@ public sealed partial class MainWindow
         tb.Foreground = textForeground;
         tb.Background = _cachedInputBgBrush;
         tb.RequestedTheme = ViewModel.CurrentElementTheme;
+        tb.IsReadOnly = ViewModel.IsActiveNoteLocked;
         tb.TextAlignment = block.BlockAlignment;
         tb.MinWidth = 0;
         tb.MinHeight = Math.Max(26, Math.Round(fontSize * 1.6));
@@ -298,6 +299,12 @@ public sealed partial class MainWindow
                 };
                 checkBox.Click += (_, _) =>
                 {
+                    if (ViewModel.IsActiveNoteLocked)
+                    {
+                        checkBox.IsChecked = block.IsChecked;
+                        TriggerLockedNoteAccidentalEditFeedback();
+                        return;
+                    }
                     EnsureLiveRenderResources();
                     block.IsChecked = checkBox.IsChecked == true;
                     tb.Foreground = block.IsChecked ? _cachedSecondaryBrush : _cachedPrimaryBrush;
@@ -854,6 +861,32 @@ public sealed partial class MainWindow
         if (blockIdx < 0)
             return;
 
+        if (ctrlDown && e.Key == VirtualKey.L)
+        {
+            e.Handled = true;
+            ViewModel.ToggleActiveNoteLock();
+            return;
+        }
+
+        if (ViewModel.IsActiveNoteLocked)
+        {
+            if (ctrlDown && (e.Key is VirtualKey.C or VirtualKey.A or VirtualKey.L))
+            {
+                // allow copy, select all, lock toggle
+            }
+            else if (e.Key is VirtualKey.Left or VirtualKey.Right or VirtualKey.Up or VirtualKey.Down or
+                     VirtualKey.Home or VirtualKey.End or VirtualKey.PageUp or VirtualKey.PageDown)
+            {
+                // allow caret navigation
+            }
+            else
+            {
+                e.Handled = true;
+                TriggerLockedNoteAccidentalEditFeedback();
+                return;
+            }
+        }
+
         if (ctrlDown)
         {
             if (shiftDown && e.Key == VirtualKey.X)
@@ -883,9 +916,7 @@ public sealed partial class MainWindow
                     return;
                 case VirtualKey.L:
                     e.Handled = true;
-                    block.Kind = block.Kind == LiveBlockKind.Checklist ? LiveBlockKind.Paragraph : LiveBlockKind.Checklist;
-                    FlushSyncLiveBlocksToViewModel();
-                    RefreshLiveBlockAt(blockIdx, tb.SelectionStart);
+                    ViewModel.ToggleActiveNoteLock();
                     return;
                 case VirtualKey.Number1:
                     e.Handled = true;

@@ -104,49 +104,123 @@
                 </Border>
             </StackPanel>
 
-            <!-- Center: Frosted Glass Live | Source Mode Switcher -->
-            <Border
-                x:Name="ViewSwitcherBorder"
+            <!-- Center: Mode Switcher & Smart Note Lock Control -->
+            <StackPanel
                 Grid.Column="1"
-                Width="126"
-                Height="32"
-                Padding="2"
-                CornerRadius="8"
+                Orientation="Horizontal"
+                Spacing="8"
                 HorizontalAlignment="Center"
-                Background="{ThemeResource InputBackgroundBrush}"
-                BorderBrush="{ThemeResource GlassBorderBrush}"
-                BorderThickness="1"
                 VerticalAlignment="Center">
-                <Grid>
-                    <Border
-                        x:Name="ModeIndicatorBorder"
-                        Width="60"
-                        Height="26"
-                        CornerRadius="6"
-                        HorizontalAlignment="Left"
-                        VerticalAlignment="Center"
-                        Background="{ThemeResource SurfaceActiveBrush}"
-                        BorderBrush="{ThemeResource GlassBorderBrush}"
-                        BorderThickness="1">
-                        <Border.RenderTransform>
-                            <TranslateTransform x:Name="ModeIndicatorTranslate" X="0" />
-                        </Border.RenderTransform>
-                    </Border>
 
-                    <StackPanel Orientation="Horizontal" Spacing="0">
-                        <Button
-                            Content="Live"
-                            Style="{StaticResource SegmentTabButtonStyle}"
-                            Command="{x:Bind ViewModel.SetLiveModeCommand}"
-                            ToolTipService.ToolTip="Live WYSIWYG Editor (Ctrl+E)" />
-                        <Button
-                            Content="Source"
-                            Style="{StaticResource SegmentTabButtonStyle}"
-                            Command="{x:Bind ViewModel.SetSourceModeCommand}"
-                            ToolTipService.ToolTip="Raw Markdown Source (Ctrl+E)" />
-                    </StackPanel>
+                <!-- Frosted Glass Live | Source Mode Switcher -->
+                <Border
+                    x:Name="ViewSwitcherBorder"
+                    Width="126"
+                    Height="32"
+                    Padding="2"
+                    CornerRadius="8"
+                    Background="{ThemeResource InputBackgroundBrush}"
+                    BorderBrush="{ThemeResource GlassBorderBrush}"
+                    BorderThickness="1"
+                    VerticalAlignment="Center">
+                    <Grid>
+                        <Border
+                            x:Name="ModeIndicatorBorder"
+                            Width="60"
+                            Height="26"
+                            CornerRadius="6"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center"
+                            Background="{ThemeResource SurfaceActiveBrush}"
+                            BorderBrush="{ThemeResource GlassBorderBrush}"
+                            BorderThickness="1">
+                            <Border.RenderTransform>
+                                <TranslateTransform x:Name="ModeIndicatorTranslate" X="0" />
+                            </Border.RenderTransform>
+                        </Border>
+
+                        <StackPanel Orientation="Horizontal" Spacing="0">
+                            <Button
+                                Content="Live"
+                                Style="{StaticResource SegmentTabButtonStyle}"
+                                Command="{x:Bind ViewModel.SetLiveModeCommand}"
+                                ToolTipService.ToolTip="Live WYSIWYG Editor (Ctrl+E)" />
+                            <Button
+                                Content="Source"
+                                Style="{StaticResource SegmentTabButtonStyle}"
+                                Command="{x:Bind ViewModel.SetSourceModeCommand}"
+                                ToolTipService.ToolTip="Raw Markdown Source (Ctrl+E)" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Smart Lock Control & Discovery Anchor -->
+                <Grid x:Name="LockContainerGrid" VerticalAlignment="Center">
+                    <Grid.RenderTransform>
+                        <CompositeTransform x:Name="LockContainerTransform" TranslateX="0" ScaleX="1" ScaleY="1" CenterX="16" CenterY="16" />
+                    </Grid.RenderTransform>
+
+                    <!-- Unlocked Button (subtle, semi-transparent open lock) -->
+                    <Button
+                        x:Name="NoteUnlockButton"
+                        Width="32"
+                        Height="32"
+                        Padding="0"
+                        CornerRadius="8"
+                        Background="Transparent"
+                        BorderBrush="{ThemeResource GlassBorderBrush}"
+                        BorderThickness="1"
+                        Click="OnToggleNoteLockClicked"
+                        ToolTipService.ToolTip="Lock Note (Ctrl+L)"
+                        Visibility="{x:Bind ViewModel.UnlockedLockVisibility, Mode=OneWay}">
+                        <FontIcon Glyph="&#xE785;" FontSize="13" Foreground="{ThemeResource TextSecondaryBrush}" />
+                    </Button>
+
+                    <!-- Locked Button (vibrant accent capsule pill) -->
+                    <Button
+                        x:Name="NoteLockButton"
+                        Height="32"
+                        Padding="8,0,10,0"
+                        CornerRadius="8"
+                        Background="{ThemeResource AccentSubtleTintBrush}"
+                        BorderBrush="{ThemeResource AccentLockedBorderBrush}"
+                        BorderThickness="1"
+                        Click="OnToggleNoteLockClicked"
+                        ToolTipService.ToolTip="Unlock Note (Ctrl+L)"
+                        Visibility="{x:Bind ViewModel.LockedLockVisibility, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <FontIcon Glyph="&#xE72E;" FontSize="12" Foreground="{ThemeResource AccentLockedForegroundBrush}" />
+                            <TextBlock Text="Locked" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource AccentLockedForegroundBrush}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Floating Discovery Glass Pill Callout -->
+                    <Popup
+                        x:Name="LockDiscoveryCalloutPopup"
+                        IsOpen="False"
+                        IsLightDismissEnabled="True"
+                        VerticalOffset="36"
+                        HorizontalOffset="-110">
+                        <Border
+                            x:Name="LockDiscoveryCalloutBorder"
+                            Padding="12,8"
+                            CornerRadius="8"
+                            Background="{ThemeResource PopupAcrylicBrush}"
+                            BorderBrush="{ThemeResource GlassBorderBrush}"
+                            BorderThickness="1"
+                            MaxWidth="360">
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <TextBlock Text="💡" FontSize="13" VerticalAlignment="Center" />
+                                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource TextPrimaryBrush}">
+                                    <Run Text="Tip: Press " />
+                                    <Run Text="Ctrl+L" FontWeight="SemiBold" />
+                                    <Run Text=" to lock and protect this note from accidental edits." />
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
                 </Grid>
-            </Border>
+            </StackPanel>
 
             <!-- Right: Compact Zoom Badge & Update Pill (padded left of window caption buttons) -->
             <StackPanel
@@ -1097,6 +1171,29 @@
                                 FontWeight="SemiBold"
                                 Foreground="{ThemeResource TextPrimaryBrush}" />
                         </Border>
+
+                        <!-- Locked Note Accidental Typing Warning Toast -->
+                        <Border
+                            x:Name="LockedNoteWarningToast"
+                            UseLayoutRounding="True"
+                            IsHitTestVisible="False"
+                            Opacity="0"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Top"
+                            Margin="0,16,0,0"
+                            Padding="12,6"
+                            CornerRadius="8"
+                            Background="{ThemeResource SurfaceActiveBrush}"
+                            BorderBrush="{ThemeResource GlassBorderBrush}"
+                            BorderThickness="1">
+                            <Border.RenderTransform>
+                                <TranslateTransform x:Name="LockedWarningToastTranslate" Y="-8" />
+                            </Border.RenderTransform>
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <FontIcon Glyph="&#xE72E;" FontSize="11" Foreground="{ThemeResource AccentLockedForegroundBrush}" />
+                                <TextBlock Text="Note is locked. Press Ctrl+L to edit." FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextPrimaryBrush}" />
+                            </StackPanel>
+                        </Border>
                     </Grid>
 
                     <!-- Borderless Bottom Status Bar -->
@@ -1874,7 +1971,8 @@
                                     <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock Grid.Column="0" Text="Cycle Live / Source mode" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Grid.Column="1" Text="Ctrl + E" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock Grid.Column="0" Text="New note / New folder" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Grid.Column="1" Text="Ctrl + N / Ctrl + Shift + N" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock Grid.Column="0" Text="Import .md / Export .md" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Grid.Column="1" Text="Ctrl + O / Ctrl + Shift + S" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
-                                    <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock Grid.Column="0" Text="Bold / Italic / Checklist (- [ ])" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Grid.Column="1" Text="Ctrl + B / Ctrl + I / Ctrl + L" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
+                                    <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock Grid.Column="0" Text="Lock / Protect Note (Toggle)" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Grid.Column="1" Text="Ctrl + L" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
+                                    <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock Grid.Column="0" Text="Bold / Italic / Strikethrough" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Grid.Column="1" Text="Ctrl + B / Ctrl + I / Ctrl + Shift + X" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock Grid.Column="0" Text="Heading 1 / 2 / 3" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Grid.Column="1" Text="Ctrl + 1 / 2 / 3" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock Grid.Column="0" Text="Delete selected note" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Grid.Column="1" Text="Ctrl + Delete" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>
                                     <Grid ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock Grid.Column="0" Text="Toggle Sidebar / Full-Window Settings" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{ThemeResource TextPrimaryBrush}" /><TextBlock Grid.Column="1" Text="Ctrl + \ / Ctrl + ," FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource TextSecondaryBrush}" HorizontalAlignment="Right" /></Grid>

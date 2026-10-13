@@ -137,6 +137,9 @@ public sealed partial class MainWindow : Window
             HideSelectionToolbar();
         };
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+        ViewModel.ActiveNoteLockChanged = OnActiveNoteLockChanged;
+        ViewModel.RequestShowLockDiscoveryTip = ShowLockDiscoveryCallout;
+        RootGrid.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) => DismissLockDiscoveryCallout()), true);
     }
 
     private void OnTopTitleBarLayoutUpdated(object? sender, object e) =>
@@ -257,6 +260,7 @@ public sealed partial class MainWindow : Window
 
     private void OnRootPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        DismissLockDiscoveryCallout();
         if (e.Key == VirtualKey.Escape)
         {
             if (SidebarContextOverlay.Visibility == Visibility.Visible)
@@ -355,6 +359,11 @@ public sealed partial class MainWindow : Window
                 ViewModel.CycleViewModeCommand.Execute(null);
                 break;
 
+            case VirtualKey.L:
+                e.Handled = true;
+                ViewModel.ToggleActiveNoteLock();
+                break;
+
             case VirtualKey.O:
                 e.Handled = true;
                 _ = PickAndImportMarkdownAsync();
@@ -450,6 +459,32 @@ public sealed partial class MainWindow : Window
             }
         }
 
+        if (ctrlDown && e.Key == VirtualKey.L)
+        {
+            e.Handled = true;
+            ViewModel.ToggleActiveNoteLock();
+            return;
+        }
+
+        if (ViewModel.IsActiveNoteLocked)
+        {
+            if (ctrlDown && (e.Key is VirtualKey.C or VirtualKey.A or VirtualKey.L))
+            {
+                // allow copy, select all, lock toggle
+            }
+            else if (e.Key is VirtualKey.Left or VirtualKey.Right or VirtualKey.Up or VirtualKey.Down or
+                     VirtualKey.Home or VirtualKey.End or VirtualKey.PageUp or VirtualKey.PageDown)
+            {
+                // allow caret navigation
+            }
+            else
+            {
+                e.Handled = true;
+                TriggerLockedNoteAccidentalEditFeedback();
+                return;
+            }
+        }
+
         if (ctrlDown)
         {
             switch (e.Key)
@@ -464,7 +499,7 @@ public sealed partial class MainWindow : Window
                     return;
                 case VirtualKey.L:
                     e.Handled = true;
-                    ToggleLinePrefix("- [ ] ");
+                    ViewModel.ToggleActiveNoteLock();
                     return;
                 case VirtualKey.Number1:
                     e.Handled = true;
@@ -3133,11 +3168,132 @@ public sealed partial class MainWindow : Window
         return text.Length;
     }
 
+    private DispatcherTimer? _warningToastTimer;
+    private DispatcherTimer? _lockShakeTimer;
+    private int _shakeStep;
+    private DispatcherTimer? _calloutDismissTimer;
+    private DispatcherTimer? _calloutPulseTimer;
+    private int _pulseStep;
+
+    private void OnActiveNoteLockChanged(bool isLocked)
+    {
+        EditorTextBox.IsReadOnly = isLocked;
+
+        if (_liveBlocks is not null)
+        {
+            foreach (var block in _liveBlocks)
+            {
+                if (block.PrimaryTextBox is { } tb)
+                    tb.IsReadOnly = isLocked;
+            }
+        }
+
+        if (isLocked)
+        {
+            HideSelectionToolbar();
+            CloseSlashMenu();
+            CloseMentionMenu();
+        }
+    }
+
+    private void OnToggleNoteLockClicked(object sender, RoutedEventArgs e)
+    {
+        DismissLockDiscoveryCallout();
+        ViewModel.ToggleActiveNoteLock();
+    }
+
+    private void TriggerLockedNoteAccidentalEditFeedback()
+    {
+        _shakeStep = 0;
+        _lockShakeTimer?.Stop();
+        _lockShakeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(35) };
+        _lockShakeTimer.Tick += (_, _) =>
+        {
+            _shakeStep++;
+            switch (_shakeStep)
+            {
+                case 1: LockContainerTransform.TranslateX = -4; break;
+                case 2: LockContainerTransform.TranslateX = 4; break;
+                case 3: LockContainerTransform.TranslateX = -2; break;
+                case 4: LockContainerTransform.TranslateX = 2; break;
+                case 5:
+                default:
+                    LockContainerTransform.TranslateX = 0;
+                    _lockShakeTimer?.Stop();
+                    break;
+            }
+        };
+        _lockShakeTimer.Start();
+
+        LockedNoteWarningToast.Opacity = 1.0;
+        LockedWarningToastTranslate.Y = 0;
+
+        _warningToastTimer?.Stop();
+        _warningToastTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
+        _warningToastTimer.Tick += (_, _) =>
+        {
+            _warningToastTimer?.Stop();
+            LockedNoteWarningToast.Opacity = 0.0;
+            LockedWarningToastTranslate.Y = -8;
+        };
+        _warningToastTimer.Start();
+    }
+
+    private void ShowLockDiscoveryCallout()
+    {
+        LockDiscoveryCalloutPopup.IsOpen = true;
+
+        _pulseStep = 0;
+        _calloutPulseTimer?.Stop();
+        _calloutPulseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+        _calloutPulseTimer.Tick += (_, _) =>
+        {
+            _pulseStep++;
+            double scale;
+            if (_pulseStep <= 10)
+                scale = 1.0 + (0.08 * (_pulseStep / 10.0));
+            else if (_pulseStep <= 20)
+                scale = 1.08 - (0.08 * ((_pulseStep - 10) / 10.0));
+            else
+            {
+                scale = 1.0;
+                _calloutPulseTimer?.Stop();
+            }
+            LockContainerTransform.ScaleX = scale;
+            LockContainerTransform.ScaleY = scale;
+        };
+        _calloutPulseTimer.Start();
+
+        _calloutDismissTimer?.Stop();
+        _calloutDismissTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+        _calloutDismissTimer.Tick += (_, _) =>
+        {
+            _calloutDismissTimer?.Stop();
+            DismissLockDiscoveryCallout();
+        };
+        _calloutDismissTimer.Start();
+    }
+
+    private void DismissLockDiscoveryCallout()
+    {
+        _calloutDismissTimer?.Stop();
+        _calloutPulseTimer?.Stop();
+        if (LockContainerTransform is not null)
+        {
+            LockContainerTransform.ScaleX = 1.0;
+            LockContainerTransform.ScaleY = 1.0;
+        }
+        if (LockDiscoveryCalloutPopup is not null && LockDiscoveryCalloutPopup.IsOpen)
+            LockDiscoveryCalloutPopup.IsOpen = false;
+    }
+
     private void UpdateTitleBarChromeRegions() =>
         _chromeService.UpdateTitleBarRegions(
             TopTitleBarGrid,
             SidebarToggleButton,
             ViewSwitcherBorder,
+            NoteUnlockButton,
+            NoteLockButton,
             UpdateTopBarButton,
             ZoomBadgeButton);
 }

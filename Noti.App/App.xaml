@@ -38,6 +38,9 @@
                     <SolidColorBrush x:Key="SidebarShadowStep4Brush" Color="#06000000" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#26FFFFFF" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#F0FFFFFF" />
+                    <SolidColorBrush x:Key="AccentSubtleTintBrush" Color="#330A84FF" />
+                    <SolidColorBrush x:Key="AccentLockedBorderBrush" Color="#FF0A84FF" />
+                    <SolidColorBrush x:Key="AccentLockedForegroundBrush" Color="#FF0A84FF" />
                     <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
@@ -87,6 +90,9 @@
                     <SolidColorBrush x:Key="SidebarShadowStep4Brush" Color="#06000000" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#26FFFFFF" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#F0FFFFFF" />
+                    <SolidColorBrush x:Key="AccentSubtleTintBrush" Color="#330A84FF" />
+                    <SolidColorBrush x:Key="AccentLockedBorderBrush" Color="#FF0A84FF" />
+                    <SolidColorBrush x:Key="AccentLockedForegroundBrush" Color="#FF0A84FF" />
                     <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
@@ -136,6 +142,9 @@
                     <SolidColorBrush x:Key="SidebarShadowStep4Brush" Color="#03000000" />
                     <SolidColorBrush x:Key="ToggleTrackBrush" Color="#22000000" />
                     <SolidColorBrush x:Key="ToggleThumbBrush" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="AccentSubtleTintBrush" Color="#22007AFF" />
+                    <SolidColorBrush x:Key="AccentLockedBorderBrush" Color="#FF007AFF" />
+                    <SolidColorBrush x:Key="AccentLockedForegroundBrush" Color="#FF007AFF" />
                     <SolidColorBrush x:Key="TextControlBackground" Color="#FFF8F8FC" />
                     <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FFF8F8FC" />
                     <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FFF8F8FC" />

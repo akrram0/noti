@@ -20,6 +20,8 @@ public sealed class AppSettings
     public List<string> CollapsedFolders { get; set; } = new();
     public Dictionary<string, string> ItemColors { get; set; } = new();
     public DateTimeOffset? LastUpdateCheckUtc { get; set; }
+    public bool HasSeenLockTip { get; set; } = false;
+    public List<string> LockedNotePaths { get; set; } = new();
 
     public static string AppDataDirectory
     {

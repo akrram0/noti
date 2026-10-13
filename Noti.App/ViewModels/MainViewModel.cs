@@ -154,6 +154,7 @@ public sealed class MainViewModel : ObservableObject
         ClearUserAvatarCommand = new RelayCommand(ClearUserAvatar);
         CheckOrInstallUpdateCommand = new AsyncRelayCommand(CheckOrInstallUpdateAsync);
         InstallUpdateCommand = new AsyncRelayCommand(InstallUpdateAsync);
+        ToggleActiveNoteLockCommand = new RelayCommand(ToggleActiveNoteLock);
     }
 
     public ObservableCollection<NoteItemViewModel> FilteredNotes { get; } = new();
@@ -195,6 +196,28 @@ public sealed class MainViewModel : ObservableObject
     public IRelayCommand ClearUserAvatarCommand { get; }
     public IAsyncRelayCommand CheckOrInstallUpdateCommand { get; }
     public IAsyncRelayCommand InstallUpdateCommand { get; }
+    public IRelayCommand ToggleActiveNoteLockCommand { get; }
+
+    private bool _isActiveNoteLocked;
+    public bool IsActiveNoteLocked
+    {
+        get => _isActiveNoteLocked;
+        set
+        {
+            if (SetProperty(ref _isActiveNoteLocked, value))
+            {
+                OnPropertyChanged(nameof(UnlockedLockVisibility));
+                OnPropertyChanged(nameof(LockedLockVisibility));
+                ActiveNoteLockChanged?.Invoke(value);
+            }
+        }
+    }
+
+    public Visibility UnlockedLockVisibility => (!IsActiveNoteLocked && _selectedNote is not null) ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility LockedLockVisibility => (IsActiveNoteLocked && _selectedNote is not null) ? Visibility.Visible : Visibility.Collapsed;
+
+    public Action<bool>? ActiveNoteLockChanged { get; set; }
+    public Action? RequestShowLockDiscoveryTip { get; set; }
 
     public NoteItemViewModel? SelectedNote
     {
@@ -220,12 +243,56 @@ public sealed class MainViewModel : ObservableObject
                     OnPropertyChanged(nameof(ActiveFolderBadgeText));
                 }
 
+                UpdateLockStateForSelectedNote(value);
+
                 _suppressAutosave = true;
                 EditorText = value?.Content ?? string.Empty;
                 _suppressAutosave = false;
 
                 OnPropertyChanged();
             }
+        }
+    }
+
+    public void ToggleActiveNoteLock()
+    {
+        if (_selectedNote is null || string.IsNullOrWhiteSpace(_selectedNote.FilePath))
+            return;
+
+        var path = _selectedNote.FilePath.Trim();
+        var isCurrentlyLocked = _settings.LockedNotePaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        if (isCurrentlyLocked)
+        {
+            _settings.LockedNotePaths.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+            IsActiveNoteLocked = false;
+        }
+        else
+        {
+            if (!_settings.LockedNotePaths.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)))
+                _settings.LockedNotePaths.Add(path);
+            IsActiveNoteLocked = true;
+        }
+
+        _settings.Save();
+    }
+
+    private void UpdateLockStateForSelectedNote(NoteItemViewModel? note)
+    {
+        if (note is null || string.IsNullOrWhiteSpace(note.FilePath))
+        {
+            IsActiveNoteLocked = false;
+            return;
+        }
+
+        var normalized = note.FilePath.Trim();
+        var isLocked = _settings.LockedNotePaths.Any(p => string.Equals(p, normalized, StringComparison.OrdinalIgnoreCase));
+        IsActiveNoteLocked = isLocked;
+
+        if (!_settings.HasSeenLockTip)
+        {
+            _settings.HasSeenLockTip = true;
+            _settings.Save();
+            RequestShowLockDiscoveryTip?.Invoke();
         }
     }
 
@@ -354,7 +421,7 @@ public sealed class MainViewModel : ObservableObject
                     OnPropertyChanged(nameof(NoteCountText));
                 }
 
-                if (_selectedNote?.Model is not null)
+                if (_selectedNote?.Model is not null && !IsActiveNoteLocked)
                 {
                     _selectedNote.Content = value;
                     QueueAutosave(_selectedNote.Model);

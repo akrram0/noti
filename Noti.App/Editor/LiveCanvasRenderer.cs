@@ -130,6 +130,7 @@ public sealed partial class MainWindow
             pooledTb.Background = _cachedInputBgBrush;
             pooledTb.Foreground = _cachedPrimaryBrush;
             pooledTb.RequestedTheme = ViewModel.CurrentElementTheme;
+            pooledTb.IsReadOnly = ViewModel.IsActiveNoteLocked;
             pooledTb.ContextFlyout = null;
             pooledTb.SelectionFlyout = null;
             pooledTb.Tag = block;
@@ -140,6 +141,7 @@ public sealed partial class MainWindow
         {
             AcceptsReturn = false,
             IsSpellCheckEnabled = false,
+            IsReadOnly = ViewModel.IsActiveNoteLocked,
             FontFamily = BodyFontFamily,
             FontWeight = FontWeights.Normal,
             FontStyle = Windows.UI.Text.FontStyle.Normal,
