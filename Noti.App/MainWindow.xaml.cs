@@ -65,6 +65,7 @@ public sealed partial class MainWindow : Window
     private bool _isContextSlashMenuOpen;
     private long _lastSlashPopupOpenTick;
     private Storyboard? _slashPopupStoryboard;
+    private Storyboard? _selectionToolbarStoryboard;
 
     private bool _isCleanedUp;
 
@@ -128,7 +129,11 @@ public sealed partial class MainWindow : Window
         EditorTextBox.PreviewKeyDown += OnEditorPreviewKeyDown;
         EditorTextBox.TextChanged += OnEditorTextChanged;
         EditorTextBox.GotFocus += (_, _) => ScheduleSmoothCaretUpdate(EditorTextBox);
-        EditorTextBox.LostFocus += (_, _) => HideSmoothCaretOverlay();
+        EditorTextBox.LostFocus += (_, _) =>
+        {
+            HideSmoothCaretOverlay();
+            HideSelectionToolbar();
+        };
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
     }
 
@@ -272,7 +277,7 @@ public sealed partial class MainWindow : Window
             }
             if (SelectionToolbarBorder.Visibility == Visibility.Visible)
             {
-                SelectionToolbarBorder.Visibility = Visibility.Collapsed;
+                HideSelectionToolbar();
                 e.Handled = true;
                 return;
             }
@@ -667,20 +672,73 @@ public sealed partial class MainWindow : Window
         if (idx < 0)
             return;
 
-        var caret = Math.Clamp(tb.SelectionStart + tb.SelectionLength, 0, (tb.Text ?? string.Empty).Length);
+        var text = tb.Text ?? string.Empty;
+        var selStart = Math.Clamp(tb.SelectionStart, 0, text.Length);
+        var selLen = Math.Clamp(tb.SelectionLength, 0, text.Length - selStart);
+
+        if (selLen > 0 && selLen < text.Length)
+        {
+            var existing = block.InlineSpans.FirstOrDefault(s => s.Start == selStart && s.Length == selLen);
+            if (existing is not null)
+            {
+                if (toggleBlockBold) existing.IsBold = !existing.IsBold;
+                if (toggleBlockItalic) existing.IsItalic = !existing.IsItalic;
+                if (toggleBlockStrikethrough) existing.IsStrikethrough = !existing.IsStrikethrough;
+                if (toggleBlockCode) existing.IsCode = !existing.IsCode;
+                if (!existing.IsBold && !existing.IsItalic && !existing.IsStrikethrough && !existing.IsCode)
+                    block.InlineSpans.Remove(existing);
+            }
+            else
+            {
+                block.InlineSpans.Add(new LiveInlineSpan
+                {
+                    Start = selStart,
+                    Length = selLen,
+                    IsBold = toggleBlockBold,
+                    IsItalic = toggleBlockItalic,
+                    IsStrikethrough = toggleBlockStrikethrough,
+                    IsCode = toggleBlockCode
+                });
+            }
+        }
+        else
+        {
+            if (toggleBlockBold)
+                block.IsBlockBold = !block.IsBlockBold;
+            else if (toggleBlockItalic)
+                block.IsBlockItalic = !block.IsBlockItalic;
+            else if (toggleBlockStrikethrough)
+                block.IsBlockStrikethrough = !block.IsBlockStrikethrough;
+            else if (toggleBlockCode)
+                block.IsBlockCode = !block.IsBlockCode;
+        }
 
         if (toggleBlockBold)
-            block.IsBlockBold = !block.IsBlockBold;
-        else if (toggleBlockItalic)
-            block.IsBlockItalic = !block.IsBlockItalic;
-        else if (toggleBlockStrikethrough)
-            block.IsBlockStrikethrough = !block.IsBlockStrikethrough;
-        else if (toggleBlockCode)
-            block.IsBlockCode = !block.IsBlockCode;
+            tb.FontWeight = (block.IsBlockBold || block.InlineSpans.Any(s => s.IsBold)) ? FontWeights.Bold : FontWeights.Normal;
+        if (toggleBlockItalic)
+            tb.FontStyle = (block.IsBlockItalic || block.InlineSpans.Any(s => s.IsItalic)) ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal;
+        if (toggleBlockCode)
+            tb.FontFamily = (block.IsBlockCode || block.InlineSpans.Any(s => s.IsCode)) ? MonoFontFamily : DefaultFontFamily;
 
-        SelectionToolbarBorder.Visibility = Visibility.Collapsed;
         FlushSyncLiveBlocksToViewModel();
-        RefreshLiveBlockAt(idx, caret);
+
+        if (toggleBlockStrikethrough)
+        {
+            RefreshLiveBlockAt(idx, selStart);
+            if (block.PrimaryTextBox is { } newTb)
+            {
+                newTb.SelectionStart = selStart;
+                newTb.SelectionLength = selLen;
+                newTb.Focus(FocusState.Programmatic);
+            }
+        }
+        else
+        {
+            tb.Focus(FocusState.Programmatic);
+            tb.SelectionStart = selStart;
+            tb.SelectionLength = selLen;
+            UpdateSelectionToolbar();
+        }
     }
 
     private void WrapEditorSelection(string prefix, string suffix)
@@ -808,60 +866,275 @@ public sealed partial class MainWindow : Window
     private void UpdateSelectionToolbar()
     {
         var activeTb = GetActiveEditorTextBox();
-        var hasSelection = activeTb.SelectionLength > 0;
-        SelectionToolbarBorder.Visibility = hasSelection ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private void OnSelectionBoldClick(object sender, RoutedEventArgs e)
-    {
-        WrapEditorSelection("**", "**");
-        FocusActiveEditorPane();
-    }
-
-    private void OnSelectionItalicClick(object sender, RoutedEventArgs e)
-    {
-        WrapEditorSelection("*", "*");
-        FocusActiveEditorPane();
-    }
-
-    private void OnSelectionStrikethroughClick(object sender, RoutedEventArgs e)
-    {
-        WrapEditorSelection("~~", "~~");
-        FocusActiveEditorPane();
-    }
-
-    private void OnSelectionCodeClick(object sender, RoutedEventArgs e)
-    {
-        WrapEditorSelection("`", "`");
-        FocusActiveEditorPane();
-    }
-
-    private void OnSelectionLinkClick(object sender, RoutedEventArgs e)
-    {
-        var activeTb = GetActiveEditorTextBox();
-        var text = activeTb.Text ?? string.Empty;
-        var start = Math.Clamp(activeTb.SelectionStart, 0, text.Length);
-        var length = Math.Clamp(activeTb.SelectionLength, 0, text.Length - start);
-        var selected = length > 0 ? text.Substring(start, length) : "link";
-        const string defaultUrl = "https://";
-        var replacement = $"[{selected}]({defaultUrl})";
-
-        var updated = text[..start] + replacement + text[(start + length)..];
-        activeTb.Text = updated;
-
-        if (ViewModel.CurrentViewMode == EditorViewMode.Live && _activeLiveBlock is not null)
+        if (activeTb is null ||
+            activeTb.SelectionLength <= 0 ||
+            activeTb.Visibility != Visibility.Visible ||
+            activeTb.FocusState == FocusState.Unfocused ||
+            EditorPaneGrid.ActualWidth <= 0 ||
+            EditorPaneGrid.ActualHeight <= 0)
         {
-            _activeLiveBlock.Content = updated;
-            FlushSyncLiveBlocksToViewModel();
+            HideSelectionToolbar();
+            return;
+        }
+
+        var text = activeTb.Text ?? string.Empty;
+        var selStart = Math.Clamp(activeTb.SelectionStart, 0, text.Length);
+        var selLen = Math.Clamp(activeTb.SelectionLength, 0, text.Length - selStart);
+        if (selLen <= 0)
+        {
+            HideSelectionToolbar();
+            return;
+        }
+
+        var selEnd = selStart + selLen;
+
+        try
+        {
+            var startRect = activeTb.GetRectFromCharacterIndex(selStart, trailingEdge: false);
+            var endRect = activeTb.GetRectFromCharacterIndex(Math.Max(selStart, selEnd - 1), trailingEdge: true);
+
+            if (double.IsNaN(startRect.X) || double.IsNaN(startRect.Y) || double.IsNaN(endRect.X) || double.IsNaN(endRect.Y))
+            {
+                HideSelectionToolbar();
+                return;
+            }
+
+            var selMinX = Math.Min(startRect.X, endRect.X);
+            var selMaxX = Math.Max(startRect.Right, endRect.Right);
+            var selMinY = Math.Min(startRect.Y, endRect.Y);
+            var selMaxY = Math.Max(startRect.Bottom, endRect.Bottom);
+
+            if (activeTb.Padding.Left > 0 && selMinX < activeTb.Padding.Left - 1.0)
+            {
+                selMinX += activeTb.Padding.Left;
+                selMaxX += activeTb.Padding.Left;
+                selMinY += activeTb.Padding.Top;
+                selMaxY += activeTb.Padding.Top;
+            }
+
+            var transform = activeTb.TransformToVisual(EditorPaneGrid);
+            var topLeft = transform.TransformPoint(new Point(selMinX, selMinY));
+            var bottomRight = transform.TransformPoint(new Point(selMaxX, selMaxY));
+
+            var selPaneLeft = topLeft.X;
+            var selPaneRight = bottomRight.X;
+            var selPaneTop = topLeft.Y;
+            var selPaneBottom = bottomRight.Y;
+
+            var selCenterX = (selPaneLeft + selPaneRight) * 0.5;
+
+            var toolbarWidth = SelectionToolbarBorder.ActualWidth > 50 ? SelectionToolbarBorder.ActualWidth : 340.0;
+            var toolbarHeight = SelectionToolbarBorder.ActualHeight > 20 ? SelectionToolbarBorder.ActualHeight : 36.0;
+
+            var targetX = selCenterX - (toolbarWidth * 0.5);
+            var maxTargetX = Math.Max(16.0, EditorPaneGrid.ActualWidth - toolbarWidth - 16.0);
+            targetX = Math.Clamp(targetX, 16.0, maxTargetX);
+
+            var targetY = selPaneTop - toolbarHeight - 8.0;
+            if (targetY < 8.0)
+            {
+                targetY = selPaneBottom + 8.0;
+            }
+
+            var maxTargetY = Math.Max(8.0, EditorPaneGrid.ActualHeight - toolbarHeight - 8.0);
+            targetY = Math.Clamp(targetY, 8.0, maxTargetY);
+
+            ShowSelectionToolbar(targetX, targetY);
+        }
+        catch
+        {
+            HideSelectionToolbar();
+        }
+    }
+
+    private void ShowSelectionToolbar(double targetX, double targetY)
+    {
+        _selectionToolbarStoryboard?.Stop();
+
+        var isAlreadyVisible = SelectionToolbarBorder.Visibility == Visibility.Visible && SelectionToolbarBorder.Opacity > 0.05;
+
+        if (!isAlreadyVisible)
+        {
+            SelectionToolbarBorder.Visibility = Visibility.Visible;
+            SelectionToolbarTranslate.X = targetX;
+            SelectionToolbarTranslate.Y = targetY + 4.0;
+            SelectionToolbarBorder.Opacity = 0.0;
+
+            var sb = new Storyboard();
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+
+            var fadeIn = new DoubleAnimation
+            {
+                From = 0.0,
+                To = 1.0,
+                Duration = new Duration(TimeSpan.FromMilliseconds(140)),
+                EasingFunction = ease,
+                FillBehavior = FillBehavior.Stop
+            };
+            Storyboard.SetTarget(fadeIn, SelectionToolbarBorder);
+            Storyboard.SetTargetProperty(fadeIn, "Opacity");
+
+            var slideY = new DoubleAnimation
+            {
+                From = targetY + 4.0,
+                To = targetY,
+                Duration = new Duration(TimeSpan.FromMilliseconds(140)),
+                EasingFunction = ease,
+                FillBehavior = FillBehavior.Stop
+            };
+            Storyboard.SetTarget(slideY, SelectionToolbarTranslate);
+            Storyboard.SetTargetProperty(slideY, "Y");
+
+            SelectionToolbarBorder.Opacity = 1.0;
+            SelectionToolbarTranslate.Y = targetY;
+
+            sb.Children.Add(fadeIn);
+            sb.Children.Add(slideY);
+            _selectionToolbarStoryboard = sb;
+            sb.Begin();
         }
         else
         {
-            ViewModel.EditorText = updated;
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            var sb = new Storyboard();
+
+            var slideX = new DoubleAnimation
+            {
+                From = SelectionToolbarTranslate.X,
+                To = targetX,
+                Duration = new Duration(TimeSpan.FromMilliseconds(90)),
+                EasingFunction = ease,
+                FillBehavior = FillBehavior.Stop
+            };
+            Storyboard.SetTarget(slideX, SelectionToolbarTranslate);
+            Storyboard.SetTargetProperty(slideX, "X");
+
+            var slideY = new DoubleAnimation
+            {
+                From = SelectionToolbarTranslate.Y,
+                To = targetY,
+                Duration = new Duration(TimeSpan.FromMilliseconds(90)),
+                EasingFunction = ease,
+                FillBehavior = FillBehavior.Stop
+            };
+            Storyboard.SetTarget(slideY, SelectionToolbarTranslate);
+            Storyboard.SetTargetProperty(slideY, "Y");
+
+            SelectionToolbarTranslate.X = targetX;
+            SelectionToolbarTranslate.Y = targetY;
+
+            sb.Children.Add(slideX);
+            sb.Children.Add(slideY);
+            _selectionToolbarStoryboard = sb;
+            sb.Begin();
+        }
+    }
+
+    private void HideSelectionToolbar(bool immediate = false)
+    {
+        if (SelectionToolbarBorder.Visibility == Visibility.Collapsed)
+            return;
+
+        _selectionToolbarStoryboard?.Stop();
+
+        if (immediate)
+        {
+            SelectionToolbarBorder.Opacity = 0.0;
+            SelectionToolbarBorder.Visibility = Visibility.Collapsed;
+            return;
         }
 
-        activeTb.SelectionStart = start + selected.Length + 3;
-        activeTb.SelectionLength = defaultUrl.Length;
-        activeTb.Focus(FocusState.Programmatic);
+        var sb = new Storyboard();
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var fadeOut = new DoubleAnimation
+        {
+            From = SelectionToolbarBorder.Opacity,
+            To = 0.0,
+            Duration = new Duration(TimeSpan.FromMilliseconds(120)),
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        Storyboard.SetTarget(fadeOut, SelectionToolbarBorder);
+        Storyboard.SetTargetProperty(fadeOut, "Opacity");
+
+        sb.Children.Add(fadeOut);
+        sb.Completed += (_, _) =>
+        {
+            SelectionToolbarBorder.Opacity = 0.0;
+            SelectionToolbarBorder.Visibility = Visibility.Collapsed;
+        };
+        _selectionToolbarStoryboard = sb;
+        sb.Begin();
+    }
+
+    private void OnSelectionBoldClick(object sender, RoutedEventArgs e) =>
+        WrapEditorSelection("**", "**");
+
+    private void OnSelectionItalicClick(object sender, RoutedEventArgs e) =>
+        WrapEditorSelection("*", "*");
+
+    private void OnSelectionStrikethroughClick(object sender, RoutedEventArgs e) =>
+        WrapEditorSelection("~~", "~~");
+
+    private void OnSelectionCodeClick(object sender, RoutedEventArgs e) =>
+        WrapEditorSelection("`", "`");
+
+    private void OnSelectionLinkClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.CurrentViewMode == EditorViewMode.Live && _activeLiveBlock is { PrimaryTextBox: { } liveTb } block)
+        {
+            var text = liveTb.Text ?? string.Empty;
+            var start = Math.Clamp(liveTb.SelectionStart, 0, text.Length);
+            var length = Math.Clamp(liveTb.SelectionLength, 0, text.Length - start);
+
+            if (length == 0)
+            {
+                const string insertedText = "link";
+                var updated = text.Insert(start, insertedText);
+                block.Content = updated;
+                liveTb.Text = updated;
+                length = insertedText.Length;
+            }
+
+            const string defaultUrl = "https://";
+            var existingSpan = block.InlineSpans.FirstOrDefault(s => s.Start <= start && s.Start + s.Length >= start + length);
+            if (existingSpan is not null)
+            {
+                existingSpan.LinkUrl = defaultUrl;
+            }
+            else
+            {
+                block.InlineSpans.Add(new LiveInlineSpan
+                {
+                    Start = start,
+                    Length = length,
+                    LinkUrl = defaultUrl
+                });
+            }
+
+            FlushSyncLiveBlocksToViewModel();
+            liveTb.Focus(FocusState.Programmatic);
+            liveTb.SelectionStart = start;
+            liveTb.SelectionLength = length;
+            UpdateSelectionToolbar();
+            return;
+        }
+
+        var sourceTb = EditorTextBox;
+        var srcText = sourceTb.Text ?? string.Empty;
+        var srcStart = Math.Clamp(sourceTb.SelectionStart, 0, srcText.Length);
+        var srcLength = Math.Clamp(sourceTb.SelectionLength, 0, srcText.Length - srcStart);
+        var selected = srcLength > 0 ? srcText.Substring(srcStart, srcLength) : "link";
+        const string fallbackUrl = "https://";
+        var replacement = $"[{selected}]({fallbackUrl})";
+
+        var updatedSrc = srcText[..srcStart] + replacement + srcText[(srcStart + srcLength)..];
+        sourceTb.Text = updatedSrc;
+        ViewModel.EditorText = updatedSrc;
+
+        sourceTb.SelectionStart = srcStart + selected.Length + 3;
+        sourceTb.SelectionLength = fallbackUrl.Length;
+        sourceTb.Focus(FocusState.Programmatic);
     }
 
     private void OnAlignLeftClick(object sender, RoutedEventArgs e) => SetEditorBlockAlignment(TextAlignment.Left);
@@ -1920,7 +2193,7 @@ public sealed partial class MainWindow : Window
                 HideSidebarContextPopup();
                 HideMentionPopup();
                 HideSlashMenuPopup();
-                SelectionToolbarBorder.Visibility = Visibility.Collapsed;
+                HideSelectionToolbar(immediate: true);
                 if (ViewModel.CurrentViewMode == EditorViewMode.Live &&
                     (!string.Equals(_lastRenderedLiveMarkdown, ViewModel.EditorText, StringComparison.Ordinal) ||
                      LiveEditorPanel.Children.Count == 0))
@@ -1952,7 +2225,7 @@ public sealed partial class MainWindow : Window
                 HideSidebarContextPopup();
                 HideMentionPopup();
                 HideSlashMenuPopup();
-                SelectionToolbarBorder.Visibility = Visibility.Collapsed;
+                HideSelectionToolbar(immediate: true);
                 if (ViewModel.CurrentViewMode == EditorViewMode.Live)
                     RebuildLiveEditor(reparse: true, focusBlockIndex: 0);
                 else if (EditorTextBox.Text != ViewModel.EditorText)

@@ -41,6 +41,7 @@ public sealed partial class MainWindow
     private void OnLiveEditorScrollViewerViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
     {
         HideSmoothCaretOverlay();
+        UpdateSelectionToolbar();
         if (_liveMaterializedCount < _liveBlocks.Count &&
             LiveEditorScrollViewer.VerticalOffset + LiveEditorScrollViewer.ViewportHeight >= LiveEditorScrollViewer.ExtentHeight - 420)
         {
@@ -449,9 +450,6 @@ public sealed partial class MainWindow
         if (!string.IsNullOrEmpty(targetBlock.Content) || targetBlock.BlockAlignment != TextAlignment.Left)
             _activeEditorAlignment = targetBlock.BlockAlignment;
 
-        if (targetBlock.DisplayTextBlock is { } dtb)
-            dtb.Visibility = Visibility.Collapsed;
-
         if (targetBlock.PrimaryTextBox is not { } targetTb)
             return;
 
@@ -474,8 +472,6 @@ public sealed partial class MainWindow
                 return;
             }
 
-            if (targetBlock.DisplayTextBlock is { } d)
-                d.Visibility = Visibility.Collapsed;
             targetTb.Visibility = Visibility.Visible;
             LiveEditorPanel.UpdateLayout();
             targetTb.Focus(FocusState.Programmatic);

@@ -982,19 +982,126 @@ public static class MarkdownRenderer
             }
         }
 
-        if (s.StartsWith("**", StringComparison.Ordinal) && !s[2..].Contains("**", StringComparison.Ordinal))
+        // 2. Parse and strip inline spans (partial bold, italic, strikethrough, code, links)
+        // so that block.Content in Live mode NEVER exposes raw markdown tokens.
+        if (HasInlineMarkdownFormatting(s))
         {
-            block.IsBlockBold = true;
-            s = s[2..];
-        }
-        else if (s.StartsWith("~~", StringComparison.Ordinal) && !s[2..].Contains("~~", StringComparison.Ordinal))
-        {
-            block.IsBlockStrikethrough = true;
-            s = s[2..];
+            s = ExtractAndStripInlineSpans(s, block.InlineSpans);
         }
 
         block.Content = s;
         return block;
+    }
+
+    private static string ExtractAndStripInlineSpans(string text, List<LiveInlineSpan> spans)
+    {
+        if (string.IsNullOrEmpty(text))
+            return string.Empty;
+
+        var sb = new System.Text.StringBuilder();
+        var i = 0;
+        while (i < text.Length)
+        {
+            // Inline code `code`
+            if (text[i] == '`')
+            {
+                var close = text.IndexOf('`', i + 1);
+                if (close > i + 1)
+                {
+                    var inner = text[(i + 1)..close];
+                    var start = sb.Length;
+                    sb.Append(inner);
+                    spans.Add(new LiveInlineSpan { Start = start, Length = inner.Length, IsCode = true });
+                    i = close + 1;
+                    continue;
+                }
+            }
+
+            // Bold + Italic ***text***
+            if (i + 5 < text.Length && text[i] == '*' && text[i + 1] == '*' && text[i + 2] == '*')
+            {
+                var close = text.IndexOf("***", i + 3, StringComparison.Ordinal);
+                if (close > i + 3)
+                {
+                    var inner = text[(i + 3)..close];
+                    var start = sb.Length;
+                    sb.Append(inner);
+                    spans.Add(new LiveInlineSpan { Start = start, Length = inner.Length, IsBold = true, IsItalic = true });
+                    i = close + 3;
+                    continue;
+                }
+            }
+
+            // Bold **text**
+            if (i + 3 < text.Length && text[i] == '*' && text[i + 1] == '*')
+            {
+                var close = text.IndexOf("**", i + 2, StringComparison.Ordinal);
+                if (close > i + 2)
+                {
+                    var inner = text[(i + 2)..close];
+                    var start = sb.Length;
+                    sb.Append(inner);
+                    spans.Add(new LiveInlineSpan { Start = start, Length = inner.Length, IsBold = true });
+                    i = close + 2;
+                    continue;
+                }
+            }
+
+            // Strikethrough ~~text~~
+            if (i + 3 < text.Length && text[i] == '~' && text[i + 1] == '~')
+            {
+                var close = text.IndexOf("~~", i + 2, StringComparison.Ordinal);
+                if (close > i + 2)
+                {
+                    var inner = text[(i + 2)..close];
+                    var start = sb.Length;
+                    sb.Append(inner);
+                    spans.Add(new LiveInlineSpan { Start = start, Length = inner.Length, IsStrikethrough = true });
+                    i = close + 2;
+                    continue;
+                }
+            }
+
+            // Italic *text*
+            if (text[i] == '*' && (i + 1 < text.Length && text[i + 1] != '*'))
+            {
+                var close = text.IndexOf('*', i + 1);
+                if (close > i + 1)
+                {
+                    var inner = text[(i + 1)..close];
+                    var start = sb.Length;
+                    sb.Append(inner);
+                    spans.Add(new LiveInlineSpan { Start = start, Length = inner.Length, IsItalic = true });
+                    i = close + 1;
+                    continue;
+                }
+            }
+
+            // Markdown link [label](url)
+            if (text[i] == '[')
+            {
+                var closeBracket = text.IndexOf("](", i + 1, StringComparison.Ordinal);
+                if (closeBracket > i + 1)
+                {
+                    var closeParen = text.IndexOf(')', closeBracket + 2);
+                    if (closeParen > closeBracket + 2)
+                    {
+                        var labelText = text[(i + 1)..closeBracket];
+                        var urlText = text[(closeBracket + 2)..closeParen].Trim();
+                        var start = sb.Length;
+                        sb.Append(labelText);
+                        spans.Add(new LiveInlineSpan { Start = start, Length = labelText.Length, LinkUrl = urlText });
+                        i = closeParen + 1;
+                        continue;
+                    }
+                }
+            }
+
+            sb.Append(text[i]);
+            i++;
+        }
+
+        return sb.ToString();
     }
 
     public static string SerializeLiveBlocks(IReadOnlyList<LiveDocBlock> blocks)
@@ -1092,14 +1199,51 @@ public static class MarkdownRenderer
         if (b.IsBlockCode)
             return $"`{content}`";
 
-        if (b.IsBlockStrikethrough)
+        if (b.InlineSpans.Count > 0)
+        {
+            var res = new System.Text.StringBuilder(content);
+            var sorted = b.InlineSpans
+                .Where(s => s.Start >= 0 && s.Start + s.Length <= content.Length)
+                .OrderByDescending(s => s.Start)
+                .ToList();
+
+            foreach (var span in sorted)
+            {
+                var spanEnd = span.Start + span.Length;
+                if (!string.IsNullOrEmpty(span.LinkUrl))
+                {
+                    res.Insert(spanEnd, $"]({span.LinkUrl})");
+                    res.Insert(span.Start, '[');
+                }
+                else if (span.IsCode)
+                {
+                    res.Insert(spanEnd, '`');
+                    res.Insert(span.Start, '`');
+                }
+                else
+                {
+                    if (span.IsStrikethrough) res.Insert(spanEnd, "~~");
+                    if (span.IsBold && span.IsItalic) res.Insert(spanEnd, "***");
+                    else if (span.IsBold) res.Insert(spanEnd, "**");
+                    else if (span.IsItalic) res.Insert(spanEnd, "*");
+
+                    if (span.IsBold && span.IsItalic) res.Insert(span.Start, "***");
+                    else if (span.IsBold) res.Insert(span.Start, "**");
+                    else if (span.IsItalic) res.Insert(span.Start, "*");
+                    if (span.IsStrikethrough) res.Insert(span.Start, "~~");
+                }
+            }
+            content = res.ToString();
+        }
+
+        if (b.IsBlockStrikethrough && !content.StartsWith("~~", StringComparison.Ordinal))
             content = $"~~{content}~~";
 
-        if (b.IsBlockBold && b.IsBlockItalic)
+        if (b.IsBlockBold && b.IsBlockItalic && !content.StartsWith("***", StringComparison.Ordinal))
             return $"***{content}***";
-        if (b.IsBlockBold)
+        if (b.IsBlockBold && !content.StartsWith("**", StringComparison.Ordinal))
             return $"**{content}**";
-        if (b.IsBlockItalic)
+        if (b.IsBlockItalic && !content.StartsWith('*'))
             return $"*{content}*";
 
         return content;

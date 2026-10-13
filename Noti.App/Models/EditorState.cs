@@ -20,6 +20,17 @@ namespace Noti.App
         HtmlWrapper
     }
 
+    public sealed class LiveInlineSpan
+    {
+        public int Start { get; set; }
+        public int Length { get; set; }
+        public bool IsBold { get; set; }
+        public bool IsItalic { get; set; }
+        public bool IsStrikethrough { get; set; }
+        public bool IsCode { get; set; }
+        public string? LinkUrl { get; set; }
+    }
+
     public sealed class LiveDocBlock
     {
         public LiveBlockKind Kind { get; set; } = LiveBlockKind.Paragraph;
@@ -41,6 +52,7 @@ namespace Noti.App
         public bool IsBlockItalic { get; set; }
         public bool IsBlockStrikethrough { get; set; }
         public bool IsBlockCode { get; set; }
+        public List<LiveInlineSpan> InlineSpans { get; set; } = [];
         public List<List<string>> TableMatrix { get; set; } = [];
         public List<double> ColumnWidths { get; set; } = [];
         public TextBox? PrimaryTextBox { get; set; }

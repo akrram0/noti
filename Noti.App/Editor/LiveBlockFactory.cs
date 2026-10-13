@@ -226,56 +226,12 @@ public sealed partial class MainWindow
         block.CellHostGrid = cellGrid;
         cellGrid.Children.Add(tb);
 
-        var rawContent = block.Content ?? string.Empty;
-        if (MarkdownRenderer.HasInlineMarkdownFormatting(rawContent))
-        {
-            var isSubLine = rawContent.Contains("<sub>", StringComparison.OrdinalIgnoreCase);
-            var displayFontSize = isSubLine ? Math.Max(12, fontSize - 2) : fontSize;
-            var displayForeground = isSubLine ? secondaryBrush : textForeground;
-
-            var displayTb = MarkdownRenderer.CreateFormattedTextBlock(
-                rawContent,
-                displayFontSize,
-                fontWeight,
-                displayForeground,
-                AccentBrush,
-                MonoFontFamily,
-                new Thickness(0, 2, 0, 2),
-                _cachedSortedNoteTitles,
-                title =>
-                {
-                    var target = ViewModel.FindNoteByMention(title);
-                    if (target is not null)
-                        NavigateToNote(target);
-                });
-            displayTb.FontStyle = fontStyle;
-            displayTb.LineHeight = Math.Max(22, Math.Round(displayFontSize * 1.45));
-            displayTb.VerticalAlignment = VerticalAlignment.Center;
-            displayTb.TextAlignment = block.BlockAlignment;
-            displayTb.HorizontalAlignment = block.HorizontalBlockAlignment == HorizontalAlignment.Left
-                ? HorizontalAlignment.Stretch
-                : block.HorizontalBlockAlignment;
-            displayTb.ContextRequested += OnEditorContextRequested;
-
-            displayTb.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, e) =>
-            {
-                if (e.GetCurrentPoint(displayTb).Properties.PointerUpdateKind == PointerUpdateKind.RightButtonReleased ||
-                    !string.IsNullOrEmpty(displayTb.SelectedText))
-                {
-                    return;
-                }
-
-                displayTb.Visibility = Visibility.Collapsed;
-                tb.Visibility = Visibility.Visible;
-                var idx = _liveBlocks.IndexOf(block);
-                if (idx >= 0)
-                    FocusLiveBlockAt(idx);
-            }), true);
-
-            block.DisplayTextBlock = displayTb;
-            tb.Visibility = Visibility.Collapsed;
-            cellGrid.Children.Add(displayTb);
-        }
+        if (block.InlineSpans.Any(s => s.IsBold) || block.IsBlockBold)
+            tb.FontWeight = FontWeights.Bold;
+        if (block.InlineSpans.Any(s => s.IsItalic) || block.IsBlockItalic)
+            tb.FontStyle = Windows.UI.Text.FontStyle.Italic;
+        if (block.InlineSpans.Any(s => s.IsCode) || block.IsBlockCode)
+            tb.FontFamily = MonoFontFamily;
 
         if (block.IsBlockStrikethrough)
         {
@@ -445,9 +401,6 @@ public sealed partial class MainWindow
                 _activeLiveBlock = block;
                 if (!string.IsNullOrEmpty(block.Content) || block.BlockAlignment != TextAlignment.Left)
                     _activeEditorAlignment = block.BlockAlignment;
-                if (block.DisplayTextBlock is { } dtb)
-                    dtb.Visibility = Visibility.Collapsed;
-                tb.Visibility = Visibility.Visible;
                 ScheduleSmoothCaretUpdate(tb);
             }
         };
@@ -455,15 +408,9 @@ public sealed partial class MainWindow
         tb.LostFocus += (_, _) =>
         {
             HideSmoothCaretOverlay();
+            HideSelectionToolbar();
             if (_isSyncingLiveEditor || tb.Tag is not LiveDocBlock block)
                 return;
-
-            if (MarkdownRenderer.HasInlineMarkdownFormatting(block.Content))
-            {
-                var idx = _liveBlocks.IndexOf(block);
-                if (idx >= 0)
-                    RefreshLiveBlockAt(idx);
-            }
         };
 
         tb.TextChanged += (_, _) =>
@@ -486,6 +433,9 @@ public sealed partial class MainWindow
             _isContextSlashMenuOpen = false;
 
             if (TryAutoConvertLiveBlock(block, tb))
+                return;
+
+            if (TryAutoConvertInlineMarkdown(block, tb))
                 return;
 
             QueueSyncLiveBlocksToViewModel();
@@ -535,6 +485,165 @@ public sealed partial class MainWindow
             if (tb.Tag is LiveDocBlock block)
                 OnLiveBlockPreviewKeyDown(block, tb, e);
         };
+    }
+
+    private bool TryAutoConvertInlineMarkdown(LiveDocBlock block, TextBox tb)
+    {
+        var text = tb.Text ?? string.Empty;
+        var caret = Math.Clamp(tb.SelectionStart, 0, text.Length);
+        if (text.Length < 3 || caret < 2)
+            return false;
+
+        var before = text[..caret];
+
+        // 1. Bold (**text** ) or (**text**)
+        if (TryExtractInlineTrigger(before, "**", "**", out var boldStart, out var boldInner))
+        {
+            var replacement = boldInner;
+            var endsWithSpace = before.EndsWith(' ');
+            var newBefore = before[..boldStart] + replacement + (endsWithSpace ? " " : string.Empty);
+            var after = text[caret..];
+            var updated = newBefore + after;
+
+            block.InlineSpans.Add(new LiveInlineSpan
+            {
+                Start = boldStart,
+                Length = boldInner.Length,
+                IsBold = true
+            });
+            if (updated.Trim() == boldInner.Trim())
+                block.IsBlockBold = true;
+
+            var newCaret = boldStart + replacement.Length + (endsWithSpace ? 1 : 0);
+            block.Content = updated;
+            tb.Text = updated;
+            tb.FontWeight = FontWeights.Bold;
+            tb.SelectionStart = Math.Clamp(newCaret, 0, updated.Length);
+            tb.SelectionLength = 0;
+            FlushSyncLiveBlocksToViewModel();
+            return true;
+        }
+
+        // 2. Strikethrough (~~text~~ )
+        if (TryExtractInlineTrigger(before, "~~", "~~", out var strikeStart, out var strikeInner))
+        {
+            var replacement = strikeInner;
+            var endsWithSpace = before.EndsWith(' ');
+            var newBefore = before[..strikeStart] + replacement + (endsWithSpace ? " " : string.Empty);
+            var after = text[caret..];
+            var updated = newBefore + after;
+
+            block.InlineSpans.Add(new LiveInlineSpan
+            {
+                Start = strikeStart,
+                Length = strikeInner.Length,
+                IsStrikethrough = true
+            });
+            if (updated.Trim() == strikeInner.Trim())
+                block.IsBlockStrikethrough = true;
+
+            var newCaret = strikeStart + replacement.Length + (endsWithSpace ? 1 : 0);
+            block.Content = updated;
+            tb.Text = updated;
+            tb.SelectionStart = Math.Clamp(newCaret, 0, updated.Length);
+            tb.SelectionLength = 0;
+            FlushSyncLiveBlocksToViewModel();
+            RefreshLiveBlockAt(_liveBlocks.IndexOf(block), newCaret);
+            return true;
+        }
+
+        // 3. Italic (*text* )
+        if (TryExtractInlineTrigger(before, "*", "*", out var italicStart, out var italicInner))
+        {
+            var replacement = italicInner;
+            var endsWithSpace = before.EndsWith(' ');
+            var newBefore = before[..italicStart] + replacement + (endsWithSpace ? " " : string.Empty);
+            var after = text[caret..];
+            var updated = newBefore + after;
+
+            block.InlineSpans.Add(new LiveInlineSpan
+            {
+                Start = italicStart,
+                Length = italicInner.Length,
+                IsItalic = true
+            });
+            if (updated.Trim() == italicInner.Trim())
+                block.IsBlockItalic = true;
+
+            var newCaret = italicStart + replacement.Length + (endsWithSpace ? 1 : 0);
+            block.Content = updated;
+            tb.Text = updated;
+            tb.FontStyle = Windows.UI.Text.FontStyle.Italic;
+            tb.SelectionStart = Math.Clamp(newCaret, 0, updated.Length);
+            tb.SelectionLength = 0;
+            FlushSyncLiveBlocksToViewModel();
+            return true;
+        }
+
+        // 4. Code (`code` )
+        if (TryExtractInlineTrigger(before, "`", "`", out var codeStart, out var codeInner))
+        {
+            var replacement = codeInner;
+            var endsWithSpace = before.EndsWith(' ');
+            var newBefore = before[..codeStart] + replacement + (endsWithSpace ? " " : string.Empty);
+            var after = text[caret..];
+            var updated = newBefore + after;
+
+            block.InlineSpans.Add(new LiveInlineSpan
+            {
+                Start = codeStart,
+                Length = codeInner.Length,
+                IsCode = true
+            });
+            if (updated.Trim() == codeInner.Trim())
+                block.IsBlockCode = true;
+
+            var newCaret = codeStart + replacement.Length + (endsWithSpace ? 1 : 0);
+            block.Content = updated;
+            tb.Text = updated;
+            tb.FontFamily = MonoFontFamily;
+            tb.SelectionStart = Math.Clamp(newCaret, 0, updated.Length);
+            tb.SelectionLength = 0;
+            FlushSyncLiveBlocksToViewModel();
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryExtractInlineTrigger(
+        string beforeCaret,
+        string openDelimiter,
+        string closeDelimiter,
+        out int triggerStart,
+        out string innerText)
+    {
+        triggerStart = -1;
+        innerText = string.Empty;
+
+        var endsWithSpace = beforeCaret.EndsWith(' ');
+        var trimmedBefore = endsWithSpace ? beforeCaret[..^1] : beforeCaret;
+
+        if (!trimmedBefore.EndsWith(closeDelimiter, StringComparison.Ordinal))
+            return false;
+
+        var closeIndex = trimmedBefore.Length - closeDelimiter.Length;
+        var openIndex = trimmedBefore.LastIndexOf(openDelimiter, closeIndex - 1, StringComparison.Ordinal);
+        if (openIndex < 0 || openIndex >= closeIndex - 1)
+            return false;
+
+        if (openDelimiter == "*" && openIndex > 0 && trimmedBefore[openIndex - 1] == '*')
+            return false;
+        if (openDelimiter == "**" && openIndex > 0 && trimmedBefore[openIndex - 1] == '*')
+            return false;
+
+        var candidate = trimmedBefore[(openIndex + openDelimiter.Length)..closeIndex];
+        if (string.IsNullOrWhiteSpace(candidate))
+            return false;
+
+        triggerStart = openIndex;
+        innerText = candidate;
+        return true;
     }
 
     private bool TryAutoConvertLiveBlock(LiveDocBlock block, TextBox tb)
@@ -744,6 +853,13 @@ public sealed partial class MainWindow
 
         if (ctrlDown)
         {
+            if (shiftDown && e.Key == VirtualKey.X)
+            {
+                e.Handled = true;
+                ApplyLiveInlineFormat(block, tb, "~~", "~~", toggleBlockStrikethrough: true);
+                return;
+            }
+
             switch (e.Key)
             {
                 case VirtualKey.B:
@@ -753,6 +869,14 @@ public sealed partial class MainWindow
                 case VirtualKey.I:
                     e.Handled = true;
                     ApplyLiveInlineFormat(block, tb, "*", "*", toggleBlockItalic: true);
+                    return;
+                case VirtualKey.U:
+                    e.Handled = true;
+                    ApplyLiveInlineFormat(block, tb, "<u>", "</u>");
+                    return;
+                case VirtualKey.K:
+                    e.Handled = true;
+                    OnSelectionLinkClick(this, new RoutedEventArgs());
                     return;
                 case VirtualKey.L:
                     e.Handled = true;

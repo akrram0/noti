@@ -774,13 +774,17 @@
                             Visibility="Collapsed"
                             HorizontalAlignment="Left"
                             VerticalAlignment="Top"
-                            Margin="40,12,0,0"
+                            Margin="0,0,0,0"
                             Padding="6,4"
-                            CornerRadius="14"
+                            CornerRadius="18"
                             Background="{ThemeResource PopupAcrylicBrush}"
                             BorderThickness="1"
                             BorderBrush="{ThemeResource SubtleDividerBrush}"
-                            Translation="0,0,16">
+                            Translation="0,0,16"
+                            Opacity="0">
+                            <Border.RenderTransform>
+                                <TranslateTransform x:Name="SelectionToolbarTranslate" X="0" Y="0" />
+                            </Border.RenderTransform>
                             <Border.Shadow>
                                 <ThemeShadow />
                             </Border.Shadow>
@@ -791,6 +795,7 @@
                                     Height="28"
                                     Padding="10,0"
                                     Style="{StaticResource GlassPillButtonStyle}"
+                                    AllowFocusOnInteraction="False"
                                     Click="OnSelectionBoldClick"
                                     ToolTipService.ToolTip="Bold (Ctrl+B)" />
                                 <Button
@@ -800,6 +805,7 @@
                                     Height="28"
                                     Padding="10,0"
                                     Style="{StaticResource GlassPillButtonStyle}"
+                                    AllowFocusOnInteraction="False"
                                     Click="OnSelectionItalicClick"
                                     ToolTipService.ToolTip="Italic (Ctrl+I)" />
                                 <Button
@@ -808,8 +814,9 @@
                                     Height="28"
                                     Padding="10,0"
                                     Style="{StaticResource GlassPillButtonStyle}"
+                                    AllowFocusOnInteraction="False"
                                     Click="OnSelectionStrikethroughClick"
-                                    ToolTipService.ToolTip="Strikethrough (~~text~~)" />
+                                    ToolTipService.ToolTip="Strikethrough (Ctrl+Shift+X)" />
                                 <Button
                                     Content="&lt;/&gt;"
                                     FontSize="11"
@@ -817,6 +824,7 @@
                                     Height="28"
                                     Padding="10,0"
                                     Style="{StaticResource GlassPillButtonStyle}"
+                                    AllowFocusOnInteraction="False"
                                     Click="OnSelectionCodeClick"
                                     ToolTipService.ToolTip="Inline Code (`code`)" />
                                 <Button
@@ -826,8 +834,9 @@
                                     Height="28"
                                     Padding="10,0"
                                     Style="{StaticResource GlassPillButtonStyle}"
+                                    AllowFocusOnInteraction="False"
                                     Click="OnSelectionLinkClick"
-                                    ToolTipService.ToolTip="Insert Link ([text](url))" />
+                                    ToolTipService.ToolTip="Insert Link (Ctrl+K)" />
                                 <Border
                                     Width="1"
                                     Height="16"
@@ -838,6 +847,7 @@
                                     Height="28"
                                     Padding="8,0"
                                     Style="{StaticResource GlassPillButtonStyle}"
+                                    AllowFocusOnInteraction="False"
                                     Click="OnAlignLeftClick"
                                     ToolTipService.ToolTip="Align Left">
                                     <FontIcon Glyph="&#xE8E4;" FontSize="12" />
@@ -846,6 +856,7 @@
                                     Height="28"
                                     Padding="8,0"
                                     Style="{StaticResource GlassPillButtonStyle}"
+                                    AllowFocusOnInteraction="False"
                                     Click="OnAlignCenterClick"
                                     ToolTipService.ToolTip="Align Center">
                                     <FontIcon Glyph="&#xE8E3;" FontSize="12" />
@@ -854,6 +865,7 @@
                                     Height="28"
                                     Padding="8,0"
                                     Style="{StaticResource GlassPillButtonStyle}"
+                                    AllowFocusOnInteraction="False"
                                     Click="OnAlignRightClick"
                                     ToolTipService.ToolTip="Align Right">
                                     <FontIcon Glyph="&#xE8E2;" FontSize="12" />
