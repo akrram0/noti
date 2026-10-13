@@ -1267,16 +1267,24 @@ public static class MarkdownRenderer
     public static bool TryParseImageLine(
         string? line,
         out List<MarkdownImageItem> items,
-        out TextAlignment? alignment) =>
-        TryParseAllImageItems(line, out items, out alignment);
+        out TextAlignment? alignment)
+    {
+        return TryParseAllImageItems(line, out items, out alignment);
+    }
 
     public static bool TryParseImageLine(
         string? line,
         out string src,
         out string alt,
         out double? width,
-        out double? height) =>
-        TryParseImageLine(line, out src, out alt, out width, out height, out _);
+        out double? height)
+    {
+        src = string.Empty;
+        alt = string.Empty;
+        width = null;
+        height = null;
+        return TryParseImageLine(line, out src, out alt, out width, out height, out _);
+    }
 
     public static bool TryParseImageLine(
         string? line,
@@ -1829,7 +1837,6 @@ public static class MarkdownRenderer
 
                 if (!string.IsNullOrWhiteSpace(item.LinkUrl) && Uri.TryCreate(item.LinkUrl, UriKind.Absolute, out var badgeLinkUri))
                 {
-                    badgeBorder.ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.Hand);
                     badgeBorder.PointerPressed += async (_, e) =>
                     {
                         e.Handled = true;
