@@ -1538,6 +1538,9 @@ public static class MarkdownRenderer
         if (uri is null)
             return false;
 
+        if (!uri.IsAbsoluteUri)
+            return uri.OriginalString.EndsWith(".svg", StringComparison.OrdinalIgnoreCase);
+
         var abs = uri.AbsoluteUri;
         if (abs.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
             return true;
@@ -1826,7 +1829,7 @@ public static class MarkdownRenderer
 
                 if (!string.IsNullOrWhiteSpace(item.LinkUrl) && Uri.TryCreate(item.LinkUrl, UriKind.Absolute, out var badgeLinkUri))
                 {
-                    badgeBorder.Cursor = InputSystemCursor.Create(InputSystemCursorShape.Hand);
+                    badgeBorder.ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.Hand);
                     badgeBorder.PointerPressed += async (_, e) =>
                     {
                         e.Handled = true;
