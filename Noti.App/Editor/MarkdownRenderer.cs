@@ -1634,7 +1634,8 @@ public static class MarkdownRenderer
         string rawSrc,
         string? noteFolderPath,
         string? vaultRootPath,
-        out Uri? resolvedUri)
+        out Uri? resolvedUri,
+        string? activeNotePath = null)
     {
         resolvedUri = null;
         if (string.IsNullOrWhiteSpace(rawSrc))
@@ -1671,7 +1672,20 @@ public static class MarkdownRenderer
         if (string.IsNullOrWhiteSpace(rel))
             return false;
 
-        var candidates = new List<string>(10);
+        var unescapedRel = Uri.UnescapeDataString(rel);
+        var candidates = new List<string>(12);
+
+        if (!string.IsNullOrWhiteSpace(activeNotePath))
+        {
+            var noteDir = System.IO.Path.GetDirectoryName(activeNotePath);
+            if (!string.IsNullOrWhiteSpace(noteDir))
+            {
+                candidates.Add(System.IO.Path.Combine(noteDir, rel));
+                if (!string.Equals(unescapedRel, rel, StringComparison.Ordinal))
+                    candidates.Add(System.IO.Path.Combine(noteDir, unescapedRel));
+            }
+        }
+
         var appImagesDir = System.IO.Path.Combine(AppSettings.AppDataDirectory, "images");
         candidates.Add(System.IO.Path.Combine(appImagesDir, rel));
         var fileNameOnly = System.IO.Path.GetFileName(rel);
@@ -1687,9 +1701,14 @@ public static class MarkdownRenderer
                     .Replace('\\', sep)
                     .Trim(sep);
                 candidates.Add(System.IO.Path.Combine(vaultRootPath, normalizedFolder, rel));
+                if (!string.Equals(unescapedRel, rel, StringComparison.Ordinal))
+                    candidates.Add(System.IO.Path.Combine(vaultRootPath, normalizedFolder, unescapedRel));
             }
 
             candidates.Add(System.IO.Path.Combine(vaultRootPath, rel));
+            if (!string.Equals(unescapedRel, rel, StringComparison.Ordinal))
+                candidates.Add(System.IO.Path.Combine(vaultRootPath, unescapedRel));
+
             if (!string.IsNullOrWhiteSpace(fileNameOnly))
                 candidates.Add(System.IO.Path.Combine(vaultRootPath, "assets", fileNameOnly));
         }
@@ -1733,6 +1752,7 @@ public static class MarkdownRenderer
         double baseFontSize,
         string? noteFolderPath,
         string? vaultRootPath,
+        string? activeNotePath = null,
         Action? onImageMutated = null,
         Action? onRequestClickBelow = null,
         Action? onRequestDeleteImage = null)
@@ -1789,7 +1809,7 @@ public static class MarkdownRenderer
                     VerticalAlignment = VerticalAlignment.Center
                 };
 
-                if (TryResolveImageUri(item.Src, noteFolderPath, vaultRootPath, out var resolvedBadgeUri) && resolvedBadgeUri is not null)
+                if (TryResolveImageUri(item.Src, noteFolderPath, vaultRootPath, out var resolvedBadgeUri, activeNotePath) && resolvedBadgeUri is not null)
                 {
                     var img = new Image
                     {
@@ -1800,17 +1820,41 @@ public static class MarkdownRenderer
                     if (item.Height is > 0)
                         img.Height = item.Height.Value;
                     else
-                        img.MaxHeight = 28;
+                        img.Height = 28;
 
                     if (item.Width is > 0)
                         img.Width = item.Width.Value;
 
                     if (IsSvgUri(resolvedBadgeUri))
                     {
-                        var svgSrc = new SvgImageSource { UriSource = resolvedBadgeUri };
+                        var rasterWidth = (item.Width ?? 300) * 2;
+                        var rasterHeight = (item.Height ?? 28) * 2;
+                        var svgSrc = new SvgImageSource
+                        {
+                            UriSource = resolvedBadgeUri,
+                            RasterizeSize = new Windows.Foundation.Size(rasterWidth, rasterHeight)
+                        };
                         img.Source = svgSrc;
                         svgSrc.OpenFailed += (_, _) =>
                         {
+                            var rawUriStr = resolvedBadgeUri.AbsoluteUri;
+                            if (rawUriStr.Contains("shields.io", StringComparison.OrdinalIgnoreCase) && !rawUriStr.Contains("raster.shields.io", StringComparison.OrdinalIgnoreCase))
+                            {
+                                try
+                                {
+                                    var rasterUri = new Uri(rawUriStr.Replace("img.shields.io", "raster.shields.io", StringComparison.OrdinalIgnoreCase));
+                                    var rasterBmp = new BitmapImage(rasterUri);
+                                    rasterBmp.ImageFailed += (_, _) =>
+                                    {
+                                        badgeBorder.Child = CreateBadgeTextChip(item.Alt, secondaryBrush, isDarkMode);
+                                    };
+                                    img.Source = rasterBmp;
+                                    return;
+                                }
+                                catch
+                                {
+                                }
+                            }
                             badgeBorder.Child = CreateBadgeTextChip(item.Alt, secondaryBrush, isDarkMode);
                         };
                     }
@@ -1843,6 +1887,10 @@ public static class MarkdownRenderer
                 {
                     badgeBorder.PointerPressed += async (_, e) =>
                     {
+                        var pt = e.GetCurrentPoint(badgeBorder);
+                        if (pt.Properties.IsRightButtonPressed)
+                            return;
+
                         e.Handled = true;
                         try
                         {
@@ -1861,7 +1909,7 @@ public static class MarkdownRenderer
             {
                 CornerRadius = new CornerRadius(8),
                 HorizontalAlignment = align,
-                Margin = new Thickness(0, 4, 0, 8),
+                Margin = new Thickness(0, 3, 0, 3),
                 Background = TransparentBrush,
                 Child = rowPanel
             };
@@ -1947,13 +1995,26 @@ public static class MarkdownRenderer
             Background = new SolidColorBrush(ColorHelper.FromArgb(1, 0, 0, 0))
         };
 
-        if (TryResolveImageUri(src, noteFolderPath, vaultRootPath, out var resolvedUri) && resolvedUri is not null)
+        if (TryResolveImageUri(src, noteFolderPath, vaultRootPath, out var resolvedUri, activeNotePath) && resolvedUri is not null)
         {
             try
             {
-                ImageSource imageSource = IsSvgUri(resolvedUri)
-                    ? new SvgImageSource { UriSource = resolvedUri }
-                    : new BitmapImage(resolvedUri);
+                ImageSource imageSource;
+                if (IsSvgUri(resolvedUri))
+                {
+                    var rasterW = (width ?? 680) * 2;
+                    var rasterH = (height ?? 400) * 2;
+                    imageSource = new SvgImageSource
+                    {
+                        UriSource = resolvedUri,
+                        RasterizeSize = new Windows.Foundation.Size(rasterW, rasterH)
+                    };
+                }
+                else
+                {
+                    imageSource = new BitmapImage(resolvedUri);
+                }
+
                 var img = new Image
                 {
                     Source = imageSource,
@@ -1962,13 +2023,32 @@ public static class MarkdownRenderer
                     MinWidth = 80,
                     HorizontalAlignment = align
                 };
-                if (width is > 0)
-                    img.Width = Math.Clamp(width.Value, 80, 680);
-                else if (height is > 0)
+                if (width is > 0 && height is > 0)
+                {
+                    img.Width = width.Value;
                     img.Height = height.Value;
+                }
+                else if (width is > 0)
+                {
+                    img.Width = Math.Clamp(width.Value, 80, 680);
+                }
+                else if (height is > 0)
+                {
+                    img.Height = height.Value;
+                }
 
-                if (!string.IsNullOrWhiteSpace(alt))
+                var linkUrl = items.Count > 0 ? items[0].LinkUrl : null;
+                if (!string.IsNullOrWhiteSpace(linkUrl))
+                {
+                    var tip = string.IsNullOrWhiteSpace(alt)
+                        ? linkUrl
+                        : $"{alt}\n{linkUrl}";
+                    ToolTipService.SetToolTip(img, tip);
+                }
+                else if (!string.IsNullOrWhiteSpace(alt))
+                {
                     ToolTipService.SetToolTip(img, alt);
+                }
 
                 var containerGrid = new Grid
                 {
@@ -1980,6 +2060,26 @@ public static class MarkdownRenderer
                     CornerRadius = new CornerRadius(8),
                     Child = img
                 };
+
+                if (!string.IsNullOrWhiteSpace(linkUrl) && Uri.TryCreate(linkUrl, UriKind.Absolute, out var singleLinkUri))
+                {
+                    imgClipBorder.PointerPressed += async (_, e) =>
+                    {
+                        var pt = e.GetCurrentPoint(imgClipBorder);
+                        if (pt.Properties.IsRightButtonPressed)
+                            return;
+
+                        e.Handled = true;
+                        try
+                        {
+                            await Launcher.LaunchUriAsync(singleLinkUri);
+                        }
+                        catch
+                        {
+                        }
+                    };
+                }
+
                 containerGrid.Children.Add(imgClipBorder);
 
                 var hoverFrame = new Border

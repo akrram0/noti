@@ -250,7 +250,22 @@ public sealed class MainViewModel : ObservableObject
                 _suppressAutosave = false;
 
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(ActiveNoteFilePath));
             }
+        }
+    }
+
+    public string? ActiveNoteFilePath
+    {
+        get
+        {
+            if (_selectedNote is null || _selectedNote.IsFolder || string.IsNullOrWhiteSpace(_selectedNote.Id))
+                return null;
+            if (_noteService.Store is MarkdownNoteStore mdStore)
+                return mdStore.GetFilePath(_selectedNote.Id);
+            if (!string.IsNullOrWhiteSpace(VaultDirectoryPath))
+                return System.IO.Path.Combine(VaultDirectoryPath, _selectedNote.Id.Replace('/', System.IO.Path.DirectorySeparatorChar) + ".md");
+            return null;
         }
     }
 

@@ -70,7 +70,9 @@ public sealed partial class MainWindow
             _cachedSecondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 63, 63, 70));
             _cachedSurfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(135, 255, 255, 255));
             _cachedBorderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(38, 255, 255, 255) : ColorHelper.FromArgb(28, 0, 0, 0));
-            _cachedInputBgBrush = TransparentBrush;
+            _cachedInputBgBrush = isDarkMode
+                ? TransparentBrush
+                : new SolidColorBrush(ColorHelper.FromArgb(1, 255, 255, 255));
         }
 
         if (_cachedBorderlessStyle is null &&

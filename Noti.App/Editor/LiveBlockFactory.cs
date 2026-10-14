@@ -119,6 +119,7 @@ public sealed partial class MainWindow
                 baseFontSize,
                 ViewModel.SelectedNote?.FolderPath,
                 ViewModel.VaultDirectoryPath,
+                activeNotePath: ViewModel.ActiveNoteFilePath,
                 onImageMutated: QueueSyncLiveBlocksToViewModel,
                 onRequestClickBelow: () =>
                 {
@@ -768,7 +769,7 @@ public sealed partial class MainWindow
                 return true;
             }
             if (MarkdownRenderer.TryParseImageLine(text, out var parsedSrc, out _, out _, out _) &&
-                MarkdownRenderer.TryResolveImageUri(parsedSrc, ViewModel.SelectedNote?.FolderPath, ViewModel.VaultDirectoryPath, out _))
+                MarkdownRenderer.TryResolveImageUri(parsedSrc, ViewModel.SelectedNote?.FolderPath, ViewModel.VaultDirectoryPath, out _, ViewModel.ActiveNoteFilePath))
             {
                 block.Kind = LiveBlockKind.ImageBlock;
                 block.Content = text;
