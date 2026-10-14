@@ -31,9 +31,8 @@ This document defines the permanent engineering invariants, frozen UI/architectu
 ### Media & Image Rendering
 - Relative image paths (such as `<img src="Noti.App/Assets/Noti.png" ... />` or `![alt](assets/pic.png)`) must resolve against `Path.GetDirectoryName(activeNotePath)` as primary candidate via `ViewModel.ActiveNoteFilePath`, falling back to `AppContext.BaseDirectory`, `Assets\`, `vaultRootPath`, and parent directories in dev environments.
 - Shields.io badge URLs (`shields.io`, `img.shields.io`) must be routed to `https://raster.shields.io/...` via `BitmapImage`. WinUI 3's `SvgImageSource` Direct2D engine (SVG 1.1 Tiny profile) discards SVG `<text>` elements completely, causing shields.io SVGs to render as empty split boxes.
-- For non-shields SVGs, use WinUI 3 `SvgImageSource` with `RasterizePixelWidth` and `RasterizePixelHeight` at 2x target size.
 - If an image cannot be resolved or fails to load, collapse the host element (`Visibility = Visibility.Collapsed; hostBorder.Child = null;`) without rendering bulky mock/placeholder pill UI elements on the canvas.
-- Linked badges and images (`[![badge](imgUrl)](linkUrl)`) must wire `PointerPressed` to launch `linkUrl` in the user's default browser via `Launcher.LaunchUriAsync` and display a Hand cursor.
+- Linked badges and images (`[![badge](imgUrl)](linkUrl)`) must wire `PointerPressed` to launch `linkUrl` in the user's default browser via `Launcher.LaunchUriAsync`.
 
 ---
 
@@ -102,5 +101,5 @@ Before writing any code or modifying XAML/C#:
   3. DirectWrite inverted native caret to white on transparent backgrounds. `SmoothCaretOverlayBorder` faded to 0.0 opacity after 360ms and was disabled when fluid animation was off.
 - **Invariant & Fix:**
   1. Automatically route shields.io requests (`img.shields.io` and `shields.io`) to official rasterized PNGs (`https://raster.shields.io/...`) using WinUI 3 `BitmapImage`.
-  2. Package all assets via `<Content Include="Assets\**"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>`, expand `TryResolveImageUri` to search `AppContext.BaseDirectory`, `Assets\`, `vaultRootPath`, and directory traversal in dev mode, and collapse unresolvable/failed images (`Visibility = Visibility.Collapsed; hostBorder.Child = null;`) without generating bulky placeholder pills.
+  2. Package all assets via `<Content Include="Assets\Noti.ico">` and `<Content Include="Assets\Noti.png">`, expand `TryResolveImageUri` to search `AppContext.BaseDirectory`, `Assets\`, `vaultRootPath`, and directory traversal in dev mode, and collapse unresolvable/failed images (`Visibility = Visibility.Collapsed; hostBorder.Child = null;`) without generating bulky placeholder pills.
   3. Transform `SmoothCaretOverlayBorder` into a persistent, high-contrast blinking caret (`#1C1C1E` in Light Mode, `#F5F5F7` in Dark Mode, 530ms cadence) active whenever an editor `TextBox` is focused, handling both fluid glide and non-fluid snap positions, while keeping editor backgrounds completely `Transparent`.

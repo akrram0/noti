@@ -1904,14 +1904,6 @@ public static class MarkdownRenderer
 
                 if (!string.IsNullOrWhiteSpace(item.LinkUrl) && Uri.TryCreate(item.LinkUrl, UriKind.Absolute, out var badgeLinkUri))
                 {
-                    try
-                    {
-                        badgeBorder.ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.Hand);
-                    }
-                    catch
-                    {
-                    }
-
                     badgeBorder.PointerPressed += async (_, e) =>
                     {
                         var pt = e.GetCurrentPoint(badgeBorder);
