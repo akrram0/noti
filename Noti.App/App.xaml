@@ -145,10 +145,10 @@
                     <SolidColorBrush x:Key="AccentSubtleTintBrush" Color="#22007AFF" />
                     <SolidColorBrush x:Key="AccentLockedBorderBrush" Color="#FF007AFF" />
                     <SolidColorBrush x:Key="AccentLockedForegroundBrush" Color="#FF007AFF" />
-                    <SolidColorBrush x:Key="TextControlBackground" Color="#FFF8F8FC" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FFF8F8FC" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FFF8F8FC" />
-                    <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="#FFF8F8FC" />
+                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
@@ -169,7 +169,7 @@
             <!-- Clean Borderless TextBox Style (eliminates WinUI Fluent bottom underline / elevation border artifact) -->
             <Style x:Key="BorderlessTextBoxStyle" TargetType="TextBox">
                 <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
-                <Setter Property="Background" Value="{ThemeResource TextControlBackground}" />
+                <Setter Property="Background" Value="Transparent" />
                 <Setter Property="BorderBrush" Value="Transparent" />
                 <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="SelectionHighlightColor" Value="#FF0A84FF" />

@@ -2467,7 +2467,7 @@ public static class MarkdownRenderer
                     if (Application.Current?.Resources.TryGetValue("BorderlessTextBoxStyle", out var styleObj) == true && styleObj is Style s)
                         tb.Style = s;
 
-                    var cellHost = new Grid { MinHeight = 32 };
+                    var cellHost = new Grid { MinHeight = 32, Background = TransparentBrush };
                     cellHost.Children.Add(tb);
 
                     if (HasInlineMarkdownFormatting(cellText))

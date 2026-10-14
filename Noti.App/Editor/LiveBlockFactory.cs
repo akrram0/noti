@@ -260,6 +260,7 @@ public sealed partial class MainWindow
             };
             var strikeGrid = new Grid
             {
+                Background = TransparentBrush,
                 HorizontalAlignment = block.HorizontalBlockAlignment,
                 VerticalAlignment = VerticalAlignment.Center,
                 IsHitTestVisible = false
