@@ -33,7 +33,7 @@ This document defines the permanent engineering invariants, frozen UI/architectu
 
 ### Media & Image Rendering
 - Relative image paths (such as `<img src="Noti.App/Assets/Noti.png" ... />` or `![alt](assets/pic.png)`) must resolve against `Path.GetDirectoryName(activeNotePath)` as primary candidate via `ViewModel.ActiveNoteFilePath`.
-- URLs ending in `.svg` or containing `shields.io` / `badgen.net` must use WinUI 3 `SvgImageSource` configured with `RasterizeSize` at 2x target size for crisp high-DPI vector rendering.
+- URLs ending in `.svg` or containing `shields.io` / `badgen.net` must use WinUI 3 `SvgImageSource` configured with `RasterizePixelWidth` and `RasterizePixelHeight` at 2x target size for crisp high-DPI vector rendering.
 - Fallback for shields.io SVGs must attempt shields raster PNG (`https://raster.shields.io/...`) before falling back to text chips.
 - Linked badges and images (`[![badge](imgUrl)](linkUrl)`) must wire `PointerPressed` to launch `linkUrl` in the user's default browser via `Launcher.LaunchUriAsync`.
 
@@ -81,7 +81,7 @@ Before writing any code or modifying XAML/C#:
 ### 3. HTML `<img>` and Shields.io SVG Badge Rendering
 - **Symptom:** Badges like `[![Latest Release](https://img.shields.io/...)](...)` rendered as split gray text chips or dumped raw markdown text, and HTML tags like `<img src="Noti.App/Assets/Noti.png" ... />` failed to resolve and displayed missing placeholders.
 - **Root Cause:** Relative image paths only checked `vaultRootPath` and `AppContext.BaseDirectory`, failing when notes were loaded from outside the vault root. Shields.io SVGs failed in `SvgImageSource` because `RasterizeSize` was omitted, or because Direct2D SVG parser encountered unsupported gradient/filter elements.
-- **Invariant & Fix:** Pass `ViewModel.ActiveNoteFilePath` into `TryResolveImageUri` to resolve relative paths against `Path.GetDirectoryName(activeNotePath)`. For SVG/Shields.io badges, configure `SvgImageSource.RasterizeSize` at 2x resolution, add fallback to shields raster PNG (`https://raster.shields.io/...`) on `OpenFailed`, and wire `PointerPressed` to launch linked URLs.
+- **Invariant & Fix:** Pass `ViewModel.ActiveNoteFilePath` into `TryResolveImageUri` to resolve relative paths against `Path.GetDirectoryName(activeNotePath)`. For SVG/Shields.io badges, configure `SvgImageSource` with `RasterizePixelWidth` and `RasterizePixelHeight` at 2x resolution, add fallback to shields raster PNG (`https://raster.shields.io/...`) on `OpenFailed`, and wire `PointerPressed` to launch linked URLs.
 
 ### 4. Enter Key Block Splitting & Checklist Mid-Line Mutation
 - **Symptom:** Pressing `Enter` in the Live WYSIWYG editor failed to split the line or advance to a new block. Typing `[ ]` or `- [ ]` mid-sentence corrupted block layout, displaced text, and broke focus.

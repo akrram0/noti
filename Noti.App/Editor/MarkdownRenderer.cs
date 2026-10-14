@@ -1827,12 +1827,11 @@ public static class MarkdownRenderer
 
                     if (IsSvgUri(resolvedBadgeUri))
                     {
-                        var rasterWidth = (item.Width ?? 300) * 2;
-                        var rasterHeight = (item.Height ?? 28) * 2;
                         var svgSrc = new SvgImageSource
                         {
                             UriSource = resolvedBadgeUri,
-                            RasterizeSize = new Windows.Foundation.Size(rasterWidth, rasterHeight)
+                            RasterizePixelWidth = (item.Width ?? 300) * 2,
+                            RasterizePixelHeight = (item.Height ?? 28) * 2
                         };
                         img.Source = svgSrc;
                         svgSrc.OpenFailed += (_, _) =>
@@ -2002,12 +2001,11 @@ public static class MarkdownRenderer
                 ImageSource imageSource;
                 if (IsSvgUri(resolvedUri))
                 {
-                    var rasterW = (width ?? 680) * 2;
-                    var rasterH = (height ?? 400) * 2;
                     imageSource = new SvgImageSource
                     {
                         UriSource = resolvedUri,
-                        RasterizeSize = new Windows.Foundation.Size(rasterW, rasterH)
+                        RasterizePixelWidth = (width ?? 680) * 2,
+                        RasterizePixelHeight = (height ?? 400) * 2
                     };
                 }
                 else
