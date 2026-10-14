@@ -42,7 +42,10 @@ public static class MarkdownRenderer
         Action<int, bool>? onChecklistToggled = null,
         IReadOnlyList<string>? noteTitles = null,
         Action<string>? onMentionClicked = null,
-        Action<int, int, IReadOnlyList<string>>? onTableChanged = null)
+        Action<int, int, IReadOnlyList<string>>? onTableChanged = null,
+        string? noteFolderPath = null,
+        string? vaultRootPath = null,
+        string? activeNotePath = null)
     {
         ArgumentNullException.ThrowIfNull(container);
         container.Children.Clear();
@@ -201,8 +204,9 @@ public static class MarkdownRenderer
                     new LiveDocBlock { Kind = LiveBlockKind.ImageBlock, Content = raw },
                     isDarkMode,
                     baseFontSize,
-                    noteFolderPath: null,
-                    vaultRootPath: null));
+                    noteFolderPath: noteFolderPath,
+                    vaultRootPath: vaultRootPath,
+                    activeNotePath: activeNotePath));
                 continue;
             }
 
@@ -1541,9 +1545,38 @@ public static class MarkdownRenderer
                (item.Height.HasValue && item.Height.Value <= 40);
     }
 
+    public static bool IsShieldsIoUri(Uri? uri)
+    {
+        if (uri is null)
+            return false;
+        if (!uri.IsAbsoluteUri)
+            return uri.OriginalString.Contains("shields.io", StringComparison.OrdinalIgnoreCase);
+        return uri.Host.Contains("shields.io", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static Uri ToShieldsRasterUri(Uri uri)
+    {
+        var raw = uri.AbsoluteUri;
+        if (raw.Contains("raster.shields.io", StringComparison.OrdinalIgnoreCase))
+            return uri;
+
+        if (raw.Contains("img.shields.io", StringComparison.OrdinalIgnoreCase))
+            return new Uri(raw.Replace("img.shields.io", "raster.shields.io", StringComparison.OrdinalIgnoreCase));
+
+        if (raw.Contains("://shields.io/", StringComparison.OrdinalIgnoreCase))
+            return new Uri(raw.Replace("://shields.io/", "://raster.shields.io/", StringComparison.OrdinalIgnoreCase));
+
+        return uri;
+    }
+
     public static bool IsSvgUri(Uri? uri)
     {
         if (uri is null)
+            return false;
+
+        // Shields.io badges contain SVG <text> elements which WinUI 3 Direct2D SvgImageSource does not render.
+        // Routing them to raster.shields.io via BitmapImage allows the full text and colors to render.
+        if (IsShieldsIoUri(uri))
             return false;
 
         if (!uri.IsAbsoluteUri)
@@ -1554,37 +1587,12 @@ public static class MarkdownRenderer
             return true;
         if (abs.Contains(".svg?", StringComparison.OrdinalIgnoreCase))
             return true;
-        if (uri.Host.Contains("shields.io", StringComparison.OrdinalIgnoreCase))
-            return true;
         if (uri.Host.Contains("badgen.net", StringComparison.OrdinalIgnoreCase))
             return true;
         if (uri.Query.Contains("format=svg", StringComparison.OrdinalIgnoreCase))
             return true;
 
         return false;
-    }
-
-    private static FrameworkElement CreateBadgeTextChip(string? label, Brush fgBrush, bool isDarkMode)
-    {
-        var text = string.IsNullOrWhiteSpace(label) ? "Badge" : label;
-        return new Border
-        {
-            Background = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(40, 255, 255, 255) : ColorHelper.FromArgb(20, 0, 0, 0)),
-            BorderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(50, 255, 255, 255) : ColorHelper.FromArgb(30, 0, 0, 0)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(8, 3, 8, 3),
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock
-            {
-                Text = text,
-                FontSize = 11,
-                FontWeight = FontWeights.SemiBold,
-                FontFamily = BodyFontFamily,
-                Foreground = fgBrush,
-                VerticalAlignment = VerticalAlignment.Center
-            }
-        };
     }
 
     private static string? ExtractHtmlAttribute(string tag, string attributeName)
@@ -1717,13 +1725,42 @@ public static class MarkdownRenderer
         if (!string.IsNullOrWhiteSpace(appBase))
         {
             candidates.Add(System.IO.Path.Combine(appBase, rel));
+            candidates.Add(System.IO.Path.Combine(appBase, "Assets", rel));
+            if (!string.IsNullOrWhiteSpace(fileNameOnly))
+            {
+                candidates.Add(System.IO.Path.Combine(appBase, "Assets", fileNameOnly));
+                candidates.Add(System.IO.Path.Combine(appBase, fileNameOnly));
+            }
+
             var appPrefix = $"Noti.App{sep}";
             if (rel.StartsWith(appPrefix, StringComparison.OrdinalIgnoreCase))
             {
                 var stripped = rel[appPrefix.Length..];
+                candidates.Add(System.IO.Path.Combine(appBase, stripped));
+                if (!string.IsNullOrWhiteSpace(fileNameOnly))
+                    candidates.Add(System.IO.Path.Combine(appBase, "Assets", fileNameOnly));
                 if (!string.IsNullOrWhiteSpace(vaultRootPath))
                     candidates.Add(System.IO.Path.Combine(vaultRootPath, stripped));
-                candidates.Add(System.IO.Path.Combine(appBase, stripped));
+            }
+
+            // In developer / debug runs from bin/, search upward for repo/project assets
+            try
+            {
+                var dirInfo = new DirectoryInfo(appBase);
+                for (var depth = 0; depth < 5 && dirInfo != null; depth++)
+                {
+                    candidates.Add(System.IO.Path.Combine(dirInfo.FullName, rel));
+                    candidates.Add(System.IO.Path.Combine(dirInfo.FullName, "Noti.App", rel));
+                    if (!string.IsNullOrWhiteSpace(fileNameOnly))
+                    {
+                        candidates.Add(System.IO.Path.Combine(dirInfo.FullName, "Assets", fileNameOnly));
+                        candidates.Add(System.IO.Path.Combine(dirInfo.FullName, "Noti.App", "Assets", fileNameOnly));
+                    }
+                    dirInfo = dirInfo.Parent;
+                }
+            }
+            catch
+            {
             }
         }
 
@@ -1777,16 +1814,7 @@ public static class MarkdownRenderer
 
         if (items.Count == 0)
         {
-            var hostBorderFallback = new Border
-            {
-                CornerRadius = new CornerRadius(8),
-                MaxWidth = 680,
-                HorizontalAlignment = align,
-                Margin = new Thickness(0, 6, 0, 8),
-                Background = TransparentBrush,
-                Child = CreateFallbackPlaceholder()
-            };
-            return hostBorderFallback;
+            return new Border { Visibility = Visibility.Collapsed };
         }
 
         var isBadgeRow = items.Count > 1 || (items.Count == 1 && IsBadgeItem(items[0]));
@@ -1825,7 +1853,17 @@ public static class MarkdownRenderer
                     if (item.Width is > 0)
                         img.Width = item.Width.Value;
 
-                    if (IsSvgUri(resolvedBadgeUri))
+                    if (IsShieldsIoUri(resolvedBadgeUri))
+                    {
+                        var rasterUri = ToShieldsRasterUri(resolvedBadgeUri);
+                        var bmp = new BitmapImage(rasterUri);
+                        img.Source = bmp;
+                        bmp.ImageFailed += (_, _) =>
+                        {
+                            badgeBorder.Visibility = Visibility.Collapsed;
+                        };
+                    }
+                    else if (IsSvgUri(resolvedBadgeUri))
                     {
                         var svgSrc = new SvgImageSource
                         {
@@ -1836,25 +1874,7 @@ public static class MarkdownRenderer
                         img.Source = svgSrc;
                         svgSrc.OpenFailed += (_, _) =>
                         {
-                            var rawUriStr = resolvedBadgeUri.AbsoluteUri;
-                            if (rawUriStr.Contains("shields.io", StringComparison.OrdinalIgnoreCase) && !rawUriStr.Contains("raster.shields.io", StringComparison.OrdinalIgnoreCase))
-                            {
-                                try
-                                {
-                                    var rasterUri = new Uri(rawUriStr.Replace("img.shields.io", "raster.shields.io", StringComparison.OrdinalIgnoreCase));
-                                    var rasterBmp = new BitmapImage(rasterUri);
-                                    rasterBmp.ImageFailed += (_, _) =>
-                                    {
-                                        badgeBorder.Child = CreateBadgeTextChip(item.Alt, secondaryBrush, isDarkMode);
-                                    };
-                                    img.Source = rasterBmp;
-                                    return;
-                                }
-                                catch
-                                {
-                                }
-                            }
-                            badgeBorder.Child = CreateBadgeTextChip(item.Alt, secondaryBrush, isDarkMode);
+                            badgeBorder.Visibility = Visibility.Collapsed;
                         };
                     }
                     else
@@ -1863,7 +1883,7 @@ public static class MarkdownRenderer
                         img.Source = bmp;
                         bmp.ImageFailed += (_, _) =>
                         {
-                            badgeBorder.Child = CreateBadgeTextChip(item.Alt, secondaryBrush, isDarkMode);
+                            badgeBorder.Visibility = Visibility.Collapsed;
                         };
                     }
 
@@ -1871,7 +1891,7 @@ public static class MarkdownRenderer
                 }
                 else
                 {
-                    badgeBorder.Child = CreateBadgeTextChip(item.Alt, secondaryBrush, isDarkMode);
+                    badgeBorder.Visibility = Visibility.Collapsed;
                 }
 
                 if (!string.IsNullOrWhiteSpace(item.Alt))
@@ -1884,6 +1904,14 @@ public static class MarkdownRenderer
 
                 if (!string.IsNullOrWhiteSpace(item.LinkUrl) && Uri.TryCreate(item.LinkUrl, UriKind.Absolute, out var badgeLinkUri))
                 {
+                    try
+                    {
+                        badgeBorder.ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.Hand);
+                    }
+                    catch
+                    {
+                    }
+
                     badgeBorder.PointerPressed += async (_, e) =>
                     {
                         var pt = e.GetCurrentPoint(badgeBorder);
@@ -1944,47 +1972,6 @@ public static class MarkdownRenderer
             return block.Content;
         }
 
-        FrameworkElement CreateFallbackPlaceholder()
-        {
-            var labelText = string.IsNullOrWhiteSpace(alt)
-                ? (string.IsNullOrWhiteSpace(src) ? "Image not found" : src)
-                : (string.IsNullOrWhiteSpace(src) ? alt : $"{alt} ({src})");
-
-            var row = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 10,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            row.Children.Add(new FontIcon
-            {
-                Glyph = "\uEB9F",
-                FontSize = 16,
-                Foreground = secondaryBrush,
-                VerticalAlignment = VerticalAlignment.Center
-            });
-            row.Children.Add(new TextBlock
-            {
-                Text = labelText,
-                FontSize = Math.Max(12, baseFontSize - 2),
-                Foreground = secondaryBrush,
-                VerticalAlignment = VerticalAlignment.Center,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                MaxWidth = 560
-            });
-
-            return new Border
-            {
-                CornerRadius = new CornerRadius(8),
-                Background = surfaceBrush,
-                BorderBrush = borderBrush,
-                BorderThickness = new Thickness(1),
-                Padding = new Thickness(14, 10, 14, 10),
-                HorizontalAlignment = block.HorizontalBlockAlignment,
-                Child = row
-            };
-        }
-
         var hostBorder = new Border
         {
             CornerRadius = new CornerRadius(8),
@@ -1999,18 +1986,40 @@ public static class MarkdownRenderer
             try
             {
                 ImageSource imageSource;
-                if (IsSvgUri(resolvedUri))
+                if (IsShieldsIoUri(resolvedUri))
                 {
-                    imageSource = new SvgImageSource
+                    var bmp = new BitmapImage(ToShieldsRasterUri(resolvedUri));
+                    bmp.ImageFailed += (_, _) =>
+                    {
+                        hostBorder.Child = null;
+                        hostBorder.Visibility = Visibility.Collapsed;
+                    };
+                    imageSource = bmp;
+                }
+                else if (IsSvgUri(resolvedUri))
+                {
+                    var svgSource = new SvgImageSource
                     {
                         UriSource = resolvedUri,
                         RasterizePixelWidth = (width ?? 680) * 2,
                         RasterizePixelHeight = (height ?? 400) * 2
                     };
+                    svgSource.OpenFailed += (_, _) =>
+                    {
+                        hostBorder.Child = null;
+                        hostBorder.Visibility = Visibility.Collapsed;
+                    };
+                    imageSource = svgSource;
                 }
                 else
                 {
-                    imageSource = new BitmapImage(resolvedUri);
+                    var bmp = new BitmapImage(resolvedUri);
+                    bmp.ImageFailed += (_, _) =>
+                    {
+                        hostBorder.Child = null;
+                        hostBorder.Visibility = Visibility.Collapsed;
+                    };
+                    imageSource = bmp;
                 }
 
                 var img = new Image
@@ -2310,19 +2319,22 @@ public static class MarkdownRenderer
 
                 img.ImageFailed += (_, _) =>
                 {
-                    hostBorder.Child = CreateFallbackPlaceholder();
+                    hostBorder.Child = null;
+                    hostBorder.Visibility = Visibility.Collapsed;
                 };
 
                 hostBorder.Child = containerGrid;
             }
             catch
             {
-                hostBorder.Child = CreateFallbackPlaceholder();
+                hostBorder.Child = null;
+                hostBorder.Visibility = Visibility.Collapsed;
             }
         }
         else
         {
-            hostBorder.Child = CreateFallbackPlaceholder();
+            hostBorder.Child = null;
+            hostBorder.Visibility = Visibility.Collapsed;
         }
 
         hostBorder.PointerPressed += (_, e) =>

@@ -8,17 +8,14 @@ This document defines the permanent engineering invariants, frozen UI/architectu
 
 ### 0% Surface Opacity & Background Transparency
 - In Liquid-Glass and Acrylic modes where surface opacity is dialed down to 0%, canvas text boxes, block containers, and rented controls must **NEVER** have opaque solid backgrounds (such as `#FFF8F8FC`).
-- **DirectWrite Light Mode Caret Fix:**
-  - Setting `TextControlBackground` to pure transparent (`#00000000`) causes DirectWrite's background luminance calculation to evaluate as pure black (luminance 0.0), automatically flipping the native text caret to invisible White in Light Mode.
-  - Fix: In Light Mode, set `_cachedInputBgBrush` and `TextControlBackground` to near-zero alpha white: `#01FFFFFF` (`ColorHelper.FromArgb(1, 255, 255, 255)`).
-  - To human eyes, `#01FFFFFF` is 99.6% transparent (zero solid strips, underlying desktop glass/acrylic shines through completely).
-  - To DirectWrite luminance calculations, RGB is (255, 255, 255) (pure white), cleanly forcing the native text caret to near-black / charcoal (`#1C1C1E`).
-  - In Dark Mode, use `Colors.Transparent`.
+- Both Light Mode and Dark Mode backgrounds are set to pure `Transparent` (`#00000000`).
+- High-contrast caret visibility across all surface opacity levels is guaranteed by `SmoothCaretOverlayBorder` rather than relying on DirectWrite background luminance heuristics or `#01FFFFFF` near-zero alpha workarounds.
 
 ### Caret Synchronization & Non-Interference
-- Both the native stationary blinking caret and the animated `SmoothCaretOverlayBorder` must bind dynamically to `{ThemeResource TextFillColorPrimaryBrush}` (`#1C1C1E` in Light Mode, `#F5F5F7` in Dark Mode).
+- The animated `SmoothCaretOverlayBorder` operates as a persistent, high-contrast blinking caret (530ms on / 530ms off cadence, immediately resetting solid 1.0 on navigation/typing) whenever an editor `TextBox` is focused and has no active selection.
+- `SmoothCaretOverlayBorder` binds dynamically to `_cachedPrimaryBrush` (`#1C1C1E` in Light Mode, `#F5F5F7` in Dark Mode).
 - `SmoothCaretOverlayBorder` must **ALWAYS** have `IsHitTestVisible="False"` so it never intercepts mouse clicks, text selection, or drag gestures.
-- The overlay caret must fade out smoothly when stationary so the native WinUI blinking caret provides standard accessibility and editing cues.
+- When `ViewModel.IsFluidAnimationEnabled` is true, caret repositioning glides smoothly (85ms `CubicEase`); when false, it snaps instantly without translation delay.
 
 ### Typography Hierarchy (Strict Boundaries)
 - `FontFamily="Cascadia Mono"` (or monospace font stack) is **STRICTLY ISOLATED** to Code Blocks (```) and Inline Code (`code`).
@@ -32,10 +29,11 @@ This document defines the permanent engineering invariants, frozen UI/architectu
 - Live canvas padding must respect the 8pt grid (`Padding="48,24,48,32"`).
 
 ### Media & Image Rendering
-- Relative image paths (such as `<img src="Noti.App/Assets/Noti.png" ... />` or `![alt](assets/pic.png)`) must resolve against `Path.GetDirectoryName(activeNotePath)` as primary candidate via `ViewModel.ActiveNoteFilePath`.
-- URLs ending in `.svg` or containing `shields.io` / `badgen.net` must use WinUI 3 `SvgImageSource` configured with `RasterizePixelWidth` and `RasterizePixelHeight` at 2x target size for crisp high-DPI vector rendering.
-- Fallback for shields.io SVGs must attempt shields raster PNG (`https://raster.shields.io/...`) before falling back to text chips.
-- Linked badges and images (`[![badge](imgUrl)](linkUrl)`) must wire `PointerPressed` to launch `linkUrl` in the user's default browser via `Launcher.LaunchUriAsync`.
+- Relative image paths (such as `<img src="Noti.App/Assets/Noti.png" ... />` or `![alt](assets/pic.png)`) must resolve against `Path.GetDirectoryName(activeNotePath)` as primary candidate via `ViewModel.ActiveNoteFilePath`, falling back to `AppContext.BaseDirectory`, `Assets\`, `vaultRootPath`, and parent directories in dev environments.
+- Shields.io badge URLs (`shields.io`, `img.shields.io`) must be routed to `https://raster.shields.io/...` via `BitmapImage`. WinUI 3's `SvgImageSource` Direct2D engine (SVG 1.1 Tiny profile) discards SVG `<text>` elements completely, causing shields.io SVGs to render as empty split boxes.
+- For non-shields SVGs, use WinUI 3 `SvgImageSource` with `RasterizePixelWidth` and `RasterizePixelHeight` at 2x target size.
+- If an image cannot be resolved or fails to load, collapse the host element (`Visibility = Visibility.Collapsed; hostBorder.Child = null;`) without rendering bulky mock/placeholder pill UI elements on the canvas.
+- Linked badges and images (`[![badge](imgUrl)](linkUrl)`) must wire `PointerPressed` to launch `linkUrl` in the user's default browser via `Launcher.LaunchUriAsync` and display a Hand cursor.
 
 ---
 
@@ -92,3 +90,17 @@ Before writing any code or modifying XAML/C#:
 - **Symptom:** Frequent app launches or background checks hit GitHub REST API rate limits (HTTP 403 Forbidden: "API rate limit exceeded"), causing update failures and console errors.
 - **Root Cause:** Unauthenticated GitHub API requests allow only 60 calls per hour per IP address. Checking updates on every launch rapidly depleted this quota.
 - **Invariant & Fix:** Enforce a persistent 4-hour cooldown (`LastUpdateCheckUtc`) stored in `AppSettings`. Do not check the GitHub API if fewer than 4 hours have elapsed since the last check, unless the user explicitly clicks "Check for Updates" in Settings. Respect `X-RateLimit-Reset` and `retry-after` response headers. Never poll in automated background loops.
+
+### 6. Shields.io Direct2D Text Loss, Missing App Assets, & Persistent Light Caret Overlay
+- **Symptom:**
+  1. Shields.io badges rendered as artificial two-tone rectangles (dark gray block attached to bright blue `#0A84FF` block) with no text.
+  2. `<img src="Noti.App/Assets/Noti.png" ... />` rendered as a bulky gray fallback pill labeled `[icon] Noti App Icon (Noti.App/Assets/Noti.png)`.
+  3. Clicking into text lines in Light Mode produced an invisible blinking caret on transparent backgrounds.
+- **Root Cause:**
+  1. WinUI 3's `SvgImageSource` relies on Direct2D SVG 1.1 Tiny profile which completely omits SVG `<text>` elements. `img.shields.io` badges have `<rect>` backgrounds and `<text>` labels, so Direct2D parsed the SVG successfully but silently dropped the text, making the badge appear like an empty hand-drawn mock.
+  2. `Noti.App.csproj` had hardcoded `<Content Include="Assets\Noti.ico">`, leaving `Noti.png` out of published output, and resolution only checked note-relative paths. On failure, `CreateFallbackPlaceholder()` rendered a bulky styled pill.
+  3. DirectWrite inverted native caret to white on transparent backgrounds. `SmoothCaretOverlayBorder` faded to 0.0 opacity after 360ms and was disabled when fluid animation was off.
+- **Invariant & Fix:**
+  1. Automatically route shields.io requests (`img.shields.io` and `shields.io`) to official rasterized PNGs (`https://raster.shields.io/...`) using WinUI 3 `BitmapImage`.
+  2. Package all assets via `<Content Include="Assets\**"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>`, expand `TryResolveImageUri` to search `AppContext.BaseDirectory`, `Assets\`, `vaultRootPath`, and directory traversal in dev mode, and collapse unresolvable/failed images (`Visibility = Visibility.Collapsed; hostBorder.Child = null;`) without generating bulky placeholder pills.
+  3. Transform `SmoothCaretOverlayBorder` into a persistent, high-contrast blinking caret (`#1C1C1E` in Light Mode, `#F5F5F7` in Dark Mode, 530ms cadence) active whenever an editor `TextBox` is focused, handling both fluid glide and non-fluid snap positions, while keeping editor backgrounds completely `Transparent`.

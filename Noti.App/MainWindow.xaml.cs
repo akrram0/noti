@@ -2040,7 +2040,7 @@ public sealed partial class MainWindow : Window
 
     private void ScheduleSmoothCaretUpdate(TextBox? targetTb = null)
     {
-        if (!ViewModel.IsFluidAnimationEnabled || ViewModel.IsSettingsOpen)
+        if (ViewModel.IsSettingsOpen)
         {
             HideSmoothCaretOverlay();
             return;
@@ -2049,8 +2049,7 @@ public sealed partial class MainWindow : Window
         DispatcherQueue.TryEnqueue(() =>
         {
             var tb = targetTb ?? GetActiveEditorTextBox();
-            if (!ViewModel.IsFluidAnimationEnabled ||
-                ViewModel.IsSettingsOpen ||
+            if (ViewModel.IsSettingsOpen ||
                 tb.FocusState == FocusState.Unfocused ||
                 tb.Visibility != Visibility.Visible ||
                 tb.SelectionLength > 0)
@@ -2065,6 +2064,7 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
+            EnsureLiveRenderResources();
             SmoothCaretOverlayBorder.Height = targetHeight;
             SmoothCaretOverlayBorder.Background = _cachedPrimaryBrush;
 
@@ -2073,7 +2073,9 @@ public sealed partial class MainWindow : Window
             var dx = Math.Abs(targetX - fromX);
             var dy = Math.Abs(targetY - fromY);
 
-            if (!_hasSmoothCaretPosition ||
+            var isFluid = ViewModel.IsFluidAnimationEnabled;
+            if (!isFluid ||
+                !_hasSmoothCaretPosition ||
                 SmoothCaretOverlayBorder.Visibility != Visibility.Visible ||
                 dx > 360.0 ||
                 dy > 220.0)
@@ -2087,66 +2089,70 @@ public sealed partial class MainWindow : Window
             }
 
             _smoothCaretStoryboard?.Stop();
-            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
             var sb = new Storyboard();
 
-            if (dx >= 0.4)
+            if (isFluid)
             {
-                var moveX = new DoubleAnimation
+                var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+                if (dx >= 0.4)
                 {
-                    From = fromX,
-                    To = targetX,
-                    Duration = new Duration(TimeSpan.FromMilliseconds(85)),
-                    EasingFunction = ease,
-                    FillBehavior = FillBehavior.Stop
-                };
-                Storyboard.SetTarget(moveX, SmoothCaretTranslate);
-                Storyboard.SetTargetProperty(moveX, "X");
-                sb.Children.Add(moveX);
-            }
+                    var moveX = new DoubleAnimation
+                    {
+                        From = fromX,
+                        To = targetX,
+                        Duration = new Duration(TimeSpan.FromMilliseconds(85)),
+                        EasingFunction = ease,
+                        FillBehavior = FillBehavior.Stop
+                    };
+                    Storyboard.SetTarget(moveX, SmoothCaretTranslate);
+                    Storyboard.SetTargetProperty(moveX, "X");
+                    sb.Children.Add(moveX);
+                }
 
-            if (dy >= 0.4)
-            {
-                var moveY = new DoubleAnimation
+                if (dy >= 0.4)
                 {
-                    From = fromY,
-                    To = targetY,
-                    Duration = new Duration(TimeSpan.FromMilliseconds(85)),
-                    EasingFunction = ease,
-                    FillBehavior = FillBehavior.Stop
-                };
-                Storyboard.SetTarget(moveY, SmoothCaretTranslate);
-                Storyboard.SetTargetProperty(moveY, "Y");
-                sb.Children.Add(moveY);
+                    var moveY = new DoubleAnimation
+                    {
+                        From = fromY,
+                        To = targetY,
+                        Duration = new Duration(TimeSpan.FromMilliseconds(85)),
+                        EasingFunction = ease,
+                        FillBehavior = FillBehavior.Stop
+                    };
+                    Storyboard.SetTarget(moveY, SmoothCaretTranslate);
+                    Storyboard.SetTargetProperty(moveY, "Y");
+                    sb.Children.Add(moveY);
+                }
             }
-
-            var pulseFade = new DoubleAnimationUsingKeyFrames
-            {
-                FillBehavior = FillBehavior.Stop
-            };
-            pulseFade.KeyFrames.Add(new EasingDoubleKeyFrame
-            {
-                KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(0)),
-                Value = 0.95
-            });
-            pulseFade.KeyFrames.Add(new EasingDoubleKeyFrame
-            {
-                KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(180)),
-                Value = 0.95
-            });
-            pulseFade.KeyFrames.Add(new EasingDoubleKeyFrame
-            {
-                KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(360)),
-                Value = 0.0,
-                EasingFunction = ease
-            });
-            Storyboard.SetTarget(pulseFade, SmoothCaretOverlayBorder);
-            Storyboard.SetTargetProperty(pulseFade, "Opacity");
-            sb.Children.Add(pulseFade);
 
             SmoothCaretTranslate.X = targetX;
             SmoothCaretTranslate.Y = targetY;
-            SmoothCaretOverlayBorder.Opacity = 0.0;
+
+            var blinkAnim = new DoubleAnimationUsingKeyFrames
+            {
+                RepeatBehavior = RepeatBehavior.Forever
+            };
+            blinkAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame
+            {
+                KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(0)),
+                Value = 1.0
+            });
+            blinkAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame
+            {
+                KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(530)),
+                Value = 0.0
+            });
+            blinkAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame
+            {
+                KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1060)),
+                Value = 1.0
+            });
+            Storyboard.SetTarget(blinkAnim, SmoothCaretOverlayBorder);
+            Storyboard.SetTargetProperty(blinkAnim, "Opacity");
+            sb.Children.Add(blinkAnim);
+
+            SmoothCaretOverlayBorder.Opacity = 1.0;
+            SmoothCaretOverlayBorder.Visibility = Visibility.Visible;
 
             _smoothCaretStoryboard = sb;
             sb.Begin();
