@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using Microsoft.UI;
 using Microsoft.UI.Input;
 using Microsoft.UI.Text;
@@ -62,6 +63,7 @@ public sealed partial class MainWindow : Window
     private SolidColorBrush _cachedSurfaceBrush = new(ColorHelper.FromArgb(36, 255, 255, 255));
     private SolidColorBrush _cachedBorderBrush = new(ColorHelper.FromArgb(38, 255, 255, 255));
     private SolidColorBrush _cachedInputBgBrush = TransparentBrush;
+    private static readonly ConditionalWeakTable<TextBox, object> _caretThemeWiredBoxes = new();
     private Style? _cachedBorderlessStyle;
     private List<string> _cachedSortedNoteTitles = [];
     private bool _isContextSlashMenuOpen;
@@ -140,13 +142,6 @@ public sealed partial class MainWindow : Window
         ViewModel.ActiveNoteLockChanged = OnActiveNoteLockChanged;
         ViewModel.RequestShowLockDiscoveryTip = ShowLockDiscoveryCallout;
         RootGrid.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) => DismissLockDiscoveryCallout()), true);
-        RootGrid.AddHandler(UIElement.GotFocusEvent, new RoutedEventHandler(OnRootGotFocus), true);
-    }
-
-    private void OnRootGotFocus(object sender, RoutedEventArgs e)
-    {
-        if (e.OriginalSource is TextBox textBox)
-            ApplyCaretTheme(textBox);
     }
 
     private void ApplyCaretTheme(TextBox textBox)
@@ -158,10 +153,22 @@ public sealed partial class MainWindow : Window
         DispatcherQueue.TryEnqueue(() => CaretThemeStyler.Apply(textBox, _cachedPrimaryBrush));
     }
 
+    private void WireCaretTheme(TextBox textBox)
+    {
+        if (_caretThemeWiredBoxes.TryGetValue(textBox, out _))
+            return;
+
+        _caretThemeWiredBoxes.Add(textBox, new object());
+        textBox.GotFocus += (_, _) => ApplyCaretTheme(textBox);
+    }
+
     private void ApplyCaretThemeToTree(DependencyObject root)
     {
         if (root is TextBox textBox)
+        {
+            WireCaretTheme(textBox);
             CaretThemeStyler.Apply(textBox, _cachedPrimaryBrush);
+        }
 
         var childCount = VisualTreeHelper.GetChildrenCount(root);
         for (var i = 0; i < childCount; i++)

@@ -407,6 +407,8 @@ public sealed partial class MainWindow
 
     private void WirePooledLiveTextBoxEvents(TextBox tb)
     {
+        WireCaretTheme(tb);
+
         tb.GotFocus += (_, _) =>
         {
             if (tb.Tag is LiveDocBlock block)
