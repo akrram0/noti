@@ -224,6 +224,7 @@ public sealed partial class MainWindow
         var cellGrid = new Grid
         {
             Background = TransparentBrush,
+            RequestedTheme = ViewModel.CurrentElementTheme,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Center
         };

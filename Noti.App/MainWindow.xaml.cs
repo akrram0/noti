@@ -2303,6 +2303,7 @@ public sealed partial class MainWindow : Window
                 break;
 
             case nameof(MainViewModel.CurrentThemeMode):
+            case nameof(MainViewModel.CurrentElementTheme):
                 AnimateThemeModePill();
                 ApplyEditorTextBoxTheme();
                 break;

@@ -57,12 +57,39 @@ public sealed partial class MainWindow
     private void ApplyEditorTextBoxTheme()
     {
         EnsureLiveRenderResources();
-        EditorTextBox.RequestedTheme = ViewModel.CurrentElementTheme;
-        EditorTextBox.Background = _cachedInputBgBrush;
-        EditorTextBox.Foreground = _cachedPrimaryBrush;
-        SmoothCaretOverlayBorder.Background = _cachedPrimaryBrush;
-        EditorTextBox.ContextFlyout = null;
-        EditorTextBox.SelectionFlyout = null;
+        var theme = ViewModel.CurrentElementTheme;
+        if (RootGrid is not null)
+            RootGrid.RequestedTheme = theme;
+        if (MainWorkspaceGrid is not null)
+            MainWorkspaceGrid.RequestedTheme = theme;
+        if (LiveCanvasRootGrid is not null)
+            LiveCanvasRootGrid.RequestedTheme = theme;
+        if (LiveEditorScrollViewer is not null)
+            LiveEditorScrollViewer.RequestedTheme = theme;
+        if (LiveEditorPanel is not null)
+        {
+            LiveEditorPanel.RequestedTheme = theme;
+            for (var i = 0; i < LiveEditorPanel.Children.Count; i++)
+            {
+                if (LiveEditorPanel.Children[i] is FrameworkElement fe)
+                    fe.RequestedTheme = theme;
+            }
+        }
+        if (EditorPaneGrid is not null)
+            EditorPaneGrid.RequestedTheme = theme;
+        if (EditorTextBox is not null)
+        {
+            EditorTextBox.RequestedTheme = theme;
+            EditorTextBox.Background = _cachedInputBgBrush;
+            EditorTextBox.Foreground = _cachedPrimaryBrush;
+            EditorTextBox.ContextFlyout = null;
+            EditorTextBox.SelectionFlyout = null;
+        }
+        if (SmoothCaretOverlayBorder is not null)
+        {
+            SmoothCaretOverlayBorder.RequestedTheme = theme;
+            SmoothCaretOverlayBorder.Background = _cachedPrimaryBrush;
+        }
     }
 
     private void EnsureLiveRenderResources(bool refreshTitles = false)
@@ -75,9 +102,7 @@ public sealed partial class MainWindow
             _cachedSecondaryBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(255, 142, 142, 147) : ColorHelper.FromArgb(255, 63, 63, 70));
             _cachedSurfaceBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(36, 255, 255, 255) : ColorHelper.FromArgb(135, 255, 255, 255));
             _cachedBorderBrush = new SolidColorBrush(isDarkMode ? ColorHelper.FromArgb(38, 255, 255, 255) : ColorHelper.FromArgb(28, 0, 0, 0));
-            _cachedInputBgBrush = isDarkMode
-                ? TransparentBrush
-                : new SolidColorBrush(ColorHelper.FromArgb(1, 255, 255, 255));
+            _cachedInputBgBrush = TransparentBrush;
         }
 
         if (_cachedBorderlessStyle is null &&

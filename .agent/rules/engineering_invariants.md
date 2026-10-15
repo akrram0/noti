@@ -8,8 +8,10 @@ This document defines the permanent engineering invariants, frozen UI/architectu
 
 ### 0% Surface Opacity & Background Transparency
 - In Liquid-Glass and Acrylic modes where surface opacity is dialed down to 0%, canvas text boxes, block containers, and rented controls must **NEVER** have opaque solid backgrounds (such as `#FFF8F8FC`).
-- In Dark Mode, backgrounds are set to pure `Transparent` (`#00000000`), allowing DirectWrite to evaluate background luminance as 0.0 and render the native caret in crisp White (`#FFFFFF`).
-- In Light Mode, `_cachedInputBgBrush` and `TextControlBackground` are set to near-zero alpha white `#01FFFFFF` (`ColorHelper.FromArgb(1, 255, 255, 255)`). DirectWrite's contrast heuristic evaluates the RGB channels (255, 255, 255) as a light background (luminance 1.0) and paints the native caret in charcoal `#1C1C1E`, while human vision perceives 99.6% transparency with 0% opacity surface fidelity (zero solid strips).
+- All backgrounds (`TextControlBackground`, `_cachedInputBgBrush`, `cellGrid`, live editor panel) are set to pure `Transparent` (`#00000000`) across all themes.
+- Under Premultiplied Alpha in DirectComposition, near-zero alpha values like `#01FFFFFF` premultiply to near-zero luminance (0.0039 ~ 0.0 black), which fails to flip DirectWrite's contrast heuristic and contaminates pixel composition. Alpha manipulation tricks are strictly forbidden.
+- `BorderElement` and `VisualStateManager.VisualStateGroups` must be completely omitted from `BorderlessTextBoxStyle` so WinUI 3's native C++ `TextBox` cannot hook or apply focus background highlights (such as `TextControlBackgroundFocused` `#1FFFFFFF`) around the focused line.
+- `RequestedTheme = ElementTheme.Light` / `ElementTheme.Dark` must be explicitly enforced in code-behind down through the entire visual hierarchy (`RootGrid`, `MainWorkspaceGrid`, `LiveCanvasRootGrid`, `LiveEditorScrollViewer`, `LiveEditorPanel`, `cellGrid`, and every rented `TextBox`). This ensures `ActualTheme` resolves correctly and paints the native caret in high contrast (`#1C1C1E` in Light Mode, `#FFF5F5F7` in Dark Mode).
 
 ### Caret Synchronization & Single-Caret Invariant
 - Exactly **ONE** single, crisp text caret must ever be visible on screen in both Light and Dark modes.
@@ -104,4 +106,15 @@ Before writing any code or modifying XAML/C#:
 - **Invariant & Fix:**
   1. Automatically route shields.io requests (`img.shields.io` and `shields.io`) to official rasterized PNGs (`https://raster.shields.io/...`) using WinUI 3 `BitmapImage`.
   2. Package all assets via `<Content Include="Assets\Noti.ico">` and `<Content Include="Assets\Noti.png">`, expand `TryResolveImageUri` to search `AppContext.BaseDirectory`, `Assets\`, `vaultRootPath`, and directory traversal in dev mode, and collapse unresolvable/failed images (`Visibility = Visibility.Collapsed; hostBorder.Child = null;`) without generating bulky placeholder pills.
-  3. Eliminate the dual-caret artifact by keeping the native `TextBox` caret as the sole persistent blinking cursor: set `_cachedInputBgBrush` and `TextControlBackground` in Light Mode to near-zero alpha white `#01FFFFFF` so DirectWrite colors the native caret in charcoal `#1C1C1E` without breaking 0% surface transparency, and restore `SmoothCaretOverlayBorder` to a transient gliding overlay (85ms glide, 360ms pulse-fade to `Opacity = 0.0`, collapsed on completion).
+  3. Eliminate the dual-caret artifact by keeping the native `TextBox` caret as the sole persistent blinking cursor: restore `SmoothCaretOverlayBorder` to a transient gliding overlay (85ms glide, 360ms pulse-fade to `Opacity = 0.0`, collapsed on completion).
+ 
+### 7. Premultiplied Alpha Ineffectiveness, Focused Line Strip Elimination, & Explicit Visual Tree Theme Propagation
+- **Symptom:** In Light Mode on a Windows machine running in Dark Mode, clicking or typing in a line (e.g. `"hhhhhhhhhh"`) resulted in a stationary white native caret, and a faint translucent white rectangular box appeared around the focused line.
+- **Root Cause:**
+  1. DirectComposition Premultiplied Alpha: Setting `TextControlBackground` to `#01FFFFFF` premultiplied to RGB (1, 1, 1) with luminance 0.0039 (~0.0 black), which DirectWrite evaluated as dark, keeping the native caret white.
+  2. Unstripped `BorderElement` in `BorderlessTextBoxStyle`: WinUI 3's native C++ `TextBox` hooks `GetTemplateChild("BorderElement")` and animates `TextControlBackgroundFocused`. When the control hierarchy defaulted to Dark theme dictionaries, it applied `#1FFFFFFF` on focus, creating a faint translucent highlight box around the focused line.
+  3. Visual Tree Theme Inheritance: When the host OS runs in Dark Mode and Noti is set to Light Mode, relying solely on `{x:Bind ViewModel.CurrentElementTheme, Mode=OneWay}` on `RootGrid` failed to propagate `ElementTheme.Light` down to dynamically materialized blocks (`cellGrid`, `tb`, `LiveEditorPanel`). As a result, `ActualTheme` resolved to `Dark`, triggering Dark theme focus visuals and white caret coloring.
+- **Invariant & Fix:**
+  1. Reverted all editor background brushes (`TextControlBackground`, `_cachedInputBgBrush`) to pure `Transparent` in both Light and Dark modes. Zero alpha tricks.
+  2. Completely stripped `<Border x:Name="BorderElement" ... />` and `<VisualStateManager.VisualStateGroups>` from `BorderlessTextBoxStyle`. With no `BorderElement` in the template, WinUI 3 cannot render any focus highlight box.
+  3. Enforced explicit `RequestedTheme = ViewModel.CurrentElementTheme` propagation in code-behind across `RootGrid`, `MainWorkspaceGrid`, `LiveCanvasRootGrid`, `LiveEditorScrollViewer`, `LiveEditorPanel`, `cellGrid`, and every rented `TextBox` (`tb`). This ensures `ActualTheme` resolves to `ElementTheme.Light`, natively painting the caret in `#1C1C1E` without background strips.

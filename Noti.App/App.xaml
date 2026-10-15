@@ -145,10 +145,10 @@
                     <SolidColorBrush x:Key="AccentSubtleTintBrush" Color="#22007AFF" />
                     <SolidColorBrush x:Key="AccentLockedBorderBrush" Color="#FF007AFF" />
                     <SolidColorBrush x:Key="AccentLockedForegroundBrush" Color="#FF007AFF" />
-                    <SolidColorBrush x:Key="TextControlBackground" Color="#01FFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#01FFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#01FFFFFF" />
-                    <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="#01FFFFFF" />
+                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
                     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
@@ -166,10 +166,10 @@
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
-            <!-- Clean Borderless TextBox Style (eliminates WinUI Fluent bottom underline / elevation border artifact) -->
+            <!-- Clean Borderless TextBox Style (completely strips BorderElement and VisualStateManager so zero background strips or focus highlights can ever render) -->
             <Style x:Key="BorderlessTextBoxStyle" TargetType="TextBox">
-                <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
-                <Setter Property="Background" Value="{ThemeResource TextControlBackground}" />
+                <Setter Property="Foreground" Value="{ThemeResource TextControlForeground}" />
+                <Setter Property="Background" Value="Transparent" />
                 <Setter Property="BorderBrush" Value="Transparent" />
                 <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="SelectionHighlightColor" Value="#FF0A84FF" />
@@ -186,21 +186,7 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="TextBox">
-                            <Grid Background="{TemplateBinding Background}">
-                                <VisualStateManager.VisualStateGroups>
-                                    <VisualStateGroup x:Name="CommonStates">
-                                        <VisualState x:Name="Normal" />
-                                        <VisualState x:Name="PointerOver" />
-                                        <VisualState x:Name="Pressed" />
-                                        <VisualState x:Name="Disabled" />
-                                        <VisualState x:Name="Focused" />
-                                    </VisualStateGroup>
-                                </VisualStateManager.VisualStateGroups>
-                                <Border
-                                    x:Name="BorderElement"
-                                    Background="{TemplateBinding Background}"
-                                    BorderBrush="Transparent"
-                                    BorderThickness="0" />
+                            <Grid Background="Transparent">
                                 <TextBlock
                                     x:Name="PlaceholderTextContentPresenter"
                                     Margin="{TemplateBinding Padding}"
@@ -212,7 +198,7 @@
                                 <ScrollViewer
                                     x:Name="ContentElement"
                                     Foreground="{TemplateBinding Foreground}"
-                                    Background="{TemplateBinding Background}"
+                                    Background="Transparent"
                                     Padding="{TemplateBinding Padding}"
                                     HorizontalScrollMode="{TemplateBinding ScrollViewer.HorizontalScrollMode}"
                                     VerticalScrollMode="{TemplateBinding ScrollViewer.VerticalScrollMode}"
