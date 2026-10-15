@@ -8,12 +8,14 @@ This document defines the permanent engineering invariants, frozen UI/architectu
 
 ### 0% Surface Opacity & Background Transparency
 - In Liquid-Glass and Acrylic modes where surface opacity is dialed down to 0%, canvas text boxes, block containers, and rented controls must **NEVER** have opaque solid backgrounds (such as `#FFF8F8FC`).
-- Both Light Mode and Dark Mode backgrounds are set to pure `Transparent` (`#00000000`).
-- High-contrast caret visibility across all surface opacity levels is guaranteed by `SmoothCaretOverlayBorder` rather than relying on DirectWrite background luminance heuristics or `#01FFFFFF` near-zero alpha workarounds.
+- In Dark Mode, backgrounds are set to pure `Transparent` (`#00000000`), allowing DirectWrite to evaluate background luminance as 0.0 and render the native caret in crisp White (`#FFFFFF`).
+- In Light Mode, `_cachedInputBgBrush` and `TextControlBackground` are set to near-zero alpha white `#01FFFFFF` (`ColorHelper.FromArgb(1, 255, 255, 255)`). DirectWrite's contrast heuristic evaluates the RGB channels (255, 255, 255) as a light background (luminance 1.0) and paints the native caret in charcoal `#1C1C1E`, while human vision perceives 99.6% transparency with 0% opacity surface fidelity (zero solid strips).
 
-### Caret Synchronization & Non-Interference
-- The animated `SmoothCaretOverlayBorder` operates as a persistent, high-contrast blinking caret (530ms on / 530ms off cadence, immediately resetting solid 1.0 on navigation/typing) whenever an editor `TextBox` is focused and has no active selection.
-- `SmoothCaretOverlayBorder` binds dynamically to `_cachedPrimaryBrush` (`#1C1C1E` in Light Mode, `#F5F5F7` in Dark Mode).
+### Caret Synchronization & Single-Caret Invariant
+- Exactly **ONE** single, crisp text caret must ever be visible on screen in both Light and Dark modes.
+- The native WinUI 3 `TextBox` caret is the primary persistent blinking caret across all editor modes.
+- `SmoothCaretOverlayBorder` operates strictly as a transient fluid gliding overlay when `ViewModel.IsFluidAnimationEnabled` is true (glides 85ms `CubicEase`, pulses and fades to `Opacity = 0.0` at 360ms, collapsing on completion).
+- `SmoothCaretOverlayBorder` must **NEVER** blink indefinitely with `RepeatBehavior.Forever` or remain visible when stationary; doing so causes a dual/ghost caret artifact against DirectWrite's native blinking caret.
 - `SmoothCaretOverlayBorder` must **ALWAYS** have `IsHitTestVisible="False"` so it never intercepts mouse clicks, text selection, or drag gestures.
 - When `ViewModel.IsFluidAnimationEnabled` is true, caret repositioning glides smoothly (85ms `CubicEase`); when false, it snaps instantly without translation delay.
 
@@ -90,16 +92,16 @@ Before writing any code or modifying XAML/C#:
 - **Root Cause:** Unauthenticated GitHub API requests allow only 60 calls per hour per IP address. Checking updates on every launch rapidly depleted this quota.
 - **Invariant & Fix:** Enforce a persistent 4-hour cooldown (`LastUpdateCheckUtc`) stored in `AppSettings`. Do not check the GitHub API if fewer than 4 hours have elapsed since the last check, unless the user explicitly clicks "Check for Updates" in Settings. Respect `X-RateLimit-Reset` and `retry-after` response headers. Never poll in automated background loops.
 
-### 6. Shields.io Direct2D Text Loss, Missing App Assets, & Persistent Light Caret Overlay
+### 6. Shields.io Direct2D Text Loss, Missing App Assets, & Dual Caret Elimination
 - **Symptom:**
   1. Shields.io badges rendered as artificial two-tone rectangles (dark gray block attached to bright blue `#0A84FF` block) with no text.
   2. `<img src="Noti.App/Assets/Noti.png" ... />` rendered as a bulky gray fallback pill labeled `[icon] Noti App Icon (Noti.App/Assets/Noti.png)`.
-  3. Clicking into text lines in Light Mode produced an invisible blinking caret on transparent backgrounds.
+  3. Clicking into text lines in Light Mode produced dual/ghost blinking carets (a white native caret rendered alongside a black custom overlay caret).
 - **Root Cause:**
   1. WinUI 3's `SvgImageSource` relies on Direct2D SVG 1.1 Tiny profile which completely omits SVG `<text>` elements. `img.shields.io` badges have `<rect>` backgrounds and `<text>` labels, so Direct2D parsed the SVG successfully but silently dropped the text, making the badge appear like an empty hand-drawn mock.
   2. `Noti.App.csproj` had hardcoded `<Content Include="Assets\Noti.ico">`, leaving `Noti.png` out of published output, and resolution only checked note-relative paths. On failure, `CreateFallbackPlaceholder()` rendered a bulky styled pill.
-  3. DirectWrite inverted native caret to white on transparent backgrounds. `SmoothCaretOverlayBorder` faded to 0.0 opacity after 360ms and was disabled when fluid animation was off.
+  3. DirectWrite renders an unsuppressed native caret in `TextBox`. When `TextControlBackground` was set to pure `Transparent`, DirectWrite inverted the native caret to white. At the same time, `SmoothCaretOverlayBorder` was configured as a permanent, repeating black blinking overlay (`RepeatBehavior.Forever`), causing both the white native caret and black overlay caret to render simultaneously out of sync.
 - **Invariant & Fix:**
   1. Automatically route shields.io requests (`img.shields.io` and `shields.io`) to official rasterized PNGs (`https://raster.shields.io/...`) using WinUI 3 `BitmapImage`.
   2. Package all assets via `<Content Include="Assets\Noti.ico">` and `<Content Include="Assets\Noti.png">`, expand `TryResolveImageUri` to search `AppContext.BaseDirectory`, `Assets\`, `vaultRootPath`, and directory traversal in dev mode, and collapse unresolvable/failed images (`Visibility = Visibility.Collapsed; hostBorder.Child = null;`) without generating bulky placeholder pills.
-  3. Transform `SmoothCaretOverlayBorder` into a persistent, high-contrast blinking caret (`#1C1C1E` in Light Mode, `#F5F5F7` in Dark Mode, 530ms cadence) active whenever an editor `TextBox` is focused, handling both fluid glide and non-fluid snap positions, while keeping editor backgrounds completely `Transparent`.
+  3. Eliminate the dual-caret artifact by keeping the native `TextBox` caret as the sole persistent blinking cursor: set `_cachedInputBgBrush` and `TextControlBackground` in Light Mode to near-zero alpha white `#01FFFFFF` so DirectWrite colors the native caret in charcoal `#1C1C1E` without breaking 0% surface transparency, and restore `SmoothCaretOverlayBorder` to a transient gliding overlay (85ms glide, 360ms pulse-fade to `Opacity = 0.0`, collapsed on completion).
