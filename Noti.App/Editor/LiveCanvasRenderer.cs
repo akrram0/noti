@@ -90,6 +90,8 @@ public sealed partial class MainWindow
             SmoothCaretOverlayBorder.RequestedTheme = theme;
             SmoothCaretOverlayBorder.Background = _cachedPrimaryBrush;
         }
+        if (RootGrid is not null)
+            ApplyCaretThemeToTree(RootGrid);
     }
 
     private void EnsureLiveRenderResources(bool refreshTitles = false)

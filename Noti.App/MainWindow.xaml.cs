@@ -140,6 +140,32 @@ public sealed partial class MainWindow : Window
         ViewModel.ActiveNoteLockChanged = OnActiveNoteLockChanged;
         ViewModel.RequestShowLockDiscoveryTip = ShowLockDiscoveryCallout;
         RootGrid.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) => DismissLockDiscoveryCallout()), true);
+        RootGrid.AddHandler(UIElement.GotFocusEvent, new RoutedEventHandler(OnRootGotFocus), true);
+    }
+
+    private void OnRootGotFocus(object sender, RoutedEventArgs e)
+    {
+        if (e.OriginalSource is TextBox textBox)
+            ApplyCaretTheme(textBox);
+    }
+
+    private void ApplyCaretTheme(TextBox textBox)
+    {
+        CaretThemeStyler.Apply(textBox, _cachedPrimaryBrush);
+
+        // WinUI creates the native caret element lazily around the first focus transaction; retry once a tick
+        // later so a box focused before its TextBoxView materialized still gets a themed caret.
+        DispatcherQueue.TryEnqueue(() => CaretThemeStyler.Apply(textBox, _cachedPrimaryBrush));
+    }
+
+    private void ApplyCaretThemeToTree(DependencyObject root)
+    {
+        if (root is TextBox textBox)
+            CaretThemeStyler.Apply(textBox, _cachedPrimaryBrush);
+
+        var childCount = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < childCount; i++)
+            ApplyCaretThemeToTree(VisualTreeHelper.GetChild(root, i));
     }
 
     private void OnTopTitleBarLayoutUpdated(object? sender, object e) =>
@@ -2040,6 +2066,10 @@ public sealed partial class MainWindow : Window
 
     private void ScheduleSmoothCaretUpdate(TextBox? targetTb = null)
     {
+        // Keep the native caret's brush in sync independently of the fluid overlay animation.
+        if (targetTb is not null)
+            CaretThemeStyler.Apply(targetTb, _cachedPrimaryBrush);
+
         if (!ViewModel.IsFluidAnimationEnabled || ViewModel.IsSettingsOpen)
         {
             HideSmoothCaretOverlay();
