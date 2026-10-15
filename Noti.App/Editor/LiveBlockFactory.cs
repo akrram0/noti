@@ -428,6 +428,8 @@ public sealed partial class MainWindow
                 return;
         };
 
+        tb.BeforeTextChanging += OnLiveTextBoxBeforeTextChanging;
+
         tb.TextChanged += (_, _) =>
         {
             if (tb.Tag is not LiveDocBlock block)
@@ -471,7 +473,7 @@ public sealed partial class MainWindow
 
         tb.SelectionChanged += (_, _) =>
         {
-            if (_isSyncingLiveEditor || tb.Tag is not LiveDocBlock block)
+            if (_isApplyingLiveSelection || _isSyncingLiveEditor || tb.Tag is not LiveDocBlock block)
                 return;
 
             _activeLiveBlock = block;
@@ -935,6 +937,27 @@ public sealed partial class MainWindow
             }
         }
 
+        if (HasLiveMultiSelection && e.Key is VirtualKey.Delete or VirtualKey.Back)
+        {
+            e.Handled = true;
+            ReplaceLiveSelection(string.Empty);
+            return;
+        }
+
+        if (ctrlDown && !shiftDown && e.Key == VirtualKey.A)
+        {
+            e.Handled = true;
+            SelectAllLiveBlocks();
+            return;
+        }
+
+        if (ctrlDown && !shiftDown && (e.Key == VirtualKey.C || e.Key == VirtualKey.X) && HasLiveMultiSelection)
+        {
+            e.Handled = true;
+            CopyLiveSelectionToClipboard(cut: e.Key == VirtualKey.X);
+            return;
+        }
+
         if (ctrlDown)
         {
             if (shiftDown && e.Key == VirtualKey.X)
@@ -988,6 +1011,13 @@ public sealed partial class MainWindow
             return;
         }
 
+        if (HasLiveMultiSelection &&
+            ((e.Key is VirtualKey.Left or VirtualKey.Right or VirtualKey.Home or VirtualKey.End or VirtualKey.PageUp or VirtualKey.PageDown) ||
+             (!shiftDown && (e.Key is VirtualKey.Up or VirtualKey.Down))))
+        {
+            ClearLiveMultiSelection();
+        }
+
         var text = tb.Text ?? string.Empty;
         var caret = Math.Clamp(tb.SelectionStart, 0, text.Length);
 
@@ -1012,6 +1042,24 @@ public sealed partial class MainWindow
                 QueueSyncLiveBlocksToViewModel();
             }
             return;
+        }
+
+        if (HasLiveMultiSelection && e.Key == VirtualKey.Enter)
+        {
+            if (block.Kind == LiveBlockKind.CodeBlock)
+            {
+                // Code blocks keep native Enter behavior; just drop the cross-block range first.
+                ClearLiveMultiSelection();
+            }
+            else
+            {
+                e.Handled = true;
+                if (shiftDown)
+                    ReplaceLiveSelection("\n");
+                else
+                    SplitLiveSelection();
+                return;
+            }
         }
 
         if (e.Key == VirtualKey.Enter && block.Kind != LiveBlockKind.CodeBlock)
@@ -1199,6 +1247,7 @@ public sealed partial class MainWindow
             e.Handled = true;
             HideSlashMenuPopup();
             HideMentionPopup();
+            ClearLiveMultiSelection();
             SelectionToolbarBorder.Visibility = Visibility.Collapsed;
             tb.SelectionLength = 0;
             return;
@@ -1211,7 +1260,10 @@ public sealed partial class MainWindow
                 if (IsEditableLiveBlock(_liveBlocks[i]))
                 {
                     e.Handled = true;
-                    FocusLiveBlockAt(i, caret);
+                    if (shiftDown)
+                        ExtendLiveSelectionToBlock(i, caret);
+                    else
+                        FocusLiveBlockAt(i, caret);
                     return;
                 }
             }
@@ -1225,7 +1277,10 @@ public sealed partial class MainWindow
                 if (IsEditableLiveBlock(_liveBlocks[i]))
                 {
                     e.Handled = true;
-                    FocusLiveBlockAt(i, caret);
+                    if (shiftDown)
+                        ExtendLiveSelectionToBlock(i, caret);
+                    else
+                        FocusLiveBlockAt(i, caret);
                     return;
                 }
             }

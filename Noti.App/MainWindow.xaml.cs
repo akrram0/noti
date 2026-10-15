@@ -142,6 +142,7 @@ public sealed partial class MainWindow : Window
         ViewModel.ActiveNoteLockChanged = OnActiveNoteLockChanged;
         ViewModel.RequestShowLockDiscoveryTip = ShowLockDiscoveryCallout;
         RootGrid.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) => DismissLockDiscoveryCallout()), true);
+        WireLiveMultiSelection();
     }
 
     private void ApplyCaretTheme(TextBox textBox)
@@ -935,6 +936,12 @@ public sealed partial class MainWindow : Window
 
     private void UpdateSelectionToolbar()
     {
+        if (HasLiveMultiSelection)
+        {
+            HideSelectionToolbar();
+            return;
+        }
+
         var activeTb = GetActiveEditorTextBox();
         if (activeTb is null ||
             activeTb.SelectionLength <= 0 ||

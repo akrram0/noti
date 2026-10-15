@@ -433,6 +433,7 @@ public sealed partial class MainWindow
         _isSyncingLiveEditor = true;
         try
         {
+            ResetLiveMultiSelectionState();
             RecycleAllLiveBlocksToPool();
             _activeLiveBlock = null;
             LiveEditorPanel.Children.Clear();
