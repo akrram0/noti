@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -32,6 +33,14 @@ public sealed partial class MainWindow
     private bool _isApplyingLiveSelection;
     private string? _pendingLiveReplaceText;
 
+    // Per-drag vertical band cache for hit testing (panel coordinates), rebuilt lazily on each drag.
+    private readonly Dictionary<int, (double Top, double Bottom)> _liveHitTestBands = new();
+    private int _dragBandBlockIdx = -1;
+
+    // Per-TextBox caret measurement table (index -> caret rect), reused across drags while
+    // the box's text, width, height, and font size are unchanged.
+    private static readonly ConditionalWeakTable<TextBox, CharacterHitTable> CharacterHitTables = new();
+
     private bool HasLiveMultiSelection =>
         _liveSelAnchorBlock >= 0 &&
         _liveSelFocusBlock >= 0 &&
@@ -52,6 +61,10 @@ public sealed partial class MainWindow
             return;
         if (ViewModel.CurrentViewMode != EditorViewMode.Live || ViewModel.IsSettingsOpen)
             return;
+
+        // Start each drag with fresh layout bands; the scan below rebuilds them lazily.
+        _liveHitTestBands.Clear();
+        _dragBandBlockIdx = -1;
 
         if (!TryHitTestEditableLiveBlock(point.Position, out var blockIdx, out var charIdx))
         {
@@ -98,7 +111,8 @@ public sealed partial class MainWindow
 
         ScrollLiveCanvasForDragSelect(point.Position);
 
-        if (!TryHitTestEditableLiveBlock(point.Position, out var blockIdx, out var charIdx))
+        if (!TryHitTestEditableLiveBlockFast(point.Position, out var blockIdx, out var charIdx) &&
+            !TryHitTestEditableLiveBlock(point.Position, out blockIdx, out charIdx))
             return;
 
         if (blockIdx == _liveSelAnchorBlock)
@@ -115,6 +129,9 @@ public sealed partial class MainWindow
 
             return;
         }
+
+        if (blockIdx == _liveSelFocusBlock && charIdx == _liveSelFocusOffset)
+            return;
 
         _liveSelFocusBlock = blockIdx;
         _liveSelFocusOffset = charIdx;
@@ -164,17 +181,22 @@ public sealed partial class MainWindow
             if (tb.Visibility != Visibility.Visible || tb.ActualHeight <= 0)
                 continue;
 
-            var rect = tb.TransformToVisual(LiveEditorPanel)
-                .TransformBounds(new Rect(0, 0, tb.ActualWidth, tb.ActualHeight));
+            // Cached per drag: the heavy TransformToVisual walk runs once per block, not per pointer move.
+            if (!_liveHitTestBands.TryGetValue(i, out var band))
+            {
+                var rect = tb.TransformToVisual(LiveEditorPanel)
+                    .TransformBounds(new Rect(0, 0, tb.ActualWidth, tb.ActualHeight));
+                band = (rect.Top, rect.Bottom);
+                _liveHitTestBands[i] = band;
+            }
 
-            if (panelPoint.Y >= rect.Top && panelPoint.Y <= rect.Bottom)
+            if (panelPoint.Y >= band.Top && panelPoint.Y <= band.Bottom)
             {
                 bestIdx = i;
-                bestDistance = 0;
                 break;
             }
 
-            var distance = panelPoint.Y < rect.Top ? rect.Top - panelPoint.Y : panelPoint.Y - rect.Bottom;
+            var distance = panelPoint.Y < band.Top ? band.Top - panelPoint.Y : panelPoint.Y - band.Bottom;
             if (distance < bestDistance)
             {
                 bestDistance = distance;
@@ -185,6 +207,7 @@ public sealed partial class MainWindow
         if (bestIdx < 0 || _liveBlocks[bestIdx].PrimaryTextBox is not { } targetTb)
             return false;
 
+        _dragBandBlockIdx = bestIdx;
         var local = LiveEditorPanel.TransformToVisual(targetTb).TransformPoint(panelPoint);
         charIdx = FindCharacterIndexAtPoint(targetTb, local);
         blockIdx = bestIdx;
@@ -192,15 +215,58 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
+    /// Fast-path variant used while dragging: reuses the band of the block found last time and only
+    /// falls back to the full scan when the pointer leaves that band. Bands never overlap, so a hit
+    /// inside the cached band yields the identical block the full scan would return — a pure cache
+    /// hit, not an approximation.
+    /// </summary>
+    private bool TryHitTestEditableLiveBlockFast(Point panelPoint, out int blockIdx, out int charIdx)
+    {
+        blockIdx = -1;
+        charIdx = 0;
+
+        if (_dragBandBlockIdx < 0 || _dragBandBlockIdx >= _liveBlocks.Count)
+            return false;
+        if (!_liveHitTestBands.TryGetValue(_dragBandBlockIdx, out var band))
+            return false;
+        if (panelPoint.Y < band.Top || panelPoint.Y > band.Bottom)
+            return false;
+        if (!IsEditableLiveBlock(_liveBlocks[_dragBandBlockIdx]) ||
+            _liveBlocks[_dragBandBlockIdx].PrimaryTextBox is not { } tb ||
+            tb.Visibility != Visibility.Visible)
+            return false;
+
+        var local = LiveEditorPanel.TransformToVisual(tb).TransformPoint(panelPoint);
+        charIdx = FindCharacterIndexAtPoint(tb, local);
+        blockIdx = _dragBandBlockIdx;
+        return true;
+    }
+
+    /// <summary>
     /// Point-to-character-index hit test. WinUI 3's TextBox has no GetCharacterIndexFromPoint
     /// (that is a UWP RichEditBox API), so the nearest caret position is derived from
     /// GetRectFromCharacterIndex: vertical distance to the caret's line dominates, then horizontal.
+    /// The per-character rects are measured once per (box, text, width, height, font size) and cached
+    /// in <see cref="CharacterHitTables"/>, so each pointer move is a pure managed scan.
     /// </summary>
     private static int FindCharacterIndexAtPoint(TextBox tb, Point localPoint)
     {
-        var textLength = (tb.Text ?? string.Empty).Length;
+        var text = tb.Text ?? string.Empty;
+        var textLength = text.Length;
         if (textLength == 0)
             return 0;
+
+        if (!CharacterHitTables.TryGetValue(tb, out var table) ||
+            !ReferenceEquals(table.Text, text) ||
+            table.Width != tb.ActualWidth ||
+            table.Height != tb.ActualHeight ||
+            table.FontSize != tb.FontSize ||
+            table.CaretX.Length != textLength + 1)
+        {
+            table = BuildCharacterHitTable(tb, text);
+            CharacterHitTables.Remove(tb);
+            CharacterHitTables.Add(tb, table);
+        }
 
         var bestIndex = 0;
         var bestVertical = double.MaxValue;
@@ -208,18 +274,15 @@ public sealed partial class MainWindow
 
         for (var position = 0; position <= textLength; position++)
         {
-            var caretRect = position < textLength
-                ? tb.GetRectFromCharacterIndex(position, trailingEdge: false)
-                : tb.GetRectFromCharacterIndex(textLength - 1, trailingEdge: true);
-
-            var vertical = localPoint.Y < caretRect.Top
-                ? caretRect.Top - localPoint.Y
-                : localPoint.Y > caretRect.Bottom
-                    ? localPoint.Y - caretRect.Bottom
+            var top = table.Top[position];
+            var bottom = table.Bottom[position];
+            var vertical = localPoint.Y < top
+                ? top - localPoint.Y
+                : localPoint.Y > bottom
+                    ? localPoint.Y - bottom
                     : 0;
 
-            var caretX = position < textLength ? caretRect.Left : caretRect.Right;
-            var horizontal = Math.Abs(localPoint.X - caretX);
+            var horizontal = Math.Abs(localPoint.X - table.CaretX[position]);
 
             if (vertical < bestVertical || (vertical == bestVertical && horizontal < bestHorizontal))
             {
@@ -230,6 +293,45 @@ public sealed partial class MainWindow
         }
 
         return bestIndex;
+    }
+
+    private static CharacterHitTable BuildCharacterHitTable(TextBox tb, string text)
+    {
+        var textLength = text.Length;
+        var table = new CharacterHitTable
+        {
+            Text = text,
+            Width = tb.ActualWidth,
+            Height = tb.ActualHeight,
+            FontSize = tb.FontSize,
+            CaretX = new double[textLength + 1],
+            Top = new double[textLength + 1],
+            Bottom = new double[textLength + 1]
+        };
+
+        for (var position = 0; position <= textLength; position++)
+        {
+            var caretRect = position < textLength
+                ? tb.GetRectFromCharacterIndex(position, trailingEdge: false)
+                : tb.GetRectFromCharacterIndex(textLength - 1, trailingEdge: true);
+
+            table.CaretX[position] = position < textLength ? caretRect.Left : caretRect.Right;
+            table.Top[position] = caretRect.Top;
+            table.Bottom[position] = caretRect.Bottom;
+        }
+
+        return table;
+    }
+
+    private sealed class CharacterHitTable
+    {
+        public string Text = string.Empty;
+        public double Width;
+        public double Height;
+        public double FontSize;
+        public double[] CaretX = Array.Empty<double>();
+        public double[] Top = Array.Empty<double>();
+        public double[] Bottom = Array.Empty<double>();
     }
 
     private void ApplyLiveSelectionToBlocks()
@@ -289,8 +391,11 @@ public sealed partial class MainWindow
                     selectionLength = textLength;
                 }
 
-                tb.SelectionStart = selectionStart;
-                tb.SelectionLength = selectionLength;
+                if (tb.SelectionStart != selectionStart || tb.SelectionLength != selectionLength)
+                {
+                    tb.SelectionStart = selectionStart;
+                    tb.SelectionLength = selectionLength;
+                }
             }
         }
         finally
@@ -345,6 +450,8 @@ public sealed partial class MainWindow
         _liveSelAppliedStart = -1;
         _liveSelAppliedEnd = -1;
         _isLiveDragSelecting = false;
+        _liveHitTestBands.Clear();
+        _dragBandBlockIdx = -1;
         _pendingLiveReplaceText = null;
     }
 
