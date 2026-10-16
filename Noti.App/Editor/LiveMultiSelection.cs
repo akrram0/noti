@@ -186,10 +186,50 @@ public sealed partial class MainWindow
             return false;
 
         var local = LiveEditorPanel.TransformToVisual(targetTb).TransformPoint(panelPoint);
-        var textLength = (targetTb.Text ?? string.Empty).Length;
-        charIdx = Math.Clamp(targetTb.GetCharacterIndexFromPoint(local, true), 0, textLength);
+        charIdx = FindCharacterIndexAtPoint(targetTb, local);
         blockIdx = bestIdx;
         return true;
+    }
+
+    /// <summary>
+    /// Point-to-character-index hit test. WinUI 3's TextBox has no GetCharacterIndexFromPoint
+    /// (that is a UWP RichEditBox API), so the nearest caret position is derived from
+    /// GetRectFromCharacterIndex: vertical distance to the caret's line dominates, then horizontal.
+    /// </summary>
+    private static int FindCharacterIndexAtPoint(TextBox tb, Point localPoint)
+    {
+        var textLength = (tb.Text ?? string.Empty).Length;
+        if (textLength == 0)
+            return 0;
+
+        var bestIndex = 0;
+        var bestVertical = double.MaxValue;
+        var bestHorizontal = double.MaxValue;
+
+        for (var position = 0; position <= textLength; position++)
+        {
+            var caretRect = position < textLength
+                ? tb.GetRectFromCharacterIndex(position, trailingEdge: false)
+                : tb.GetRectFromCharacterIndex(textLength - 1, trailingEdge: true);
+
+            var vertical = localPoint.Y < caretRect.Top
+                ? caretRect.Top - localPoint.Y
+                : localPoint.Y > caretRect.Bottom
+                    ? localPoint.Y - caretRect.Bottom
+                    : 0;
+
+            var caretX = position < textLength ? caretRect.Left : caretRect.Right;
+            var horizontal = Math.Abs(localPoint.X - caretX);
+
+            if (vertical < bestVertical || (vertical == bestVertical && horizontal < bestHorizontal))
+            {
+                bestVertical = vertical;
+                bestHorizontal = horizontal;
+                bestIndex = position;
+            }
+        }
+
+        return bestIndex;
     }
 
     private void ApplyLiveSelectionToBlocks()
